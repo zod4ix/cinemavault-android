@@ -1,0 +1,28 @@
+{
+  "appId": "net.cinemavault.app",
+  "appName": "CinemaVault",
+  "webDir": "dist",
+  "backgroundColor": "#07090e",
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": true,
+    "backgroundColor": "#07090e"
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    },
+    "CapacitorCookies": {
+      "enabled": true
+    },
+    "SystemBars": {
+      "insetsHandling": "disable",
+      "style": "DARK"
+    }
+  }
+}

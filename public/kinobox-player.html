@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="referrer" content="origin" />
+  <title>CinemaVault Multi-Balancer</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: #000;
+      color: #e2e8f0;
+      font-family: system-ui, -apple-system, sans-serif;
+      overflow: hidden;
+    }
+    .kinobox_player {
+      width: 100%;
+      height: 100%;
+    }
+    #fallback-msg {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: #07090e;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 24px;
+      gap: 12px;
+    }
+    #fallback-msg h3 { color: #f8fafc; font-size: 16px; }
+    #fallback-msg p { color: #94a3b8; font-size: 13px; max-width: 360px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <div class="kinobox_player"></div>
+  <div id="fallback-msg">
+    <h3>Дзеркало Kinobox недоступне у вашій мережі</h3>
+    <p>Будь ласка, оберіть сусідній сервер угорі плеєра (<b>VidSrc PRO</b>, <b>VidLink 4K</b> або <b>AutoEmbed</b>) — вони працюють без VPN.</p>
+  </div>
+
+  <script>
+    (function () {
+      var params = new URLSearchParams(window.location.search);
+      var imdb = params.get('imdb') || '';
+      var tmdb = params.get('tmdb') || '';
+      var title = params.get('title') || '';
+
+      var script = document.createElement('script');
+      script.src = 'https://kinobox.tv/static/kinobox.min.js';
+      script.async = true;
+
+      var timeout = setTimeout(function () {
+        if (typeof window.kbox === 'undefined') {
+          document.getElementById('fallback-msg').style.display = 'flex';
+        }
+      }, 7000);
+
+      script.onload = function () {
+        clearTimeout(timeout);
+        if (typeof window.kbox === 'function') {
+          var searchCfg = {};
+          if (imdb) searchCfg.imdb = imdb;
+          if (tmdb) searchCfg.tmdb = tmdb;
+          if (title) searchCfg.title = title;
+
+          window.kbox('.kinobox_player', {
+            search: searchCfg,
+            menu: {
+              enable: true,
+              default: 'menu_list',
+              mobile: 'menu_button',
+              format: '{N} :: {T} ({Q})'
+            },
+            players: {
+              ashdi: { enable: true, position: 1 },
+              voidboost: { enable: true, position: 2 },
+              alloha: { enable: true, position: 3 },
+              kodik: { enable: true, position: 4 },
+              collaps: { enable: true, position: 5 },
+              veoveo: { enable: true, position: 6 },
+              cdnmovies: { enable: true, position: 7 }
+            }
+          });
+        } else {
+          document.getElementById('fallback-msg').style.display = 'flex';
+        }
+      };
+
+      script.onerror = function () {
+        clearTimeout(timeout);
+        document.getElementById('fallback-msg').style.display = 'flex';
+      };
+
+      document.body.appendChild(script);
+    })();
+  </script>
+</body>
+</html>
