@@ -12,6 +12,7 @@ import {
   normalizeGenre,
 } from './tmdb';
 import { cinemetaCatalog, cinemetaSearch, GENRE_TO_CINEMETA } from './cinemeta';
+import { isRussianOrSoviet } from './contentFilter';
 
 const GENERATED_OVERVIEW =
   /^(Серіал|Фільм|Аніме|Повна версія|Офіційний реліз|Популярний серіал|Топ аніме|Серіал «|Мультфільм)/;
@@ -175,22 +176,29 @@ export async function fetchCatalogPage(
   const skip = (page - 1) * 100;
 
   try {
+    let rawItems: MediaItem[] = [];
     switch (category) {
       case 'movies':
-        return await cinemetaCatalog('movie', { genre, skip });
+        rawItems = await cinemetaCatalog('movie', { genre, skip });
+        break;
       case 'series':
-        return await cinemetaCatalog('series', { genre, skip });
+        rawItems = await cinemetaCatalog('series', { genre, skip });
+        break;
       case 'cartoons':
-        return await cinemetaCatalog('movie', { genre: 'Animation', skip });
+        rawItems = await cinemetaCatalog('movie', { genre: 'Animation', skip });
+        break;
       case 'anime': {
         const jikan = await withTimeout(fetchJikanTop(page), 8000, [] as MediaItem[]);
-        if (jikan.length > 0) return jikan;
-        return await cinemetaCatalog('series', { genre: 'Animation', skip });
+        if (jikan.length > 0) rawItems = jikan;
+        else rawItems = await cinemetaCatalog('series', { genre: 'Animation', skip });
+        break;
       }
       case '4k':
-        return (await cinemetaCatalog('movie', { genre, skip })).filter((i) => i.year >= 2018);
+        rawItems = (await cinemetaCatalog('movie', { genre, skip })).filter((i) => i.year >= 2018);
+        break;
       case 'ukrainian':
-        return [];
+        rawItems = [];
+        break;
       case 'trending':
       default: {
         const [m, s] = await Promise.all([
@@ -203,9 +211,12 @@ export async function fetchCatalogPage(
           if (m[i]) out.push(m[i]);
           if (s[i]) out.push(s[i]);
         }
-        return out;
+        rawItems = out;
+        break;
       }
     }
+    // Filter out Russian/Soviet films from home/discovery feeds (only accessible via explicit search)
+    return rawItems.filter((item) => !isRussianOrSoviet(item));
   } catch {
     return [];
   }

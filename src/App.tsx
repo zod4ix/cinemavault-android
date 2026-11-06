@@ -11,6 +11,7 @@ import { FilterBar } from './components/FilterBar';
 import { BottomNav } from './components/BottomNav';
 import { tmdbService, CURATED_CATALOG } from './services/tmdb';
 import { searchEverywhere, fetchCatalogPage } from './services/search';
+import { isRussianOrSoviet } from './services/contentFilter';
 import { rezkaService } from './services/rezka';
 import { storageService } from './services/storage';
 import { MediaItem, MediaSource, Episode, PlaybackProgress, CatalogFilter } from './types/movie';
@@ -117,9 +118,11 @@ const MainAppContent: React.FC = () => {
       if (!active) return;
       setLiveCatalogPool((prev) => {
         const map = new Map<string, MediaItem>();
-        [...prev, ...movies, ...series, ...anime].forEach((item) => {
-          map.set(item.id.toString(), item);
-        });
+        [...prev, ...movies, ...series, ...anime]
+          .filter((item) => !isRussianOrSoviet(item))
+          .forEach((item) => {
+            map.set(item.id.toString(), item);
+          });
         return Array.from(map.values());
       });
     });
@@ -180,9 +183,11 @@ const MainAppContent: React.FC = () => {
     const moreItems = await fetchCatalogPage(filter.category, nextPage, filter.genre);
     setLiveCatalogPool((prev) => {
       const map = new Map<string, MediaItem>();
-      [...prev, ...moreItems].forEach((item) => {
-        map.set(item.id.toString(), item);
-      });
+      [...prev, ...moreItems]
+        .filter((item) => !isRussianOrSoviet(item))
+        .forEach((item) => {
+          map.set(item.id.toString(), item);
+        });
       return Array.from(map.values());
     });
     setCatalogPage(nextPage);
@@ -238,8 +243,9 @@ const MainAppContent: React.FC = () => {
     }
   };
 
-  const featured = CURATED_CATALOG[heroIndex] || CURATED_CATALOG[0];
-  const filteredCatalog = tmdbService.filterAndSort(liveCatalogPool, filter);
+  const cleanHomePool = liveCatalogPool.filter((i) => !isRussianOrSoviet(i));
+  const featured = cleanHomePool[heroIndex] || cleanHomePool[0] || CURATED_CATALOG[0];
+  const filteredCatalog = tmdbService.filterAndSort(cleanHomePool, filter);
   const isCustomFilterActive =
     filter.category !== 'trending' ||
     filter.genre !== 'all' ||
@@ -475,7 +481,7 @@ const MainAppContent: React.FC = () => {
               <FilterBar
                 filter={filter}
                 onChange={(upd) => setFilter((prev) => ({ ...prev, ...upd }))}
-                totalCount={liveCatalogPool.length}
+                totalCount={cleanHomePool.length}
                 onQuickSearch={(term) => setSearchQuery(term)}
               />
             </div>
@@ -488,7 +494,7 @@ const MainAppContent: React.FC = () => {
               <MediaRow
                 title={t('trendingRow')}
                 badge={t('trendingBadge')}
-                items={liveCatalogPool.slice(0, 18)}
+                items={cleanHomePool.slice(0, 18)}
                 onSelectMedia={setSelectedMedia}
                 onPlayMedia={handlePlayMedia}
                 favorites={favorites}
@@ -498,7 +504,7 @@ const MainAppContent: React.FC = () => {
               <MediaRow
                 title={t('ukrainianRow')}
                 badge={t('ukrainianBadge')}
-                items={liveCatalogPool
+                items={cleanHomePool
                   .filter(
                     (i) =>
                       i.genres.includes('Українське кіно') || i.hasUkrainianAudio
@@ -513,7 +519,7 @@ const MainAppContent: React.FC = () => {
               <MediaRow
                 title={t('seriesRow')}
                 badge={t('seriesBadge')}
-                items={liveCatalogPool.filter((i) => i.mediaType === 'tv').slice(0, 18)}
+                items={cleanHomePool.filter((i) => i.mediaType === 'tv').slice(0, 18)}
                 onSelectMedia={setSelectedMedia}
                 onPlayMedia={handlePlayMedia}
                 favorites={favorites}
@@ -523,7 +529,7 @@ const MainAppContent: React.FC = () => {
               <MediaRow
                 title={t('hdrRow')}
                 badge={t('hdrBadge')}
-                items={liveCatalogPool.filter((i) => i.quality === '4K HDR').slice(0, 18)}
+                items={cleanHomePool.filter((i) => i.quality === '4K HDR').slice(0, 18)}
                 onSelectMedia={setSelectedMedia}
                 onPlayMedia={handlePlayMedia}
                 favorites={favorites}
@@ -533,7 +539,7 @@ const MainAppContent: React.FC = () => {
               <MediaRow
                 title={t('cartoonsRow')}
                 badge={t('cartoonsBadge')}
-                items={liveCatalogPool.filter((i) => i.mediaType === 'cartoon').slice(0, 18)}
+                items={cleanHomePool.filter((i) => i.mediaType === 'cartoon').slice(0, 18)}
                 onSelectMedia={setSelectedMedia}
                 onPlayMedia={handlePlayMedia}
                 favorites={favorites}
@@ -543,7 +549,7 @@ const MainAppContent: React.FC = () => {
               <MediaRow
                 title={t('animeRow')}
                 badge={t('animeBadge')}
-                items={liveCatalogPool.filter((i) => i.mediaType === 'anime').slice(0, 18)}
+                items={cleanHomePool.filter((i) => i.mediaType === 'anime').slice(0, 18)}
                 onSelectMedia={setSelectedMedia}
                 onPlayMedia={handlePlayMedia}
                 favorites={favorites}

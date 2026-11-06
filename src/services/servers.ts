@@ -193,6 +193,32 @@ const anyId = (c: Ctx) => (c.tmdb ? String(c.tmdb) : c.imdb || '');
  */
 const PROVIDERS: ProviderDef[] = [
   {
+    id: 'loadbox',
+    name: 'Rezka Multi',
+    badge: 'Multi',
+    langs: ['UA', 'MULTI', 'RU', 'EN', 'SUB'],
+    build: (c) => {
+      if (c.imdb) {
+        return c.series
+          ? `https://api.loadbox.ws/embed/imdb/${c.imdb}?season=${c.s}&episode=${c.e}`
+          : `https://api.loadbox.ws/embed/imdb/${c.imdb}`;
+      }
+      return null;
+    },
+  },
+  {
+    id: 'videasy',
+    name: 'Videasy',
+    badge: '4K',
+    langs: ['MULTI', 'UA', 'RU', 'EN', 'SUB'],
+    build: (c) =>
+      c.tmdb
+        ? c.series
+          ? `https://player.videasy.net/tv/${c.tmdb}/${c.s}/${c.e}?color=e50914`
+          : `https://player.videasy.net/movie/${c.tmdb}?color=e50914`
+        : null,
+  },
+  {
     id: 'vidlink',
     name: 'VidLink',
     badge: '4K',
@@ -205,18 +231,6 @@ const PROVIDERS: ProviderDef[] = [
         ? `https://vidlink.pro/tv/${id}/${c.s}/${c.e}?primaryColor=e50914&autoplay=true`
         : `https://vidlink.pro/movie/${id}?primaryColor=e50914&autoplay=true`;
     },
-  },
-  {
-    id: 'videasy',
-    name: 'Videasy',
-    badge: '4K',
-    langs: ['MULTI', 'SUB'],
-    build: (c) =>
-      c.tmdb
-        ? c.series
-          ? `https://player.videasy.net/tv/${c.tmdb}/${c.s}/${c.e}?color=e50914`
-          : `https://player.videasy.net/movie/${c.tmdb}?color=e50914`
-        : null,
   },
   {
     id: 'vidfast',
@@ -381,6 +395,21 @@ export function buildServers(
 
   const ua = getCachedUaServer(media, ctx.s);
   if (ua) servers.push(ua);
+
+  if (!ids.imdb && /^\d+$/.test(String(media.id))) {
+    const numId = String(media.id);
+    const url = ctx.series
+      ? `https://api.loadbox.ws/embed/kp/${numId}?season=${ctx.s}&episode=${ctx.e}`
+      : `https://api.loadbox.ws/embed/movie/${numId}`;
+    servers.push({
+      id: 'loadbox',
+      name: 'Rezka Multi',
+      badge: 'Multi',
+      url,
+      mode: 'embed',
+      langs: ['UA', 'MULTI', 'RU', 'EN'],
+    });
+  }
 
   for (const p of PROVIDERS) {
     const url = p.build(ctx);

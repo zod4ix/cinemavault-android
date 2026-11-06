@@ -430,7 +430,13 @@ export const MediaModal: React.FC<MediaModalProps> = ({
                             <span className="text-xs text-slate-400">
                               {t('playbackLanguages')}{' '}
                               <span className="text-slate-300 font-medium">
-                                {src.id.includes('ashdi') ? '🇺🇦 UA' : 'EN / Multi Audio'}
+                                {src.id.includes('ashdi')
+                                  ? '🇺🇦 Український дубляж (UAKino)'
+                                  : src.id.includes('loadbox')
+                                    ? '🇺🇦 UA Дубляж / Rezka / LostFilm / RU / 🇬🇧 EN'
+                                    : src.id.includes('videasy')
+                                      ? '🇺🇦 UA / 🇬🇧 EN / 🇵🇱 PL / 🇪🇸 ES / Multi Audio'
+                                      : '🇬🇧 English / Multi Audio'}
                               </span>
                             </span>
                           </div>

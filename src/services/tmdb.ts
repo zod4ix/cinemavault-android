@@ -1,6 +1,7 @@
 import { Capacitor, CapacitorHttp } from '@capacitor/core';
 import { MediaItem, Season, Episode, CatalogFilter, MediaType } from '../types/movie';
 import { EXTRA_CATALOG } from '../data/extraCatalog';
+import { isRussianOrSoviet } from './contentFilter';
 
 // Helper to create fallback SVG poster if an image URL ever fails
 export function createPosterFallback(title: string, year?: number, rating?: number): string {
@@ -687,7 +688,9 @@ const BASE_CATALOG: MediaItem[] = [
   }
 ];
 
-export const CURATED_CATALOG: MediaItem[] = [...BASE_CATALOG, ...EXTRA_CATALOG];
+export const CURATED_CATALOG: MediaItem[] = [...BASE_CATALOG, ...EXTRA_CATALOG].filter(
+  (item) => !isRussianOrSoviet(item)
+);
 
 // Native-first HTTP JSON helper: uses Android CapacitorHttp (0 CORS restrictions!) on mobile, standard fetch on web
 export async function httpGetJson(url: string): Promise<any | null> {
@@ -1555,7 +1558,7 @@ export const tmdbService = {
   },
 
   filterAndSort(items: MediaItem[], filter: Partial<CatalogFilter>): MediaItem[] {
-    let result = [...items];
+    let result = items.filter((i) => !isRussianOrSoviet(i));
 
     if (filter.category && filter.category !== 'trending') {
       if (filter.category === 'movies') result = result.filter((i) => i.mediaType === 'movie');
