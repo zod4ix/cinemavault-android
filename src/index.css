@@ -12,6 +12,40 @@
   }
 }
 
+/* ========================================================
+   Performance Optimizations for Projectors & Smart TV
+   ======================================================== */
+
+/* Prevent browser tap delays and double-tap zoom delay */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* On Android WebViews, Smart TVs, and Projectors, CSS backdrop-filter blur
+   forces expensive multi-pass OpenGL shaders that drop framerates to 10 FPS.
+   We disable the blur filter and use sleek high-contrast dark backgrounds instead! */
+.backdrop-blur-sm,
+.backdrop-blur,
+.backdrop-blur-md,
+.backdrop-blur-lg,
+.backdrop-blur-xl {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Ensure smooth hardware scrolling */
+html, body {
+  background-color: #07090e;
+  overscroll-behavior: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Universal pointer feedback for mouse & air mouse */
+button, [role="button"], a, select {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
 }
@@ -32,7 +66,7 @@
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: scale(0.97);
+    transform: scale(0.98);
   }
   to {
     opacity: 1;
@@ -41,20 +75,7 @@
 }
 
 .animate-fadeIn {
-  animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-@keyframes pulseSlow {
-  0%, 100% {
-    transform: scale(1.05);
-  }
-  50% {
-    transform: scale(1.08);
-  }
-}
-
-.animate-pulse-slow {
-  animation: pulseSlow 16s ease-in-out infinite;
+  animation: fadeIn 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 /* ========================================================
@@ -64,13 +85,13 @@
 /* High-contrast focus outline for DPAD remote & keyboard navigation */
 :focus-visible {
   outline: none !important;
-  box-shadow: 0 0 0 3px #ef4444, 0 0 24px rgba(239, 68, 68, 0.7) !important;
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  box-shadow: 0 0 0 3px #ef4444, 0 0 20px rgba(239, 68, 68, 0.8) !important;
+  transition: transform 0.15s ease-out, box-shadow 0.15s ease-out !important;
 }
 
 /* TV Card / Item focus pop */
 .tv-card-focus:focus-visible {
-  transform: scale(1.05) translateY(-4px) !important;
+  transform: scale(1.05) translateY(-3px) !important;
   z-index: 30 !important;
 }
 
@@ -80,7 +101,7 @@
   z-index: 30 !important;
 }
 
-/* Smooth drag-to-scroll cursor for air mouse / physical mouse */
+/* Active drag cursor for air mouse / physical mouse */
 .drag-scroll-active {
   cursor: grabbing !important;
   user-select: none !important;

@@ -3,12 +3,14 @@ import Hls from 'hls.js';
 import {
   Play, Pause, RotateCcw, RotateCw, Volume2, VolumeX,
   Maximize, Minimize, ArrowLeft, Settings, Check, Radio,
-  Server, SkipForward, SkipBack, Smartphone, Link2, ChevronRight, AlertCircle
+  Server, SkipForward, SkipBack, Smartphone, Link2, ChevronRight, AlertCircle,
+  HardDrive, X
 } from 'lucide-react';
-import { MediaItem, AudioTrack, StreamQuality, StreamServer } from '../types/movie';
+import { MediaItem, AudioTrack, StreamQuality, StreamServer, TorrentItem } from '../types/movie';
 import { buildServers, ensureIds, resolveUaServer, probeServer, ServerHealth } from '../services/servers';
 import { rememberWorkingServer } from '../services/rezka';
 import { storageService } from '../services/storage';
+import { torrentService } from '../services/torrent';
 import { useLanguage } from '../i18n/LanguageContext';
 
 declare global {
@@ -16,6 +18,7 @@ declare global {
     AndroidCinemaBridge?: {
       setPlayerFullscreen: (fullscreen: boolean) => void;
     };
+    webtor?: any;
   }
 }
 
@@ -27,11 +30,12 @@ interface VideoPlayerProps {
   audioTracks: AudioTrack[];
   embedUrl?: string;
   servers?: StreamServer[];
-  initialMode?: 'native' | 'embed' | 'trailer';
+  initialMode?: 'native' | 'embed' | 'trailer' | 'torrent';
   onClose: () => void;
   episodeId?: string | number;
   seasonNumber?: number;
   episodeNumber?: number;
+  magnet?: string;
 }
 
 export const VideoPlayer: React.FC<VideoPlayerProps> = ({
@@ -47,10 +51,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   episodeId,
   seasonNumber: initialSeason,
   episodeNumber: initialEpisode,
+  magnet: initialMagnet,
 }) => {
   const { t } = useLanguage();
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const backBtnRef = useRef<HTMLButtonElement>(null);
   const hlsRef = useRef<Hls | null>(null);
 
   const isSeries = media.mediaType === 'tv' || media.mediaType === 'anime';
@@ -59,6 +65,13 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [isLandscapeLocked, setIsLandscapeLocked] = useState<boolean>(false);
   const [serverHealthMap, setServerHealthMap] = useState<Record<string, ServerHealth>>({});
   const [autoFailoverMsg, setAutoFailoverMsg] = useState<string | null>(null);
+
+  // Active Menu: 'none' | 'audio' | 'quality' | 'torrents' | 'episodes'
+  const [activeMenu, setActiveMenu] = useState<'none' | 'audio' | 'quality' | 'torrents' | 'episodes'>('none');
+
+  // Live P2P Torrents
+  const [torrentStreams, setTorrentStreams] = useState<TorrentItem[]>([]);
+  const [currentMagnet, setCurrentMagnet] = useState<string>(initialMagnet || '');
 
   // Background ensure IDs + UA dubbing lookup for current season
   const [serversVersion, setServersVersion] = useState<number>(0);
@@ -75,24 +88,65 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     };
   }, [media, activeSeason]);
 
+  // Live search torrents for this movie or episode
+  useEffect(() => {
+    let active = true;
+    torrentService.searchTorrents(media, activeSeason, activeEpisode).then((torrents) => {
+      if (active && torrents.length > 0) {
+        setTorrentStreams(torrents);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [media, activeSeason, activeEpisode]);
+
   // Dynamically build all servers for current movie or season/episode
   const availableServers = useMemo(() => {
     const list = buildServers(media, activeSeason, activeEpisode);
+    const map = new Map<string, StreamServer>();
+    list.forEach((s) => map.set(s.id, s));
+
     if (initialServers && initialServers.length > 0) {
-      // Merge in any already-passed initial servers if not present
-      const map = new Map<string, StreamServer>();
-      list.forEach((s) => map.set(s.id, s));
       initialServers.forEach((s) => {
         if (!map.has(s.id)) map.set(s.id, s);
       });
-      return Array.from(map.values());
     }
-    return list;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [media, activeSeason, activeEpisode, serversVersion]);
 
-  // Determine initial server based on embedUrl or initialMode
+    // Add torrent streams directly to server list
+    if (initialMagnet) {
+      map.set('initial-torrent', {
+        id: 'initial-torrent',
+        name: '⚡ P2P Торрент',
+        badge: 'Торрент',
+        url: initialMagnet,
+        mode: 'torrent',
+        magnet: initialMagnet,
+        langs: ['UA', 'MULTI'],
+      });
+    }
+
+    torrentStreams.slice(0, 3).forEach((tItem) => {
+      const sId = `torrent-${tItem.id}`;
+      if (!map.has(sId)) {
+        map.set(sId, {
+          id: sId,
+          name: `⚡ P2P ${tItem.tracker} (${tItem.quality})`,
+          badge: `${tItem.seeds} seeds`,
+          url: tItem.magnet,
+          mode: 'torrent',
+          magnet: tItem.magnet,
+          langs: [tItem.audio || 'MULTI'],
+        });
+      }
+    });
+
+    return Array.from(map.values());
+  }, [media, activeSeason, activeEpisode, serversVersion, initialServers, torrentStreams, initialMagnet]);
+
+  // Determine initial server based on embedUrl, magnet or initialMode
   const getInitialServerId = () => {
+    if (initialMode === 'torrent' || initialMagnet) return 'initial-torrent';
     if (initialMode === 'native') return 'custom-stream';
     if (initialMode === 'trailer') {
       const tr = availableServers.find((s) => s.mode === 'trailer');
@@ -133,7 +187,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [showControls, setShowControls] = useState<boolean>(true);
-  const [showSettingsMenu, setShowSettingsMenu] = useState<'none' | 'quality' | 'audio'>('none');
   const [bufferedEnd, setBufferedEnd] = useState<number>(0);
   const [iframeLoading, setIframeLoading] = useState<boolean>(true);
   const [osdMessage, setOsdMessage] = useState<string | null>(null);
@@ -146,6 +199,14 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     setOsdMessage(msg);
     osdTimerRef.current = setTimeout(() => setOsdMessage(null), 1500);
   };
+
+  // TV remote autofocus on mount
+  useEffect(() => {
+    const tId = setTimeout(() => {
+      backBtnRef.current?.focus();
+    }, 150);
+    return () => clearTimeout(tId);
+  }, []);
 
   // Probe current active server health on mount or when switching
   useEffect(() => {
@@ -173,6 +234,56 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
   }, [activeServer?.url, activeServer?.id]);
 
+  // In-App Webtor P2P Torrent Streaming Engine
+  useEffect(() => {
+    if (!activeServer || activeServer.mode !== 'torrent') return;
+    const magnet = activeServer.magnet || activeServer.url || currentMagnet;
+    if (!magnet) return;
+
+    setCurrentMagnet(magnet);
+    setIframeLoading(true);
+
+    const target = document.getElementById('webtor-torrent-target');
+    if (!target) return;
+    target.innerHTML = '';
+
+    const initWebtor = () => {
+      const win = window as any;
+      win.webtor = win.webtor || [];
+      win.webtor.push({
+        id: 'webtor-torrent-target',
+        magnet,
+        width: '100%',
+        height: '100%',
+        controls: true,
+        title: title,
+        poster: media.backdropPath || media.posterPath,
+        imdbId: media.imdbId,
+        lang: 'uk',
+        header: true,
+        on: (e: any) => {
+          if (e.name === 'inited' || e.name === 'play_clicked' || e.name === 'player status') {
+            setIframeLoading(false);
+          }
+        },
+      });
+    };
+
+    if ((window as any).webtor) {
+      initWebtor();
+    } else {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/@webtor/embed-sdk-js/dist/index.min.js';
+      script.async = true;
+      script.onload = () => initWebtor();
+      document.body.appendChild(script);
+    }
+
+    return () => {
+      if (target) target.innerHTML = '';
+    };
+  }, [activeServer?.id, activeServer?.mode, activeServer?.magnet, activeServer?.url]);
+
   // Helper to switch to the next server
   const switchToNextServer = () => {
     const embedServers = availableServers.filter((s) => s.mode === 'embed');
@@ -190,6 +301,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const toggleAndroidLandscape = () => {
     const next = !isLandscapeLocked;
     setIsLandscapeLocked(next);
+    setIsFullscreen(next);
     try {
       if (window.AndroidCinemaBridge) {
         window.AndroidCinemaBridge.setPlayerFullscreen(next);
@@ -218,11 +330,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
     if (Hls.isSupported() && streamToPlay.includes('.m3u8')) {
       if (hlsRef.current) hlsRef.current.destroy();
-      const hls = new Hls({
-        enableWorker: true,
-        lowLatencyMode: true,
-        backBufferLength: 90,
-      });
+      const hls = new Hls({ enableWorker: true, lowLatencyMode: true });
       hlsRef.current = hls;
       hls.loadSource(streamToPlay);
       hls.attachMedia(video);
@@ -237,229 +345,162 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
 
     return () => {
-      if (hlsRef.current) hlsRef.current.destroy();
-    };
-  }, [activeServer, selectedQuality.url, customStreamUrl, media.id, episodeId]);
-
-  // Track watch time continuously for BOTH native player and embed iframes
-  const watchTimeRef = useRef<number>(currentTime || 0);
-
-  useEffect(() => {
-    const epKey = isSeries ? `${media.id}-s${activeSeason}e${activeEpisode}` : episodeId;
-    const saved = storageService.getProgress(media.id, epKey);
-    if (saved && saved.currentTime > 0) {
-      watchTimeRef.current = saved.currentTime;
-    } else {
-      watchTimeRef.current = currentTime || 15;
-    }
-
-    const defaultDuration = duration > 0 ? duration : (media.duration ? media.duration * 60 : 5400);
-
-    const saveCurrent = () => {
-      let cur = watchTimeRef.current;
-      let dur = defaultDuration;
-
-      if (videoRef.current && activeServer?.mode === 'native') {
-        cur = videoRef.current.currentTime || cur;
-        dur = videoRef.current.duration || dur;
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
       }
+    };
+  }, [activeServer?.id, activeServer?.mode, selectedQuality.url, customStreamUrl]);
 
+  // Periodic watch progress save
+  useEffect(() => {
+    if (!currentTime || !duration || duration <= 0) return;
+    const timer = setInterval(() => {
       storageService.saveProgress({
         mediaId: media.id,
-        episodeId: epKey,
-        seasonNumber: isSeries ? activeSeason : undefined,
-        episodeNumber: isSeries ? activeEpisode : undefined,
-        currentTime: Math.round(cur),
-        duration: Math.round(dur),
-        percentage: Math.min(100, Math.round((cur / Math.max(1, dur)) * 100)),
-        lastUpdated: Date.now(),
-        title,
-        posterPath: media.posterPath,
         mediaSnapshot: media,
+        title: title,
+        posterPath: media.posterPath,
+        currentTime,
+        duration,
+        lastUpdated: Date.now(),
+        episodeId,
+        seasonNumber: activeSeason,
+        episodeNumber: activeEpisode,
       });
-    };
-
-    // Save initial progress immediately
-    saveCurrent();
-
-    // Periodic timer every 5 seconds
-    const interval = setInterval(() => {
-      if (activeServer?.mode === 'native') {
-        if (videoRef.current && !videoRef.current.paused) {
-          watchTimeRef.current = videoRef.current.currentTime;
-          saveCurrent();
-        }
-      } else {
-        // Embed mode (iframe)
-        watchTimeRef.current += 5;
-        saveCurrent();
-      }
     }, 5000);
+    return () => clearInterval(timer);
+  }, [currentTime, duration, media, episodeId, activeSeason, activeEpisode, title]);
 
-    return () => {
-      clearInterval(interval);
-      saveCurrent();
-    };
-  }, [media, episodeId, activeSeason, activeEpisode, isSeries, duration, title, activeServer?.mode]);
+  const togglePlay = () => {
+    if (activeServer?.mode !== 'native') return;
+    if (videoRef.current) {
+      if (isPlaying) {
+        videoRef.current.pause();
+        setIsPlaying(false);
+      } else {
+        videoRef.current.play().catch(() => {});
+        setIsPlaying(true);
+      }
+    }
+  };
+
+  const seek = (seconds: number) => {
+    if (activeServer?.mode !== 'native' || !videoRef.current) return;
+    videoRef.current.currentTime = Math.max(
+      0,
+      Math.min(duration, videoRef.current.currentTime + seconds)
+    );
+  };
+
+  const toggleMute = () => {
+    if (videoRef.current) {
+      videoRef.current.muted = !isMuted;
+      setIsMuted(!isMuted);
+    }
+  };
+
+  const toggleFullscreen = () => {
+    toggleAndroidLandscape();
+  };
 
   const resetControlsTimeout = () => {
     setShowControls(true);
     if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
     controlsTimeoutRef.current = setTimeout(() => {
-      if (isPlaying && activeServer?.mode === 'native') {
-        setShowControls(false);
-        setShowSettingsMenu('none');
-      }
-    }, 3500);
+      if (isPlaying && activeMenu === 'none') setShowControls(false);
+    }, 4500);
   };
 
-  const togglePlay = () => {
-    const video = videoRef.current;
-    if (!video) return;
-    if (video.paused) {
-      video.play();
-      setIsPlaying(true);
-    } else {
-      video.pause();
-      setIsPlaying(false);
-    }
-    resetControlsTimeout();
-  };
-
-  const seek = (seconds: number) => {
-    const video = videoRef.current;
-    if (!video) return;
-    video.currentTime = Math.max(0, Math.min(duration, video.currentTime + seconds));
-    resetControlsTimeout();
-  };
-
-  const handleSeekChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const video = videoRef.current;
-    if (!video) return;
-    const targetTime = parseFloat(e.target.value);
-    video.currentTime = targetTime;
-    setCurrentTime(targetTime);
-    resetControlsTimeout();
-  };
-
-  const toggleMute = () => {
-    const video = videoRef.current;
-    if (!video) return;
-    video.muted = !video.muted;
-    setIsMuted(video.muted);
-    resetControlsTimeout();
-  };
-
-  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const video = videoRef.current;
-    if (!video) return;
-    const val = parseFloat(e.target.value);
-    video.volume = val;
-    setVolume(val);
-    setIsMuted(val === 0);
-    resetControlsTimeout();
-  };
-
-  const toggleFullscreen = () => {
-    const container = containerRef.current;
-    if (!container) return;
-    if (!document.fullscreenElement) {
-      container.requestFullscreen().catch(() => {});
-      setIsFullscreen(true);
-    } else {
-      document.exitFullscreen().catch(() => {});
-      setIsFullscreen(false);
-    }
-    resetControlsTimeout();
-  };
-
-  const formatTime = (secs: number) => {
-    const m = Math.floor(secs / 60);
-    const s = Math.floor(secs % 60);
-    const h = Math.floor(m / 60);
-    const remM = m % 60;
-    if (h > 0) {
-      return `${h}:${remM.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    }
-    return `${m}:${s.toString().padStart(2, '0')}`;
-  };
-
-  // Smart TV Remote & Keyboard Navigation Listener (DPAD, Space, Arrows, Volume, Media Keys)
+  // Keyboard navigation & remote control hotkeys
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if user is typing in custom stream input
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      resetControlsTimeout();
 
+      // If a menu modal is open, Escape closes the menu
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        if (activeMenu !== 'none') {
+          setActiveMenu('none');
+          return;
+        }
+        onClose();
+        return;
+      }
+
+      // Hotkeys for TV Remote & Air Mouse
       switch (e.key) {
+        case 'a':
+        case 'A':
+          e.preventDefault();
+          setActiveMenu((prev) => (prev === 'audio' ? 'none' : 'audio'));
+          break;
+        case 'q':
+        case 'Q':
+          e.preventDefault();
+          setActiveMenu((prev) => (prev === 'quality' ? 'none' : 'quality'));
+          break;
+        case 't':
+        case 'T':
+          e.preventDefault();
+          setActiveMenu((prev) => (prev === 'torrents' ? 'none' : 'torrents'));
+          break;
         case ' ':
         case 'k':
         case 'K':
-          e.preventDefault();
-          togglePlay();
-          showOsd(isPlaying ? '⏸ Пауза' : '▶ Відтворення');
-          break;
-        case 'Enter':
-          // If a button is focused, allow standard button activation
-          if (document.activeElement && document.activeElement.tagName === 'BUTTON') {
-            return;
+          if (activeServer?.mode === 'native') {
+            e.preventDefault();
+            togglePlay();
+            showOsd(isPlaying ? '⏸ Пауза' : '▶ Відтворення');
           }
-          e.preventDefault();
-          togglePlay();
-          showOsd(isPlaying ? '⏸ Пауза' : '▶ Відтворення');
           break;
         case 'ArrowLeft':
-        case 'j':
-        case 'J':
-          e.preventDefault();
-          seek(-10);
-          showOsd('⏪ -10 сек');
+          if (activeServer?.mode === 'native') {
+            e.preventDefault();
+            seek(-10);
+            showOsd('⏪ -10 сек');
+          }
           break;
         case 'ArrowRight':
-        case 'l':
-        case 'L':
-          e.preventDefault();
-          seek(10);
-          showOsd('⏩ +10 сек');
+          if (activeServer?.mode === 'native') {
+            e.preventDefault();
+            seek(10);
+            showOsd('⏩ +10 сек');
+          }
           break;
         case 'ArrowUp':
-          e.preventDefault();
           if (videoRef.current && activeServer?.mode === 'native') {
+            e.preventDefault();
             const nextVol = Math.min(1, Number((volume + 0.1).toFixed(2)));
             videoRef.current.volume = nextVol;
             setVolume(nextVol);
             setIsMuted(false);
             showOsd(`🔊 ${Math.round(nextVol * 100)}%`);
-          } else {
-            showOsd('🔊 Гучність +');
           }
           break;
         case 'ArrowDown':
-          e.preventDefault();
           if (videoRef.current && activeServer?.mode === 'native') {
+            e.preventDefault();
             const nextVol = Math.max(0, Number((volume - 0.1).toFixed(2)));
             videoRef.current.volume = nextVol;
             setVolume(nextVol);
             setIsMuted(nextVol === 0);
             showOsd(nextVol === 0 ? '🔇 Без звуку' : `🔉 ${Math.round(nextVol * 100)}%`);
-          } else {
-            showOsd('🔉 Гучність -');
           }
           break;
         case 'm':
         case 'M':
-          e.preventDefault();
-          toggleMute();
-          showOsd(isMuted ? '🔊 Звук увімкнено' : '🔇 Без звуку');
+          if (activeServer?.mode === 'native') {
+            e.preventDefault();
+            toggleMute();
+            showOsd(isMuted ? '🔊 Звук увімкнено' : '🔇 Без звуку');
+          }
           break;
         case 'f':
         case 'F':
           e.preventDefault();
           toggleFullscreen();
           showOsd(isFullscreen ? '🗗 Звичайний екран' : '🗖 Повний екран');
-          break;
-        case 'Escape':
-          e.preventDefault();
-          onClose();
           break;
       }
     };
@@ -501,7 +542,23 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('cinema-remote-media', handleRemoteMedia);
     };
-  }, [isPlaying, volume, isMuted, isFullscreen, activeServer?.mode, isSeries, onClose]);
+  }, [isPlaying, volume, isMuted, isFullscreen, activeServer?.mode, isSeries, activeMenu, onClose]);
+
+  // Current audio label for the dedicated action button
+  const getCurrentAudioLabel = () => {
+    if (activeServer?.id.includes('ashdi') || activeServer?.langs?.includes('UA')) return '🇺🇦 Ashdi UA';
+    if (activeServer?.id.includes('loadbox')) return '🎭 Rezka Multi';
+    if (activeServer?.mode === 'torrent') return '⚡ P2P Торрент';
+    if (activeServer?.langs && activeServer.langs.length > 0) return `🌐 ${activeServer.langs[0]}`;
+    return '🔊 Озвучення';
+  };
+
+  // Current quality label
+  const getCurrentQualityLabel = () => {
+    if (activeServer?.mode === 'torrent') return '⚡ 4K / 1080p';
+    if (activeServer?.id.includes('vidlink') || activeServer?.id.includes('vidsrc')) return '💎 4K HDR';
+    return '📺 1080p';
+  };
 
   return (
     <div
@@ -510,16 +567,20 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       onClick={resetControlsTimeout}
       className="fixed inset-0 z-50 bg-black flex flex-col select-none overflow-hidden"
     >
-      {/* DEDICATED TOP HEADER BAR (Never overlaps iframe controls; compact on mobile) */}
-      <div className="shrink-0 z-30 bg-[#07090e] border-b border-white/10 px-2.5 sm:px-4 py-2 space-y-2">
-        {/* Row 1: Back, Title, Episode Controls, Rotate/Fullscreen */}
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
+      {/* ========================================================
+          DEDICATED TV / AIR MOUSE TOP CONTROL BAR
+          ======================================================== */}
+      <div className="shrink-0 z-30 bg-[#07090e] border-b border-white/10 px-3 sm:px-5 py-2.5 space-y-2">
+        {/* Row 1: Back, Title, High-Visibility TV Remote Buttons */}
+        <div className="flex items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2.5 min-w-0">
             <button
+              ref={backBtnRef}
               onClick={onClose}
               tabIndex={0}
               className="p-2.5 rounded-xl bg-white/10 hover:bg-red-600 text-white transition-all active:scale-95 shrink-0 tv-btn-focus focus:outline-none"
               aria-label={t('closePlayer')}
+              title="Закрити плеєр (ESC / Назад)"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
@@ -533,15 +594,68 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0">
-            {/* Quick Season/Episode Switcher for Series & Anime */}
+          {/* D-Pad & Mouse Accessible Primary Controls */}
+          <div className="flex items-center gap-2 shrink-0">
+            {/* 1. AUDIO / DUBBING SELECTOR BUTTON */}
+            <button
+              onClick={() => setActiveMenu((prev) => (prev === 'audio' ? 'none' : 'audio'))}
+              tabIndex={0}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all tv-btn-focus focus:outline-none ${
+                activeMenu === 'audio'
+                  ? 'bg-amber-500 text-black border-amber-400'
+                  : 'bg-amber-500/15 text-amber-300 border-amber-500/30 hover:bg-amber-500/25'
+              }`}
+              title="Вибір мовної доріжки та озвучення (A)"
+            >
+              <Radio className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Озвучення:</span>
+              <span>{getCurrentAudioLabel()}</span>
+            </button>
+
+            {/* 2. QUALITY SELECTOR BUTTON */}
+            <button
+              onClick={() => setActiveMenu((prev) => (prev === 'quality' ? 'none' : 'quality'))}
+              tabIndex={0}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all tv-btn-focus focus:outline-none ${
+                activeMenu === 'quality'
+                  ? 'bg-emerald-500 text-black border-emerald-400'
+                  : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25'
+              }`}
+              title="Вибір якості відео (Q)"
+            >
+              <Settings className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Якість:</span>
+              <span>{getCurrentQualityLabel()}</span>
+            </button>
+
+            {/* 3. TORRENT STREAM BUTTON */}
+            <button
+              onClick={() => setActiveMenu((prev) => (prev === 'torrents' ? 'none' : 'torrents'))}
+              tabIndex={0}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all tv-btn-focus focus:outline-none ${
+                activeMenu === 'torrents' || activeServer?.mode === 'torrent'
+                  ? 'bg-purple-600 text-white border-purple-400 shadow-lg shadow-purple-600/30'
+                  : 'bg-purple-500/15 text-purple-300 border-purple-500/30 hover:bg-purple-500/25'
+              }`}
+              title="Торренти онлайн P2P (T)"
+            >
+              <HardDrive className="w-3.5 h-3.5" />
+              <span>⚡ Торренти</span>
+              {torrentStreams.length > 0 && (
+                <span className="px-1.5 py-0.2 text-[10px] rounded-full bg-purple-500/30 text-purple-200">
+                  {torrentStreams.length}
+                </span>
+              )}
+            </button>
+
+            {/* 4. Quick Season/Episode Switcher for Series */}
             {isSeries && (
-              <div className="flex items-center gap-1 bg-white/5 px-1.5 py-1 rounded-xl border border-white/10">
+              <div className="flex items-center gap-1 bg-white/5 px-2 py-1 rounded-xl border border-white/10">
                 <button
                   onClick={() => setActiveEpisode((prev) => Math.max(1, prev - 1))}
                   disabled={activeEpisode <= 1}
                   tabIndex={0}
-                  className="p-1.5 rounded-lg hover:bg-white/10 disabled:opacity-30 text-white tv-btn-focus focus:outline-none"
+                  className="p-1 rounded hover:bg-white/10 disabled:opacity-30 text-white tv-btn-focus focus:outline-none"
                   title={t('prevEpisode')}
                 >
                   <SkipBack className="w-3.5 h-3.5" />
@@ -570,7 +684,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                   tabIndex={0}
                   className="bg-transparent text-[11px] font-bold text-white focus:outline-none cursor-pointer"
                 >
-                  {Array.from({ length: 30 }, (_, i) => i + 1).map((eNum) => (
+                  {Array.from({ length: 35 }, (_, i) => i + 1).map((eNum) => (
                     <option key={eNum} value={eNum} className="bg-slate-900 text-white">
                       {t('episodeLetter')}{eNum}
                     </option>
@@ -579,7 +693,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 <button
                   onClick={() => setActiveEpisode((prev) => prev + 1)}
                   tabIndex={0}
-                  className="p-1.5 rounded-lg hover:bg-white/10 text-white tv-btn-focus focus:outline-none"
+                  className="p-1 rounded hover:bg-white/10 text-white tv-btn-focus focus:outline-none"
                   title={t('nextEpisode')}
                 >
                   <SkipForward className="w-3.5 h-3.5" />
@@ -587,7 +701,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               </div>
             )}
 
-            {/* Next Server Quick Failover Button */}
+            {/* 5. Next Mirror Quick Failover Button */}
             {availableServers.filter((s) => s.mode === 'embed').length > 1 && (
               <button
                 onClick={switchToNextServer}
@@ -600,26 +714,23 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               </button>
             )}
 
-            {/* Rotate Phone to Landscape / Fullscreen Button */}
+            {/* 6. Rotate Phone to Landscape Button */}
             <button
               onClick={toggleAndroidLandscape}
               tabIndex={0}
-              className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold flex items-center gap-1 border transition-all tv-btn-focus focus:outline-none ${
+              className={`p-2 rounded-xl text-[11px] font-bold flex items-center gap-1 border transition-all tv-btn-focus focus:outline-none ${
                 isLandscapeLocked
                   ? 'bg-amber-500 text-slate-950 border-amber-400'
                   : 'bg-white/10 text-slate-200 border-white/15 hover:bg-white/20'
               }`}
               title={isLandscapeLocked ? t('rotateNormal') : t('rotateLandscape')}
             >
-              <Smartphone className={`w-3.5 h-3.5 ${isLandscapeLocked ? 'rotate-90' : ''} transition-transform`} />
-              <span className="hidden sm:inline">
-                {isLandscapeLocked ? t('rotateNormal') : t('rotateLandscape')}
-              </span>
+              <Smartphone className={`w-4 h-4 ${isLandscapeLocked ? 'rotate-90' : ''} transition-transform`} />
             </button>
           </div>
         </div>
 
-        {/* Row 2: Multi-Server Switcher Pills (Scrollable on Phone!) */}
+        {/* Row 2: Multi-Server Switcher Pills */}
         <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-0.5">
           <span className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1 shrink-0 mr-1">
             <Server className="w-3 h-3 text-red-500" /> {t('serverLabel')}
@@ -628,23 +739,33 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             const active = activeServer?.id === srv.id;
             const health = serverHealthMap[srv.id];
             const isUa = srv.id.includes('ashdi') || srv.langs?.includes('UA');
+            const isTorrent = srv.mode === 'torrent';
 
             return (
               <button
                 key={srv.id}
-                onClick={() => setSelectedServerId(srv.id)}
+                onClick={() => {
+                  setSelectedServerId(srv.id);
+                  if (srv.mode === 'torrent' && srv.magnet) {
+                    setCurrentMagnet(srv.magnet);
+                  }
+                }}
                 tabIndex={0}
                 className={`px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap flex items-center gap-1.5 border transition-all shrink-0 tv-btn-focus focus:outline-none ${
                   active
-                    ? 'bg-red-600 text-white border-red-500 shadow-md shadow-red-600/30'
+                    ? isTorrent
+                      ? 'bg-purple-600 text-white border-purple-400 shadow-md shadow-purple-600/30'
+                      : 'bg-red-600 text-white border-red-500 shadow-md shadow-red-600/30'
                     : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/15 hover:text-white'
                 }`}
               >
                 {/* Health dot */}
-                {health === 'ok' ? (
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                {isTorrent ? (
+                  <span>⚡</span>
                 ) : isUa ? (
                   <span>🇺🇦</span>
+                ) : health === 'ok' ? (
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                 ) : null}
 
                 <span>{srv.name}</span>
@@ -670,7 +791,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           )}
         </div>
 
-        {/* Optional Custom Stream URL Bar */}
+        {/* Custom Stream URL Bar */}
         {showCustomUrlInput && activeServer?.mode === 'native' && (
           <div className="flex items-center gap-2 pt-1">
             <input
@@ -692,22 +813,240 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
       {/* Auto Failover Notification Toast */}
       {autoFailoverMsg && (
-        <div className="absolute top-24 left-1/2 -translate-x-1/2 z-40 bg-black/90 border border-amber-500 text-amber-300 px-4 py-2 rounded-xl text-xs font-bold shadow-2xl flex items-center gap-2 animate-fadeIn">
+        <div className="absolute top-24 left-1/2 -translate-x-1/2 z-40 bg-black/95 border border-amber-500 text-amber-300 px-4 py-2 rounded-xl text-xs font-bold shadow-2xl flex items-center gap-2 animate-fadeIn">
           <AlertCircle className="w-4 h-4 text-amber-400" />
           <span>{autoFailoverMsg}</span>
         </div>
       )}
 
-      {/* MAIN VIDEO VIEWPORT */}
+      {/* ========================================================
+          QUICK OVERLAY MENUS FOR TV REMOTE & AIR MOUSE
+          ======================================================== */}
+      {activeMenu !== 'none' && (
+        <div 
+          className="absolute inset-0 z-40 bg-black/85 flex items-center justify-center p-4 animate-fadeIn"
+          onClick={() => setActiveMenu('none')}
+        >
+          <div 
+            className="bg-[#0b0f19] border border-white/20 rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl text-left"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <h3 className="text-white text-base sm:text-lg font-bold flex items-center gap-2">
+                {activeMenu === 'audio' && (
+                  <>
+                    <Radio className="w-5 h-5 text-amber-400" />
+                    <span>Вибір озвучення та мовної доріжки</span>
+                  </>
+                )}
+                {activeMenu === 'quality' && (
+                  <>
+                    <Settings className="w-5 h-5 text-emerald-400" />
+                    <span>Вибір якості та відео-сервера</span>
+                  </>
+                )}
+                {activeMenu === 'torrents' && (
+                  <>
+                    <HardDrive className="w-5 h-5 text-purple-400" />
+                    <span>P2P Торренти онлайн ({torrentStreams.length})</span>
+                  </>
+                )}
+              </h3>
+              <button
+                onClick={() => setActiveMenu('none')}
+                tabIndex={0}
+                className="p-1.5 rounded-lg bg-white/10 hover:bg-red-600 text-slate-300 hover:text-white transition-all tv-btn-focus focus:outline-none"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Content for Audio Menu */}
+            {activeMenu === 'audio' && (
+              <div className="space-y-2.5 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                <p className="text-xs text-slate-400">
+                  Оберіть потрібну версію дубляжу. Сервер автоматично налаштує відповідний звуковий потік:
+                </p>
+                {availableServers.map((srv) => {
+                  const isCur = activeServer?.id === srv.id;
+                  const isUa = srv.id.includes('ashdi') || srv.langs?.includes('UA');
+                  const isRezka = srv.id.includes('loadbox');
+                  const isTorrent = srv.mode === 'torrent';
+
+                  return (
+                    <button
+                      key={srv.id}
+                      onClick={() => {
+                        setSelectedServerId(srv.id);
+                        if (isTorrent && srv.magnet) setCurrentMagnet(srv.magnet);
+                        setActiveMenu('none');
+                        showOsd(`🔊 ${srv.name}`);
+                      }}
+                      tabIndex={0}
+                      className={`w-full p-3 rounded-xl border text-left flex items-center justify-between transition-all tv-btn-focus focus:outline-none ${
+                        isCur
+                          ? 'bg-red-600 text-white border-red-500 shadow-md'
+                          : 'bg-white/5 border-white/10 text-slate-200 hover:bg-white/15'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-xl">
+                          {isUa ? '🇺🇦' : isRezka ? '🎭' : isTorrent ? '⚡' : '🌐'}
+                        </span>
+                        <div>
+                          <h4 className="font-bold text-sm">{srv.name}</h4>
+                          <p className="text-xs text-slate-300">
+                            {isUa
+                              ? 'Повний професійний український дубляж (UAKino)'
+                              : isRezka
+                                ? 'Багатоголосе озвучення (HDRezka / LostFilm / студії)'
+                                : isTorrent
+                                  ? 'P2P потік без стиснення з оригінальними доріжками'
+                                  : 'Оригінальний звук + субтитри (VidLink 4K / VidSrc)'}
+                          </p>
+                        </div>
+                      </div>
+                      {isCur && <Check className="w-5 h-5 text-white shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Content for Quality Menu */}
+            {activeMenu === 'quality' && (
+              <div className="space-y-2.5 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                <p className="text-xs text-slate-400">
+                  Оберіть бажану якість відтворення:
+                </p>
+                {[
+                  { id: 'vidlink', label: '💎 4K HDR Ultra HD', desc: 'Максимальна якість для 4K ТВ та проєкторів (VidLink 4K)' },
+                  { id: 'vidsrc', label: '📺 1080p Ultra Full HD', desc: 'Швидка буферизація та висока чіткість (VidSrc PRO)' },
+                  { id: 'ashdi', label: '🇺🇦 1080p HD (Ashdi UA)', desc: 'Український дубляж у високій якості 1080p' },
+                  { id: 'loadbox', label: '🎭 1080p HD (Rezka Multi)', desc: 'Адаптивна якість 1080p / 720p з вибором озвучень' },
+                ].map((qOpt) => {
+                  const srv = availableServers.find((s) => s.id === qOpt.id) || availableServers[0];
+                  const isCur = activeServer?.id === srv?.id;
+
+                  return (
+                    <button
+                      key={qOpt.id}
+                      onClick={() => {
+                        if (srv) setSelectedServerId(srv.id);
+                        setActiveMenu('none');
+                        showOsd(`💎 ${qOpt.label}`);
+                      }}
+                      tabIndex={0}
+                      className={`w-full p-3 rounded-xl border text-left flex items-center justify-between transition-all tv-btn-focus focus:outline-none ${
+                        isCur
+                          ? 'bg-emerald-600 text-white border-emerald-500 shadow-md'
+                          : 'bg-white/5 border-white/10 text-slate-200 hover:bg-white/15'
+                      }`}
+                    >
+                      <div>
+                        <h4 className="font-bold text-sm">{qOpt.label}</h4>
+                        <p className="text-xs text-slate-300">{qOpt.desc}</p>
+                      </div>
+                      {isCur && <Check className="w-5 h-5 text-white shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Content for Torrents Menu */}
+            {activeMenu === 'torrents' && (
+              <div className="space-y-2.5 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                <p className="text-xs text-slate-400">
+                  Пряме програвання торрентів через вбудований P2P-рушій (без потреби завантаження файлу на диск):
+                </p>
+                {torrentStreams.length === 0 ? (
+                  <div className="py-8 text-center text-slate-400 space-y-2">
+                    <HardDrive className="w-8 h-8 mx-auto text-slate-500 animate-pulse" />
+                    <p className="text-xs">Пошук відкритих P2P-роздач...</p>
+                  </div>
+                ) : (
+                  torrentStreams.map((tItem) => (
+                    <button
+                      key={tItem.id}
+                      onClick={() => {
+                        setCurrentMagnet(tItem.magnet);
+                        // Add or activate this torrent server
+                        setSelectedServerId(`torrent-${tItem.id}`);
+                        setActiveMenu('none');
+                        showOsd(`⚡ P2P: ${tItem.quality}`);
+                      }}
+                      tabIndex={0}
+                      className="w-full p-3 rounded-xl border border-white/10 bg-white/5 hover:bg-purple-900/40 hover:border-purple-500/50 text-left flex items-center justify-between transition-all tv-btn-focus focus:outline-none"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-600/30 text-purple-300 border border-purple-500/30">
+                            {tItem.tracker}
+                          </span>
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                            {tItem.quality}
+                          </span>
+                          <span className="text-xs font-mono text-emerald-400 font-bold">
+                            ▲ {tItem.seeds} seeds
+                          </span>
+                          <span className="text-xs font-mono text-slate-400">
+                            {tItem.size}
+                          </span>
+                        </div>
+                        <h4 className="font-semibold text-white text-xs sm:text-sm line-clamp-1">{tItem.title}</h4>
+                        <p className="text-[11px] text-slate-400">{tItem.audio}</p>
+                      </div>
+                      <div className="p-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white shrink-0 ml-3 shadow-md">
+                        <Play className="w-4 h-4 fill-white" />
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          MAIN VIDEO VIEWPORT
+          ======================================================== */}
       <div className="relative flex-1 w-full bg-black flex items-center justify-center overflow-hidden">
         {/* On-Screen Display (OSD) feedback for Remote Control and Air Mouse */}
         {osdMessage && (
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-none bg-black/90 border border-white/25 text-white px-6 py-3.5 rounded-2xl text-base sm:text-xl font-black shadow-2xl backdrop-blur-md animate-fadeIn flex items-center gap-3">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-none bg-black/95 border border-white/25 text-white px-6 py-3.5 rounded-2xl text-base sm:text-xl font-black shadow-2xl animate-fadeIn flex items-center gap-3">
             <span>{osdMessage}</span>
           </div>
         )}
 
-        {activeServer && activeServer.mode !== 'native' ? (
+        {/* 1. TORRENT STREAMING VIEWPORT */}
+        {activeServer?.mode === 'torrent' ? (
+          <div className="relative w-full h-full flex items-center justify-center bg-black">
+            {iframeLoading && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#05070c] z-10">
+                <div className="w-12 h-12 rounded-full border-4 border-purple-600/30 border-t-purple-600 animate-spin" />
+                <p className="text-xs text-slate-300 font-medium">
+                  Підключення до P2P-роздачі <span className="text-purple-400 font-bold">{activeServer.name}</span>...
+                </p>
+                <p className="text-[11px] text-slate-500 px-6 text-center pt-1">
+                  Буферизація відеопотоку безпосередньо з мережі торент-пірів.
+                </p>
+                <div className="flex items-center gap-2 pt-2">
+                  <button
+                    onClick={switchToNextServer}
+                    className="px-4 py-1.5 rounded-xl bg-white/10 hover:bg-red-600 text-white text-xs font-bold border border-white/15 transition-all tv-btn-focus focus:outline-none"
+                  >
+                    Перемкнути на звичайний сервер
+                  </button>
+                </div>
+              </div>
+            )}
+            <div id="webtor-torrent-target" className="w-full h-full flex items-center justify-center" />
+          </div>
+        ) : activeServer && activeServer.mode !== 'native' ? (
+          /* 2. EMBED / IFRAME STREAMING VIEWPORT */
           <>
             {iframeLoading && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#05070c] z-10">
@@ -718,7 +1057,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 <div className="flex items-center gap-2 pt-2">
                   <button
                     onClick={switchToNextServer}
-                    className="px-4 py-1.5 rounded-xl bg-white/10 hover:bg-red-600 text-white text-xs font-bold border border-white/15 transition-all"
+                    className="px-4 py-1.5 rounded-xl bg-white/10 hover:bg-red-600 text-white text-xs font-bold border border-white/15 transition-all tv-btn-focus focus:outline-none"
                   >
                     {t('nextServer')}
                   </button>
@@ -740,7 +1079,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             />
           </>
         ) : (
-          /* NATIVE HTML5 / HLS VIDEO MODE */
+          /* 3. NATIVE HTML5 / HLS VIDEO MODE */
           <>
             <video
               ref={videoRef}
@@ -773,9 +1112,14 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    setShowSettingsMenu(showSettingsMenu === 'audio' ? 'none' : 'audio');
+                    if (audioTracks.length > 1) {
+                      const curIdx = audioTracks.findIndex((a) => a.id === selectedAudio.id);
+                      const next = audioTracks[(curIdx + 1) % audioTracks.length];
+                      if (next) setSelectedAudio(next);
+                    }
+                    setActiveMenu(activeMenu === 'audio' ? 'none' : 'audio');
                   }}
-                  className="px-2.5 py-1.5 rounded-xl bg-black/70 text-xs font-semibold text-amber-400 border border-white/15 flex items-center gap-1.5"
+                  className="px-2.5 py-1.5 rounded-xl bg-black/80 text-xs font-semibold text-amber-400 border border-white/15 flex items-center gap-1.5 tv-btn-focus focus:outline-none"
                 >
                   <Radio className="w-3.5 h-3.5" />
                   <span className="truncate max-w-[110px]">{selectedAudio.name}</span>
@@ -783,9 +1127,14 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    setShowSettingsMenu(showSettingsMenu === 'quality' ? 'none' : 'quality');
+                    if (nonEmbedQualities.length > 1) {
+                      const curIdx = nonEmbedQualities.findIndex((q) => q.url === selectedQuality.url);
+                      const next = nonEmbedQualities[(curIdx + 1) % nonEmbedQualities.length];
+                      if (next) setSelectedQuality(next);
+                    }
+                    setActiveMenu(activeMenu === 'quality' ? 'none' : 'quality');
                   }}
-                  className="px-2.5 py-1.5 rounded-xl bg-black/70 text-xs font-bold text-emerald-400 border border-white/15 flex items-center gap-1.5"
+                  className="px-2.5 py-1.5 rounded-xl bg-black/80 text-xs font-bold text-emerald-400 border border-white/15 flex items-center gap-1.5 tv-btn-focus focus:outline-none"
                 >
                   <Settings className="w-3.5 h-3.5" />
                   <span>{selectedQuality.label}</span>
@@ -797,137 +1146,79 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 <button
                   onClick={() => seek(-10)}
                   tabIndex={0}
-                  className="p-3.5 rounded-full bg-white/15 hover:bg-white/25 text-white backdrop-blur-md active:scale-90 transition-transform tv-btn-focus focus:outline-none"
-                  title={t('rewind10')}
+                  className="p-3.5 rounded-full bg-white/15 hover:bg-white/25 text-white active:scale-90 transition-transform tv-btn-focus focus:outline-none"
+                  aria-label="Перемотати назад 10 сек"
                 >
-                  <RotateCcw className="w-6 h-6 sm:w-8 sm:h-8" />
+                  <RotateCcw className="w-5 h-5 sm:w-6 sm:h-6" />
                 </button>
-
                 <button
                   onClick={togglePlay}
                   tabIndex={0}
-                  className="p-5 rounded-full bg-red-600 hover:bg-red-500 text-white shadow-xl shadow-red-600/40 active:scale-95 transition-all tv-btn-focus focus:outline-none"
+                  className="p-5 sm:p-6 rounded-full bg-red-600 hover:bg-red-500 text-white shadow-xl shadow-red-600/40 active:scale-95 transition-all tv-btn-focus focus:outline-none"
+                  aria-label={isPlaying ? "Пауза" : "Відтворення"}
                 >
                   {isPlaying ? (
-                    <Pause className="w-8 h-8 sm:w-10 sm:h-10" />
+                    <Pause className="w-7 h-7 sm:w-8 sm:h-8 fill-white" />
                   ) : (
-                    <Play className="w-8 h-8 sm:w-10 sm:h-10 ml-1" />
+                    <Play className="w-7 h-7 sm:w-8 sm:h-8 fill-white ml-0.5" />
                   )}
                 </button>
-
                 <button
                   onClick={() => seek(10)}
                   tabIndex={0}
-                  className="p-3.5 rounded-full bg-white/15 hover:bg-white/25 text-white backdrop-blur-md active:scale-90 transition-transform tv-btn-focus focus:outline-none"
-                  title={t('forward10')}
+                  className="p-3.5 rounded-full bg-white/15 hover:bg-white/25 text-white active:scale-90 transition-transform tv-btn-focus focus:outline-none"
+                  aria-label="Перемотати вперед 10 сек"
                 >
-                  <RotateCw className="w-6 h-6 sm:w-8 sm:h-8" />
+                  <RotateCw className="w-5 h-5 sm:w-6 sm:h-6" />
                 </button>
               </div>
 
-              {/* Bottom Timeline */}
-              <div className="p-3.5 sm:p-5 space-y-2.5 pointer-events-auto">
-                <div className="relative flex items-center">
-                  <div className="absolute left-0 right-0 h-1.5 bg-white/20 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-white/35"
-                      style={{ width: `${duration > 0 ? (bufferedEnd / duration) * 100 : 0}%` }}
-                    />
-                  </div>
+              {/* Bottom Progress Bar & Volume */}
+              <div className="p-3 sm:p-5 space-y-2 pointer-events-auto">
+                <div
+                  className="relative w-full h-2 bg-white/20 rounded-full cursor-pointer overflow-hidden"
+                  onClick={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const pos = (e.clientX - rect.left) / rect.width;
+                    seek(pos * duration - currentTime);
+                  }}
+                >
                   <div
-                    className="absolute left-0 h-1.5 bg-red-600 rounded-full pointer-events-none"
-                    style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
+                    className="absolute top-0 left-0 bottom-0 bg-white/30"
+                    style={{ width: `${duration > 0 ? (bufferedEnd / duration) * 100 : 0}%` }}
                   />
-                  <input
-                    type="range"
-                    min={0}
-                    max={duration || 100}
-                    step={0.1}
-                    value={currentTime}
-                    onChange={handleSeekChange}
-                    className="relative w-full h-5 opacity-0 cursor-pointer z-10"
+                  <div
+                    className="absolute top-0 left-0 bottom-0 bg-red-600"
+                    style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
                   />
                 </div>
 
-                <div className="flex items-center justify-between text-white text-xs sm:text-sm">
+                <div className="flex items-center justify-between text-xs text-slate-300">
+                  <span>
+                    {Math.floor(currentTime / 60)}:
+                    {String(Math.floor(currentTime % 60)).padStart(2, '0')} /{' '}
+                    {Math.floor(duration / 60)}:
+                    {String(Math.floor(duration % 60)).padStart(2, '0')}
+                  </span>
                   <div className="flex items-center gap-3">
-                    <button onClick={togglePlay} tabIndex={0} className="hover:text-red-500 tv-btn-focus focus:outline-none rounded-lg p-1">
-                      {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+                    <button
+                      onClick={toggleMute}
+                      tabIndex={0}
+                      className="p-1 hover:text-white tv-btn-focus focus:outline-none"
+                    >
+                      {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
                     </button>
-                    <button onClick={toggleMute} tabIndex={0} className="hover:text-red-500 tv-btn-focus focus:outline-none rounded-lg p-1">
-                      {isMuted || volume === 0 ? (
-                        <VolumeX className="w-5 h-5 text-red-500" />
-                      ) : (
-                        <Volume2 className="w-5 h-5" />
-                      )}
+                    <button
+                      onClick={toggleFullscreen}
+                      tabIndex={0}
+                      className="p-1 hover:text-white tv-btn-focus focus:outline-none"
+                    >
+                      {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
                     </button>
-                    <input
-                      type="range"
-                      min={0}
-                      max={1}
-                      step={0.05}
-                      value={isMuted ? 0 : volume}
-                      onChange={handleVolumeChange}
-                      className="w-16 sm:w-24 h-1 bg-white/20 accent-red-600 rounded-full cursor-pointer hidden sm:block"
-                    />
-                    <span className="font-mono text-slate-300">
-                      {formatTime(currentTime)} / {formatTime(duration)}
-                    </span>
                   </div>
-
-                  <button onClick={toggleFullscreen} tabIndex={0} className="p-1.5 rounded-lg hover:bg-white/10 tv-btn-focus focus:outline-none">
-                    {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
-                  </button>
                 </div>
               </div>
             </div>
-
-            {/* Quality & Audio Popups */}
-            {showSettingsMenu === 'quality' && (
-              <div className="absolute right-4 top-14 z-50 bg-[#121824] border border-white/15 rounded-xl shadow-2xl p-2 w-44 animate-fadeIn">
-                <div className="text-[11px] font-bold text-slate-400 px-3 py-1 uppercase">
-                  {t('qualityMenu')}
-                </div>
-                {nonEmbedQualities.map((q) => (
-                  <button
-                    key={q.label}
-                    onClick={() => {
-                      setSelectedQuality(q);
-                      setShowSettingsMenu('none');
-                    }}
-                    className="w-full flex items-center justify-between px-3 py-2 text-xs rounded-lg text-slate-200 hover:bg-white/10"
-                  >
-                    <span>{q.label}</span>
-                    {selectedQuality.label === q.label && (
-                      <Check className="w-4 h-4 text-emerald-400" />
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {showSettingsMenu === 'audio' && (
-              <div className="absolute right-4 top-14 z-50 bg-[#121824] border border-white/15 rounded-xl shadow-2xl p-2 w-60 animate-fadeIn">
-                <div className="text-[11px] font-bold text-slate-400 px-3 py-1 uppercase">
-                  {t('audioTrackMenu')}
-                </div>
-                {audioTracks.map((a) => (
-                  <button
-                    key={a.id}
-                    onClick={() => {
-                      setSelectedAudio(a);
-                      setShowSettingsMenu('none');
-                    }}
-                    className="w-full flex items-center justify-between px-3 py-2 text-xs rounded-lg text-slate-200 hover:bg-white/10"
-                  >
-                    <span className="truncate pr-2">{a.name}</span>
-                    {selectedAudio.id === a.id && (
-                      <Check className="w-4 h-4 text-amber-400 shrink-0" />
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
           </>
         )}
       </div>

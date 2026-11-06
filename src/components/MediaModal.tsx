@@ -125,6 +125,29 @@ export const MediaModal: React.FC<MediaModalProps> = ({
     }
   };
 
+  const handlePlayTorrent = (tItem: TorrentItem) => {
+    const torrentSource: MediaSource = {
+      id: `torrent-${tItem.id}`,
+      provider: 'Webtor P2P',
+      title: `${tItem.tracker} • ${tItem.quality}`,
+      type: 'torrent',
+      audioTracks: [{ id: 'torrent-audio', name: tItem.audio || 'Original', language: 'uk' }],
+      qualities: [{ label: (tItem.quality.includes('4K') ? '4K' : '1080p') as any, url: tItem.magnet }],
+      magnet: tItem.magnet,
+      embedUrl: tItem.magnet,
+      servers: [{
+        id: `torrent-${tItem.id}`,
+        name: `⚡ P2P ${tItem.tracker} (${tItem.quality})`,
+        badge: `${tItem.seeds} seeds`,
+        url: tItem.magnet,
+        mode: 'torrent',
+        magnet: tItem.magnet,
+      }],
+      status: 'working',
+    };
+    onPlayOnline(media, torrentSource, selectedEpisode);
+  };
+
   const handleFakeDownload = (name: string) => {
     setDownloadProgress((prev) => ({ ...prev, [name]: 5 }));
     const interval = setInterval(() => {
@@ -155,15 +178,18 @@ export const MediaModal: React.FC<MediaModalProps> = ({
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/85 backdrop-blur-md animate-fadeIn"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/90 animate-fadeIn"
       onClick={onClose}
     >
       <div 
-        className="relative w-full max-w-4xl bg-[#0c101a] border-t sm:border border-white/15 rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90dvh]"
+        className="relative w-full max-w-4xl bg-[#0c101a] border-t sm:border border-white/15 rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col h-[94dvh] sm:h-auto sm:max-h-[88vh]"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Mobile Pull / Drag Indicator Pill */}
+        <div className="w-12 h-1 bg-white/30 rounded-full mx-auto my-2 sm:hidden shrink-0" />
+
         {/* Backdrop Banner Header */}
-        <div className="relative h-52 sm:h-72 w-full shrink-0 overflow-hidden bg-slate-900">
+        <div className="relative h-44 sm:h-64 w-full shrink-0 overflow-hidden bg-slate-900">
           <img
             src={backdropSrc}
             alt={displayTitle}
@@ -176,7 +202,7 @@ export const MediaModal: React.FC<MediaModalProps> = ({
           <button
             onClick={onClose}
             tabIndex={0}
-            className="absolute top-4 right-4 p-2.5 rounded-full bg-black/60 hover:bg-red-600 text-white backdrop-blur-md border border-white/15 transition-all z-20 tv-btn-focus focus:outline-none"
+            className="absolute top-4 right-4 p-2.5 rounded-full bg-black/60 hover:bg-red-600 text-white border border-white/15 transition-all z-20 tv-btn-focus focus:outline-none"
             aria-label={t('closePlayer')}
           >
             <X className="w-5 h-5" />
@@ -322,9 +348,15 @@ export const MediaModal: React.FC<MediaModalProps> = ({
             )}
           </div>
 
-          <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-            {overview}
-          </p>
+          {overview ? (
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">{overview}</p>
+          ) : (
+            <div className="space-y-2 py-1 animate-pulse">
+              <div className="h-3.5 bg-white/10 rounded w-full"></div>
+              <div className="h-3.5 bg-white/10 rounded w-5/6"></div>
+              <div className="h-3.5 bg-white/10 rounded w-4/6"></div>
+            </div>
+          )}
 
           {(media.director || (media.cast && media.cast.length > 0)) && (
             <div className="p-3 rounded-xl bg-white/5 border border-white/10 text-xs space-y-1 text-slate-300">
@@ -596,13 +628,13 @@ export const MediaModal: React.FC<MediaModalProps> = ({
                           </button>
 
                           <button
-                            onClick={() => {
-                              if (sources[0]) onPlayOnline(media, sources[0], selectedEpisode);
-                            }}
-                            className="px-4 py-2 rounded-xl bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-red-600/30 active:scale-95 transition-all"
+                            onClick={() => handlePlayTorrent(tItem)}
+                            tabIndex={0}
+                            className="px-4 py-2 rounded-xl bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white font-bold text-xs sm:text-sm flex items-center gap-1.5 shadow-lg shadow-red-600/30 active:scale-95 transition-all tv-btn-focus focus:outline-none"
+                            title="Дивитися торрент онлайн без завантаження"
                           >
                             <Play className="w-4 h-4 fill-white" />
-                            <span>{t('streaming')}</span>
+                            <span>Дивитися онлайн</span>
                           </button>
                         </div>
                       </div>

@@ -42,6 +42,10 @@ public class MainActivity extends BridgeActivity {
 
         Window window = getWindow();
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        window.setFlags(
+            WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+            WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
+        );
         window.getDecorView().setBackgroundColor(Color.parseColor("#07090E"));
 
         WindowInsetsControllerCompat insetsController =
@@ -76,6 +80,9 @@ public class MainActivity extends BridgeActivity {
             WebView webView = this.bridge.getWebView();
             webView.setBackgroundColor(Color.parseColor("#07090E"));
 
+            // Enforce hardware acceleration on the WebView layer for 60 FPS on Smart TVs & Projectors
+            webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+
             // Enable focus & spatial navigation for Smart TV remotes, D-Pads and Air Mouse
             webView.setFocusable(true);
             webView.setFocusableInTouchMode(true);
@@ -95,6 +102,9 @@ public class MainActivity extends BridgeActivity {
             settings.setLoadWithOverviewMode(true);
             settings.setUseWideViewPort(true);
             settings.setNeedInitialFocus(true);
+            settings.setRenderPriority(WebSettings.RenderPriority.HIGH);
+            settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+            settings.setOffscreenPreRaster(true);
             // Trap popup ads via onCreateWindow so balancers never redirect main app
             settings.setSupportMultipleWindows(true);
             settings.setJavaScriptCanOpenWindowsAutomatically(false);

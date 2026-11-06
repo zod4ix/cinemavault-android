@@ -597,7 +597,7 @@ const MainAppContent: React.FC = () => {
       <footer className="border-t border-white/10 bg-[#05070a] py-6 text-center text-xs text-slate-500">
         <div className="max-w-[1700px] mx-auto px-4">
           <p className="flex flex-wrap items-center justify-center gap-1.5 font-medium text-slate-400">
-            <span>CinemaVault PRO v3.3</span> •{' '}
+            <span>CinemaVault PRO v3.4</span> •{' '}
             <span className="text-amber-400/90 font-bold">Smart TV & Universal Edition</span> •{' '}
             <span>{t('footerLine')}</span> • <span>🍿 4K HDR</span>
           </p>
@@ -659,12 +659,15 @@ const MainAppContent: React.FC = () => {
           embedUrl={activePlayback.source.embedUrl}
           servers={activePlayback.source.servers}
           initialMode={
-            activePlayback.source.type === 'online'
-              ? 'native'
-              : activePlayback.source.type === 'trailer'
-                ? 'trailer'
-                : 'embed'
+            activePlayback.source.type === 'torrent'
+              ? 'torrent'
+              : activePlayback.source.type === 'online'
+                ? 'native'
+                : activePlayback.source.type === 'trailer'
+                  ? 'trailer'
+                  : 'embed'
           }
+          magnet={activePlayback.source.magnet}
           onClose={() => setActivePlayback(null)}
           episodeId={activePlayback.episode?.id}
           seasonNumber={activePlayback.episode?.seasonNumber}

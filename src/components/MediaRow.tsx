@@ -24,31 +24,53 @@ export const MediaRow: React.FC<MediaRowProps> = ({
 }) => {
   const rowRef = useRef<HTMLDivElement>(null);
 
-  // Mouse Drag-to-Scroll support for Air Mouse / USB Mouse
-  const [isMouseDown, setIsMouseDown] = useState(false);
-  const [startX, setStartX] = useState(0);
-  const [scrollLeft, setScrollLeft] = useState(0);
-  const [draggedDistance, setDraggedDistance] = useState(0);
+  // Mouse Drag-to-Scroll support for Air Mouse / USB Mouse without breaking clicks
+  const [isDragging, setIsDragging] = useState(false);
+  const isMouseDownRef = useRef(false);
+  const startPosRef = useRef({ x: 0, y: 0, scrollLeft: 0 });
+  const hasDraggedRef = useRef(false);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (!rowRef.current) return;
-    setIsMouseDown(true);
-    setStartX(e.pageX - rowRef.current.offsetLeft);
-    setScrollLeft(rowRef.current.scrollLeft);
-    setDraggedDistance(0);
+    // Only track primary left mouse button
+    if (e.button !== 0) return;
+    isMouseDownRef.current = true;
+    hasDraggedRef.current = false;
+    startPosRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      scrollLeft: rowRef.current.scrollLeft,
+    };
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isMouseDown || !rowRef.current) return;
-    e.preventDefault();
-    const x = e.pageX - rowRef.current.offsetLeft;
-    const walk = (x - startX) * 1.5;
-    rowRef.current.scrollLeft = scrollLeft - walk;
-    setDraggedDistance((prev) => prev + Math.abs(walk));
+    if (!isMouseDownRef.current || !rowRef.current) return;
+    const deltaX = e.clientX - startPosRef.current.x;
+    const deltaY = e.clientY - startPosRef.current.y;
+
+    // Only initiate drag scroll if horizontal movement clearly exceeds 8px
+    if (!hasDraggedRef.current && Math.abs(deltaX) > 8 && Math.abs(deltaX) > Math.abs(deltaY)) {
+      hasDraggedRef.current = true;
+      setIsDragging(true);
+    }
+
+    if (hasDraggedRef.current) {
+      rowRef.current.scrollLeft = startPosRef.current.scrollLeft - deltaX;
+    }
   };
 
   const handleMouseUpOrLeave = () => {
-    setIsMouseDown(false);
+    if (!isMouseDownRef.current) return;
+    isMouseDownRef.current = false;
+    if (hasDraggedRef.current) {
+      // Keep true momentarily so onClickCapture can discard the drag-release click
+      setTimeout(() => {
+        hasDraggedRef.current = false;
+        setIsDragging(false);
+      }, 80);
+    } else {
+      setIsDragging(false);
+    }
   };
 
   const scroll = (direction: 'left' | 'right') => {
@@ -114,7 +136,7 @@ export const MediaRow: React.FC<MediaRowProps> = ({
         onMouseLeave={handleMouseUpOrLeave}
         onWheel={handleWheel}
         className={`flex items-start gap-3 sm:gap-4 overflow-x-auto px-4 sm:px-6 lg:px-8 scrollbar-none scroll-smooth pb-3 ${
-          isMouseDown ? 'drag-scroll-active cursor-grabbing' : 'cursor-grab'
+          isDragging ? 'drag-scroll-active cursor-grabbing' : 'cursor-default'
         }`}
       >
         {items.map((media) => {
@@ -124,8 +146,8 @@ export const MediaRow: React.FC<MediaRowProps> = ({
               key={media.id}
               className="w-[145px] sm:w-[175px] md:w-[200px] lg:w-[220px] 2xl:w-[240px] shrink-0"
               onClickCapture={(e) => {
-                // If user dragged more than 10px with air mouse, prevent triggering card click
-                if (draggedDistance > 10) {
+                // If user was actively dragging the row, suppress the card click
+                if (hasDraggedRef.current) {
                   e.stopPropagation();
                 }
               }}

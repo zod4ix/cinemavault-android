@@ -66,21 +66,24 @@ export interface StreamServer {
   name: string;
   badge: string;
   url: string;
-  mode: 'embed' | 'native' | 'trailer';
+  mode: 'embed' | 'native' | 'trailer' | 'torrent';
   langs?: string[];
+  magnet?: string;
+  infoHash?: string;
 }
 
 export interface MediaSource {
   id: string;
   provider: string;
   title: string;
-  type: 'embed' | 'online' | 'trailer';
+  type: 'embed' | 'online' | 'trailer' | 'torrent';
   audioTracks: AudioTrack[];
   qualities: StreamQuality[];
   embedUrl?: string;
   servers?: StreamServer[];
   status: 'working' | 'slow' | 'checking' | 'failed';
   pingMs?: number;
+  magnet?: string;
 }
 
 export interface TorrentItem {
