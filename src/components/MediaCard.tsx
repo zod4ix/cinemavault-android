@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Star, Heart, Play } from 'lucide-react';
+import { Heart, Play } from 'lucide-react';
 import { MediaItem } from '../types/movie';
 import { createPosterFallback } from '../services/tmdb';
+import { formatRating } from '../services/rating';
 import { useLanguage } from '../i18n/LanguageContext';
 
 interface MediaCardProps {
@@ -81,9 +82,13 @@ export const MediaCard: React.FC<MediaCardProps> = ({
 
         {/* Bottom Rating + Tactile Quick Play Button */}
         <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between z-10">
-          <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-black/85 backdrop-blur-md text-amber-400 text-[11px] font-bold border border-white/10">
-            <Star className="w-3 h-3 fill-amber-400" />
-            <span>{media.rating.toFixed(1)}</span>
+          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-black/90 backdrop-blur-md border border-white/10 shadow-md">
+            <span className="px-1 py-0.5 rounded-[3px] text-[8.5px] font-black bg-[#f5c518] text-black leading-none tracking-tight">
+              IMDb
+            </span>
+            <span className="text-amber-400 text-[11px] font-extrabold tracking-tight">
+              {formatRating(media.rating)}
+            </span>
           </div>
 
           <div className="flex items-center gap-1.5">

@@ -103,6 +103,7 @@ export interface PlaybackProgress {
   episodeNumber?: number;
   currentTime: number;
   duration: number;
+  percentage?: number;
   lastUpdated: number;
   title: string;
   posterPath: string;

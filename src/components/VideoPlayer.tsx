@@ -233,39 +233,65 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     };
   }, [activeServer, selectedQuality.url, customStreamUrl, media.id, episodeId]);
 
-  // Save watch history periodically
-  useEffect(() => {
-    storageService.saveProgress({
-      mediaId: media.id,
-      episodeId: isSeries ? `${media.id}-s${activeSeason}e${activeEpisode}` : episodeId,
-      seasonNumber: isSeries ? activeSeason : undefined,
-      episodeNumber: isSeries ? activeEpisode : undefined,
-      currentTime: currentTime || 30,
-      duration: duration || (media.duration ? media.duration * 60 : 5400),
-      lastUpdated: Date.now(),
-      title,
-      posterPath: media.posterPath,
-      mediaSnapshot: media,
-    });
+  // Track watch time continuously for BOTH native player and embed iframes
+  const watchTimeRef = useRef<number>(currentTime || 0);
 
+  useEffect(() => {
+    const epKey = isSeries ? `${media.id}-s${activeSeason}e${activeEpisode}` : episodeId;
+    const saved = storageService.getProgress(media.id, epKey);
+    if (saved && saved.currentTime > 0) {
+      watchTimeRef.current = saved.currentTime;
+    } else {
+      watchTimeRef.current = currentTime || 15;
+    }
+
+    const defaultDuration = duration > 0 ? duration : (media.duration ? media.duration * 60 : 5400);
+
+    const saveCurrent = () => {
+      let cur = watchTimeRef.current;
+      let dur = defaultDuration;
+
+      if (videoRef.current && activeServer?.mode === 'native') {
+        cur = videoRef.current.currentTime || cur;
+        dur = videoRef.current.duration || dur;
+      }
+
+      storageService.saveProgress({
+        mediaId: media.id,
+        episodeId: epKey,
+        seasonNumber: isSeries ? activeSeason : undefined,
+        episodeNumber: isSeries ? activeEpisode : undefined,
+        currentTime: Math.round(cur),
+        duration: Math.round(dur),
+        percentage: Math.min(100, Math.round((cur / Math.max(1, dur)) * 100)),
+        lastUpdated: Date.now(),
+        title,
+        posterPath: media.posterPath,
+        mediaSnapshot: media,
+      });
+    };
+
+    // Save initial progress immediately
+    saveCurrent();
+
+    // Periodic timer every 5 seconds
     const interval = setInterval(() => {
-      if (videoRef.current && duration > 0 && activeServer?.mode === 'native') {
-        storageService.saveProgress({
-          mediaId: media.id,
-          episodeId: isSeries ? `${media.id}-s${activeSeason}e${activeEpisode}` : episodeId,
-          seasonNumber: isSeries ? activeSeason : undefined,
-          episodeNumber: isSeries ? activeEpisode : undefined,
-          currentTime: videoRef.current.currentTime,
-          duration,
-          lastUpdated: Date.now(),
-          title,
-          posterPath: media.posterPath,
-          mediaSnapshot: media,
-        });
+      if (activeServer?.mode === 'native') {
+        if (videoRef.current && !videoRef.current.paused) {
+          watchTimeRef.current = videoRef.current.currentTime;
+          saveCurrent();
+        }
+      } else {
+        // Embed mode (iframe)
+        watchTimeRef.current += 5;
+        saveCurrent();
       }
     }, 5000);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      saveCurrent();
+    };
   }, [media, episodeId, activeSeason, activeEpisode, isSeries, duration, title, activeServer?.mode]);
 
   const resetControlsTimeout = () => {

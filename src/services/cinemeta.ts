@@ -1,5 +1,6 @@
 import { Episode, MediaItem, MediaType, Season } from '../types/movie';
 import { createPosterFallback, dynamicItemsCache, httpGetJson, normalizeGenre } from './tmdb';
+import { parseRatingNumber } from './rating';
 
 /**
  * Cinemeta (Stremio's open metadata addon) — free, key-less, CORS-safe catalogue:
@@ -67,8 +68,8 @@ export function metaToItem(meta: any, typeHint: CinemetaType): MediaItem | null 
       : 'movie';
 
   const year = parseYear(meta.year, meta.releaseInfo, meta.released);
-  const ratingNum = parseFloat(meta.imdbRating);
-  const rating = Number.isFinite(ratingNum) ? ratingNum : 7.0;
+  const rawRating = meta.imdbRating || meta.imdb_rating || meta.rating || meta.vote_average;
+  const rating = parseRatingNumber(rawRating, 7.6);
   const runtimeMin = meta.runtime ? parseInt(String(meta.runtime), 10) : undefined;
 
   const item: MediaItem = {
@@ -239,7 +240,7 @@ export async function enrichItemFromCinemeta(item: MediaItem): Promise<MediaItem
     tmdbId: fresh.tmdbId || item.tmdbId,
     trailerYoutubeId: item.trailerYoutubeId || fresh.trailerYoutubeId,
     genres: item.genres.length > 0 && item.genres[0] !== 'Кіно' ? item.genres : fresh.genres,
-    rating: item.rating || fresh.rating,
+    rating: (fresh.rating && fresh.rating > 0) ? fresh.rating : (item.rating || 7.6),
     posterPath: item.posterPath || fresh.posterPath || createPosterFallback(item.title, item.year, item.rating),
   };
 }

@@ -18,6 +18,9 @@ import { MediaItem, MediaSource, Episode, PlaybackProgress, CatalogFilter } from
 import { Film, Heart, Loader2, PlusCircle, Sparkles } from 'lucide-react';
 import { LanguageProvider, useLanguage } from './i18n/LanguageContext';
 import { SplashScreen } from './components/SplashScreen';
+import { AuthModal } from './components/AuthModal';
+import { authSyncService, UserProfile } from './services/authSync';
+import { fetchNovelties } from './services/novelties';
 
 declare global {
   interface Window {
@@ -46,6 +49,9 @@ const MainAppContent: React.FC = () => {
 
   const [isFavoritesActive, setIsFavoritesActive] = useState<boolean>(false);
   const [isDonateOpen, setIsDonateOpen] = useState<boolean>(false);
+  const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
+  const [authProfile, setAuthProfile] = useState<UserProfile | null>(authSyncService.getProfile());
+  const [novelties, setNovelties] = useState<MediaItem[]>([]);
   const [heroIndex, setHeroIndex] = useState<number>(0);
 
   const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
@@ -74,6 +80,10 @@ const MainAppContent: React.FC = () => {
         setIsDonateOpen(false);
         return true;
       }
+      if (isAuthOpen) {
+        setIsAuthOpen(false);
+        return true;
+      }
       if (searchQuery.trim()) {
         setSearchQuery('');
         return true;
@@ -91,20 +101,35 @@ const MainAppContent: React.FC = () => {
     return () => {
       delete window.__cinemaHandleBack;
     };
-  }, [activePlayback, selectedMedia, isDonateOpen, searchQuery, isFavoritesActive, filter]);
+  }, [activePlayback, selectedMedia, isDonateOpen, isAuthOpen, searchQuery, isFavoritesActive, filter]);
 
-  // Rotate Hero Banner every 9 seconds
+  // Load favorites, history, novelties & subscribe to cloud auth profile
   useEffect(() => {
-    const timer = setInterval(() => {
-      setHeroIndex((prev) => (prev + 1) % Math.min(8, CURATED_CATALOG.length));
-    }, 9000);
-    return () => clearInterval(timer);
-  }, []);
+    let active = true;
 
-  // Load favorites & history
-  useEffect(() => {
     setFavorites(storageService.getFavorites());
     setHistory(storageService.getHistory());
+
+    fetchNovelties().then((items) => {
+      if (!active || !items || items.length === 0) return;
+      setNovelties(items);
+      setLiveCatalogPool((prev) => {
+        const map = new Map<string, MediaItem>();
+        [...items, ...prev]
+          .filter((item) => !isRussianOrSoviet(item))
+          .forEach((item) => map.set(item.id.toString(), item));
+        return Array.from(map.values());
+      });
+    });
+
+    const unsub = authSyncService.subscribe((p) => {
+      if (active) setAuthProfile(p);
+    });
+
+    return () => {
+      active = false;
+      unsub();
+    };
   }, [activePlayback]);
 
   // Initial background fetch of extra live catalog items so rows & categories are rich
@@ -244,7 +269,10 @@ const MainAppContent: React.FC = () => {
   };
 
   const cleanHomePool = liveCatalogPool.filter((i) => !isRussianOrSoviet(i));
-  const featured = cleanHomePool[heroIndex] || cleanHomePool[0] || CURATED_CATALOG[0];
+  const heroCarouselItems =
+    novelties.length > 0
+      ? novelties.slice(0, 10)
+      : cleanHomePool.slice(0, 10);
   const filteredCatalog = tmdbService.filterAndSort(cleanHomePool, filter);
   const isCustomFilterActive =
     filter.category !== 'trending' ||
@@ -287,6 +315,8 @@ const MainAppContent: React.FC = () => {
           setIsFavoritesActive(false);
         }}
         onOpenDonate={() => setIsDonateOpen(true)}
+        onOpenAuth={() => setIsAuthOpen(true)}
+        authProfile={authProfile}
         favoritesCount={favorites.length}
         onOpenFavorites={() => {
           setIsFavoritesActive(!isFavoritesActive);
@@ -451,30 +481,16 @@ const MainAppContent: React.FC = () => {
         ) : (
           /* 4. HOME DISCOVERY VIEW */
           <>
-            {/* Hero Banner */}
-            <div className="relative">
-              <HeroBanner
-                media={featured}
-                onPlay={handlePlayMedia}
-                onOpenDetails={setSelectedMedia}
-                isFavorite={favorites.some((f) => f.id.toString() === featured.id.toString())}
-                onToggleFavorite={handleToggleFavorite}
-              />
-              {/* Hero Slide Dots */}
-              <div className="absolute bottom-3 right-4 sm:right-6 z-20 flex items-center gap-1.5">
-                {CURATED_CATALOG.slice(0, 8).map((item, idx) => (
-                  <button
-                    key={item.id}
-                    onClick={() => setHeroIndex(idx)}
-                    className={`h-1.5 rounded-full transition-all ${
-                      heroIndex === idx
-                        ? 'w-5 bg-red-500'
-                        : 'w-1.5 bg-white/35 hover:bg-white/60'
-                    }`}
-                  />
-                ))}
-              </div>
-            </div>
+            {/* Hero Carousel Banner */}
+            <HeroBanner
+              items={heroCarouselItems}
+              currentIndex={heroIndex}
+              onIndexChange={setHeroIndex}
+              onPlay={handlePlayMedia}
+              onOpenDetails={setSelectedMedia}
+              isFavorite={favorites.some((f) => f.id.toString() === (heroCarouselItems[heroIndex]?.id || ''))}
+              onToggleFavorite={handleToggleFavorite}
+            />
 
             {/* Interactive Filter & Quick Search Bar right on Home Page */}
             <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 mt-4 sm:mt-6">
@@ -488,6 +504,21 @@ const MainAppContent: React.FC = () => {
 
             {/* Watch History */}
             <WatchHistory history={history} onPlayItem={handleResumePlayback} />
+
+            {/* Novelties Row */}
+            {novelties.length > 0 && (
+              <div className="pt-1">
+                <MediaRow
+                  title="🔥 Гарячі новинки (2024–2026)"
+                  badge="СВІЖІ РЕЛІЗИ"
+                  items={novelties}
+                  onSelectMedia={setSelectedMedia}
+                  onPlayMedia={handlePlayMedia}
+                  favorites={favorites}
+                  onToggleFavorite={handleToggleFavorite}
+                />
+              </div>
+            )}
 
             {/* Curated + Live Media Rows */}
             <div className="space-y-3 sm:space-y-4">
@@ -639,6 +670,16 @@ const MainAppContent: React.FC = () => {
       )}
 
       <DonateModal isOpen={isDonateOpen} onClose={() => setIsDonateOpen(false)} />
+
+      {/* Cloud Profile & Cross-Device Sync Modal */}
+      <AuthModal
+        isOpen={isAuthOpen}
+        onClose={() => setIsAuthOpen(false)}
+        onDataSync={() => {
+          setFavorites(storageService.getFavorites());
+          setHistory(storageService.getHistory());
+        }}
+      />
     </div>
   );
 };

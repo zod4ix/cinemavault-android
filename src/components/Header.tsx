@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { CinemaLogo } from './CinemaLogo';
-import { Search, Heart, X, ChevronDown, Star, Play, Loader2 } from 'lucide-react';
+import { Search, Heart, X, ChevronDown, Play, Loader2, Cloud } from 'lucide-react';
 import { useLanguage } from '../i18n/LanguageContext';
 import { LANGUAGES, SupportedLanguage } from '../i18n/translations';
 import { MediaItem } from '../types/movie';
 import { createPosterFallback } from '../services/tmdb';
+import { formatRating } from '../services/rating';
 
 interface HeaderProps {
   searchQuery: string;
@@ -20,6 +21,8 @@ interface HeaderProps {
   onOpenFavorites: () => void;
   isFavoritesActive: boolean;
   focusTrigger?: number;
+  onOpenAuth?: () => void;
+  authProfile?: any;
 }
 
 const COMMIT_DELAY_MS = 450;
@@ -38,6 +41,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenFavorites,
   isFavoritesActive,
   focusTrigger = 0,
+  onOpenAuth,
+  authProfile,
 }) => {
   const { language, setLanguage, t, tg, title } = useLanguage();
   const [showLangMenu, setShowLangMenu] = useState<boolean>(false);
@@ -191,8 +196,9 @@ export const Header: React.FC<HeaderProps> = ({
                   <div className="flex items-center gap-2 text-[11px] text-slate-400">
                     <span>{item.year}</span>
                     <span>•</span>
-                    <span className="text-amber-400 font-bold flex items-center gap-0.5">
-                      <Star className="w-3 h-3 fill-amber-400" /> {item.rating.toFixed(1)}
+                    <span className="text-amber-400 font-bold flex items-center gap-1">
+                      <span className="px-1 py-0.2 rounded-[2px] text-[8px] font-black bg-[#f5c518] text-black leading-none">IMDb</span>
+                      <span>{formatRating(item.rating)}</span>
                     </span>
                     <span>•</span>
                     <span className="truncate">{tg(item.genres[0] || t('genreFilm'))}</span>
@@ -313,6 +319,28 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
               )}
             </div>
+
+            {/* Cloud Sync & User Profile Button */}
+            {onOpenAuth && (
+              <button
+                onClick={onOpenAuth}
+                className="relative p-2 sm:p-2.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white transition-all flex items-center gap-1.5"
+                title="Хмарна синхронізація та профіль"
+              >
+                {authProfile?.avatar ? (
+                  <img
+                    src={authProfile.avatar}
+                    alt={authProfile.name}
+                    className="w-4 h-4 sm:w-5 sm:h-5 rounded-full object-cover border border-white/20"
+                  />
+                ) : (
+                  <Cloud className="w-4 h-4 sm:w-5 sm:h-5 text-blue-400" />
+                )}
+                {authProfile ? (
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-[#07090e]" />
+                ) : null}
+              </button>
+            )}
 
             {/* Favorites Button (BottomNav has it on phones) */}
             <button

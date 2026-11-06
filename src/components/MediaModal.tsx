@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  X, Play, Heart, Download, Check, Star, Wifi, HardDrive, 
+  X, Play, Heart, Download, Check, Wifi, HardDrive, 
   Layers, Clock, Copy, Sparkles, Globe, Youtube, Loader2, Users, ExternalLink
 } from 'lucide-react';
 import { MediaItem, Season, Episode, MediaSource, TorrentItem } from '../types/movie';
 import { tmdbService, createPosterFallback } from '../services/tmdb';
+import { formatRating } from '../services/rating';
 import { rezkaService } from '../services/rezka';
 import { getCinemetaSeasons } from '../services/cinemeta';
 import { torrentService } from '../services/torrent';
@@ -270,9 +271,24 @@ export const MediaModal: React.FC<MediaModalProps> = ({
         <div className="p-4 sm:p-6 overflow-y-auto space-y-5 custom-scrollbar">
           {/* Metadata info */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs sm:text-sm text-slate-400">
-            <div className="flex items-center gap-1 text-amber-400 font-bold">
-              <Star className="w-4 h-4 fill-amber-400" />
-              <span>{media.rating.toFixed(1)} / 10 ({media.voteCount} {t('votes')})</span>
+            <div className="flex items-center gap-1.5 text-amber-400 font-bold">
+              {media.imdbId ? (
+                <a
+                  href={`https://www.imdb.com/title/${media.imdbId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[4px] bg-[#f5c518] hover:bg-yellow-400 text-black text-[10px] font-black tracking-tight transition-colors shadow-sm"
+                  title="Відкрити сторінку IMDb"
+                >
+                  <span>IMDb</span>
+                  <ExternalLink className="w-2.5 h-2.5 opacity-75" />
+                </a>
+              ) : (
+                <span className="px-1.5 py-0.5 rounded-[4px] bg-[#f5c518] text-black text-[10px] font-black tracking-tight leading-none">
+                  IMDb
+                </span>
+              )}
+              <span>{formatRating(media.rating)} / 10 {media.voteCount ? `(${media.voteCount.toLocaleString()} ${t('votes')})` : ''}</span>
             </div>
             <span>•</span>
             <span className="text-slate-200 font-semibold">{media.year} {t('year')}</span>
