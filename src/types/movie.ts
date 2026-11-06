@@ -67,6 +67,7 @@ export interface StreamServer {
   badge: string;
   url: string;
   mode: 'embed' | 'native' | 'trailer';
+  langs?: string[];
 }
 
 export interface MediaSource {
@@ -85,12 +86,12 @@ export interface MediaSource {
 export interface TorrentItem {
   id: string;
   title: string;
-  tracker: 'Toloka (Hurtom)' | 'Rutor' | 'RuTracker' | 'TorrentGalaxy' | 'YTS 4K';
+  tracker: string;
   size: string;
   seeds: number;
   peers: number;
   magnet: string;
-  quality: '4K HDR' | '1080p' | '720p' | 'BDRip' | 'WEB-DL';
+  quality: string;
   audio: string;
   dateAdded: string;
 }

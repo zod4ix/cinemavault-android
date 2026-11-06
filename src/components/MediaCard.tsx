@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Star, Heart, Play } from 'lucide-react';
 import { MediaItem } from '../types/movie';
 import { createPosterFallback } from '../services/tmdb';
+import { useLanguage } from '../i18n/LanguageContext';
 
 interface MediaCardProps {
   media: MediaItem;
@@ -18,6 +19,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
   isFavorite,
   onToggleFavorite,
 }) => {
+  const { t, tg, title } = useLanguage();
   const [imgSrc, setImgSrc] = useState<string>(
     media.posterPath || createPosterFallback(media.title, media.year, media.rating)
   );
@@ -25,6 +27,9 @@ export const MediaCard: React.FC<MediaCardProps> = ({
   useEffect(() => {
     setImgSrc(media.posterPath || createPosterFallback(media.title, media.year, media.rating));
   }, [media.posterPath, media.title, media.year, media.rating]);
+
+  const displayTitle = title(media);
+  const primaryGenre = media.genres && media.genres.length > 0 ? tg(media.genres[0]) : t('genreFilm');
 
   return (
     <div
@@ -35,7 +40,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
       <div className="relative aspect-[2/3] w-full rounded-2xl overflow-hidden bg-slate-900 border border-white/10 shadow-lg group-hover:shadow-2xl group-hover:shadow-red-600/15 group-hover:border-red-500/40 transition-all duration-300">
         <img
           src={imgSrc}
-          alt={media.title}
+          alt={displayTitle}
           loading="lazy"
           onError={() => setImgSrc(createPosterFallback(media.title, media.year, media.rating))}
           className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
@@ -84,7 +89,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
           <div className="flex items-center gap-1.5">
             {media.seasonsCount && (
               <span className="px-1.5 py-0.5 rounded-md bg-white/15 backdrop-blur-md text-white text-[10px] font-bold">
-                {media.seasonsCount} сез.
+                {media.seasonsCount} {t('seasonsShort')}
               </span>
             )}
             <button
@@ -93,7 +98,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
                 onPlay(media);
               }}
               className="p-1.5 rounded-full bg-red-600 hover:bg-red-500 active:scale-90 text-white shadow-lg shadow-red-600/50 transition-transform"
-              title="Дивитись зараз"
+              title={t('watchNowTitle')}
             >
               <Play className="w-3.5 h-3.5 fill-white ml-0.5" />
             </button>
@@ -104,12 +109,12 @@ export const MediaCard: React.FC<MediaCardProps> = ({
       {/* Meta */}
       <div className="mt-2 space-y-0.5 px-0.5">
         <h3 className="font-bold text-xs sm:text-sm text-slate-100 group-hover:text-red-400 transition-colors line-clamp-1">
-          {media.title}
+          {displayTitle}
         </h3>
         <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
           <span className="font-medium text-slate-300">{media.year}</span>
           <span>•</span>
-          <span className="truncate">{media.genres[0] || 'Кіно'}</span>
+          <span className="truncate">{primaryGenre}</span>
         </div>
       </div>
     </div>

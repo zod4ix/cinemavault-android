@@ -36,7 +36,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         }`}
       >
         <Home className="w-5 h-5 shrink-0" />
-        <span className="text-[10px] truncate max-w-full px-1">Головна</span>
+        <span className="text-[10px] truncate max-w-full px-1">{t('navHome')}</span>
       </button>
 
       <button
@@ -48,7 +48,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         }`}
       >
         <Search className="w-5 h-5 shrink-0" />
-        <span className="text-[10px] truncate max-w-full px-1">Пошук</span>
+        <span className="text-[10px] truncate max-w-full px-1">{t('navSearch')}</span>
       </button>
 
       <button
@@ -87,7 +87,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         className="flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl text-amber-400 font-bold active:bg-amber-500/10 min-w-0"
       >
         <Sparkles className="w-5 h-5 shrink-0" />
-        <span className="text-[10px] truncate max-w-full px-1">Донат</span>
+        <span className="text-[10px] truncate max-w-full px-1">{t('donateShort')}</span>
       </button>
     </nav>
   );

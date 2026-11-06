@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Play, Info, Heart, Star, Sparkles } from 'lucide-react';
 import { MediaItem } from '../types/movie';
 import { useLanguage } from '../i18n/LanguageContext';
+import { useOverview } from '../i18n/useOverview';
 import { createPosterFallback } from '../services/tmdb';
 
 interface HeroBannerProps {
@@ -19,7 +20,8 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
   isFavorite,
   onToggleFavorite,
 }) => {
-  const { t } = useLanguage();
+  const { t, tg, title } = useLanguage();
+  const overview = useOverview(media);
   const [bgSrc, setBgSrc] = useState<string>(
     media.backdropPath || media.posterPath || createPosterFallback(media.title, media.year, media.rating)
   );
@@ -30,12 +32,17 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
     );
   }, [media]);
 
+  const displayTitle = title(media);
+  const localizedGenres = media.genres && media.genres.length > 0
+    ? media.genres.map(tg).join(' • ')
+    : t('genreFilm');
+
   return (
     <div className="relative w-full h-[46vh] sm:h-[58vh] lg:h-[70vh] min-h-[340px] max-h-[680px] overflow-hidden select-none">
       {/* Background Image with Cinematic Vignette */}
       <img
         src={bgSrc}
-        alt={media.title}
+        alt={displayTitle}
         onError={() => setBgSrc(createPosterFallback(media.title, media.year, media.rating))}
         className="absolute inset-0 w-full h-full object-cover object-center scale-105 transform filter brightness-90 animate-pulse-slow"
       />
@@ -73,14 +80,14 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
 
           {/* Title */}
           <h1 className="text-2xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight drop-shadow-xl leading-tight line-clamp-2">
-            {media.title}
+            {displayTitle}
           </h1>
 
           {/* Subtitle / Genres */}
           <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] sm:text-sm text-slate-300 font-medium">
             <span>{media.year}</span>
             <span>•</span>
-            <span className="truncate max-w-[230px] sm:max-w-none">{media.genres.join(' • ')}</span>
+            <span className="truncate max-w-[230px] sm:max-w-none">{localizedGenres}</span>
             {media.duration && (
               <>
                 <span>•</span>
@@ -91,14 +98,14 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
 
           {/* Overview */}
           <p className="text-xs sm:text-sm text-slate-300 line-clamp-2 sm:line-clamp-3 leading-relaxed max-w-xl drop-shadow">
-            {media.overview}
+            {overview}
           </p>
 
           {/* Action Buttons — Responsive & Wrap-Safe on 360px Phones */}
           <div className="flex flex-wrap items-center gap-2 sm:gap-3 pt-1">
             <button
               onClick={() => onPlay(media)}
-              className="px-4 sm:px-7 py-2.5 sm:py-3 rounded-xl bg-red-600 hover:bg-red-500 active:bg-red-700 text-white font-bold text-xs sm:text-base flex items-center gap-2 shadow-xl shadow-red-600/40 active:scale-95 transition-all"
+              className="px-5 sm:px-7 py-2.5 sm:py-3.5 rounded-2xl bg-red-600 hover:bg-red-500 active:scale-95 text-white font-extrabold text-xs sm:text-sm flex items-center gap-2 shadow-xl shadow-red-600/35 transition-all"
             >
               <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-white" />
               <span>{t('watchNow')}</span>
@@ -106,7 +113,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
 
             <button
               onClick={() => onOpenDetails(media)}
-              className="px-3.5 sm:px-6 py-2.5 sm:py-3 rounded-xl bg-white/15 hover:bg-white/25 text-white font-semibold text-xs sm:text-base backdrop-blur-md flex items-center gap-1.5 sm:gap-2 border border-white/15 active:scale-95 transition-all"
+              className="px-4 sm:px-5 py-2.5 sm:py-3.5 rounded-2xl bg-white/15 hover:bg-white/25 active:scale-95 text-white font-bold text-xs sm:text-sm flex items-center gap-2 backdrop-blur-md border border-white/20 transition-all"
             >
               <Info className="w-4 h-4 sm:w-5 sm:h-5" />
               <span>{t('detailsAndEpisodes')}</span>
@@ -114,14 +121,14 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
 
             <button
               onClick={() => onToggleFavorite(media)}
-              className={`p-2.5 sm:p-3 rounded-xl border backdrop-blur-md active:scale-95 transition-all ${
+              className={`p-2.5 sm:p-3.5 rounded-2xl border backdrop-blur-md transition-all ${
                 isFavorite
-                  ? 'bg-red-600/25 border-red-500 text-red-500'
-                  : 'bg-white/10 border-white/15 text-slate-300 hover:text-white'
+                  ? 'bg-red-600 text-white border-red-500 shadow-lg shadow-red-600/30'
+                  : 'bg-black/60 text-slate-200 hover:text-white border-white/20'
               }`}
               title={t('inFavorites')}
             >
-              <Heart className={`w-4 h-4 sm:w-5 sm:h-5 ${isFavorite ? 'fill-red-500' : ''}`} />
+              <Heart className={`w-4 h-4 sm:w-5 sm:h-5 ${isFavorite ? 'fill-white' : ''}`} />
             </button>
           </div>
         </div>

@@ -10,6 +10,7 @@ import { MediaCard } from './components/MediaCard';
 import { FilterBar } from './components/FilterBar';
 import { BottomNav } from './components/BottomNav';
 import { tmdbService, CURATED_CATALOG } from './services/tmdb';
+import { searchEverywhere, fetchCatalogPage } from './services/search';
 import { rezkaService } from './services/rezka';
 import { storageService } from './services/storage';
 import { MediaItem, MediaSource, Episode, PlaybackProgress, CatalogFilter } from './types/movie';
@@ -24,7 +25,7 @@ declare global {
 }
 
 const MainAppContent: React.FC = () => {
-  const { t } = useLanguage();
+  const { t, tg, title } = useLanguage();
   const [showSplash, setShowSplash] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [searchResults, setSearchResults] = useState<MediaItem[]>([]);
@@ -109,9 +110,9 @@ const MainAppContent: React.FC = () => {
   useEffect(() => {
     let active = true;
     Promise.all([
-      tmdbService.fetchLiveCategory('movies', 1),
-      tmdbService.fetchLiveCategory('series', 1),
-      tmdbService.fetchLiveCategory('anime', 1),
+      fetchCatalogPage('movies', 1),
+      fetchCatalogPage('series', 1),
+      fetchCatalogPage('anime', 1),
     ]).then(([movies, series, anime]) => {
       if (!active) return;
       setLiveCatalogPool((prev) => {
@@ -127,7 +128,7 @@ const MainAppContent: React.FC = () => {
     };
   }, []);
 
-  // Live Global Search with race-safe request ID & debounce
+  // Live Multi-Engine Search with progressive partial emissions and race cancellation
   useEffect(() => {
     const q = searchQuery.trim();
     if (!q) {
@@ -137,19 +138,21 @@ const MainAppContent: React.FC = () => {
     }
 
     const reqId = ++latestSearchReqRef.current;
-    const local = tmdbService.search(q);
-    setSearchResults(local);
     setIsSearchingLive(true);
 
-    const timer = setTimeout(async () => {
-      const globalRes = await tmdbService.searchGlobal(q);
+    searchEverywhere(
+      q,
+      (partial) => {
+        if (latestSearchReqRef.current === reqId) {
+          setSearchResults(partial);
+        }
+      },
+      () => latestSearchReqRef.current === reqId
+    ).finally(() => {
       if (latestSearchReqRef.current === reqId) {
-        setSearchResults(globalRes);
         setIsSearchingLive(false);
       }
-    }, 260);
-
-    return () => clearTimeout(timer);
+    });
   }, [searchQuery]);
 
   const handleSearchSubmit = async (q: string) => {
@@ -157,9 +160,16 @@ const MainAppContent: React.FC = () => {
     if (!clean) return;
     const reqId = ++latestSearchReqRef.current;
     setIsSearchingLive(true);
-    const globalRes = await tmdbService.searchGlobal(clean);
+    await searchEverywhere(
+      clean,
+      (partial) => {
+        if (latestSearchReqRef.current === reqId) {
+          setSearchResults(partial);
+        }
+      },
+      () => latestSearchReqRef.current === reqId
+    );
     if (latestSearchReqRef.current === reqId) {
-      setSearchResults(globalRes);
       setIsSearchingLive(false);
     }
   };
@@ -167,7 +177,7 @@ const MainAppContent: React.FC = () => {
   const handleLoadMoreCatalog = async () => {
     setIsLoadingMore(true);
     const nextPage = catalogPage + 1;
-    const moreItems = await tmdbService.fetchLiveCategory(filter.category, nextPage);
+    const moreItems = await fetchCatalogPage(filter.category, nextPage, filter.genre);
     setLiveCatalogPool((prev) => {
       const map = new Map<string, MediaItem>();
       [...prev, ...moreItems].forEach((item) => {
@@ -188,7 +198,8 @@ const MainAppContent: React.FC = () => {
     const sources = await rezkaService.resolveSources(
       media,
       episode?.seasonNumber,
-      episode?.episodeNumber
+      episode?.episodeNumber,
+      { withHealth: true }
     );
     if (sources.length > 0) {
       setActivePlayback({
@@ -205,7 +216,8 @@ const MainAppContent: React.FC = () => {
       const sources = await rezkaService.resolveSources(
         media,
         prog.seasonNumber,
-        prog.episodeNumber
+        prog.episodeNumber,
+        { withHealth: true }
       );
       if (sources.length > 0) {
         setActivePlayback({
@@ -218,7 +230,7 @@ const MainAppContent: React.FC = () => {
                   `${prog.mediaId}-s${prog.seasonNumber}e${prog.episodeNumber}`,
                 seasonNumber: prog.seasonNumber || 1,
                 episodeNumber: prog.episodeNumber,
-                title: `Епізод ${prog.episodeNumber}`,
+                title: `${t('episodeWord')} ${prog.episodeNumber}`,
               }
             : undefined,
         });
@@ -233,6 +245,18 @@ const MainAppContent: React.FC = () => {
     filter.genre !== 'all' ||
     filter.year !== 'all' ||
     filter.sortBy !== 'popularity';
+
+  const getCategoryTitle = () => {
+    switch (filter.category) {
+      case 'movies': return t('movies');
+      case 'series': return t('series');
+      case 'cartoons': return t('cartoons');
+      case 'anime': return t('anime');
+      case '4k': return t('hdr4k');
+      case 'ukrainian': return t('ukrainianRow');
+      default: return t('allTrends');
+    }
+  };
 
   return (
     <div className="min-h-dvh bg-[#07090e] text-slate-100 flex flex-col selection:bg-red-600 selection:text-white pb-20 md:pb-0">
@@ -286,7 +310,7 @@ const MainAppContent: React.FC = () => {
                 </h2>
                 {isSearchingLive && (
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-300 text-xs font-semibold">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Пошук по всіх базах...
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> {t('searchingAllDbs')}
                   </span>
                 )}
               </div>
@@ -312,7 +336,7 @@ const MainAppContent: React.FC = () => {
               <div className="py-20 text-center space-y-3">
                 <Loader2 className="w-10 h-10 text-red-500 animate-spin mx-auto" />
                 <p className="text-slate-300 text-sm font-medium px-4">
-                  Шукаємо «{searchQuery}» у світових каталогах (IMDb, Wikidata UA, TVMaze, Anime)...
+                  {t('searchingLong')}
                 </p>
               </div>
             ) : (
@@ -363,23 +387,9 @@ const MainAppContent: React.FC = () => {
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-lg sm:text-2xl font-extrabold text-white flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-amber-400 shrink-0" />
-                <span>
-                  {filter.category === 'movies'
-                    ? t('movies')
-                    : filter.category === 'series'
-                      ? t('series')
-                      : filter.category === 'cartoons'
-                        ? t('cartoons')
-                        : filter.category === 'anime'
-                          ? t('anime')
-                          : filter.category === '4k'
-                            ? t('hdr4k')
-                            : filter.category === 'ukrainian'
-                              ? t('ukrainianRow')
-                              : t('allTrends')}
-                </span>
+                <span>{getCategoryTitle()}</span>
                 {filter.genre !== 'all' && (
-                  <span className="text-red-500 text-sm sm:text-xl">• {filter.genre}</span>
+                  <span className="text-red-500 text-sm sm:text-xl">• {tg(filter.genre)}</span>
                 )}
               </h2>
 
@@ -394,7 +404,7 @@ const MainAppContent: React.FC = () => {
                 }
                 className="text-xs text-slate-400 hover:text-white underline shrink-0"
               >
-                Скинути фільтри
+                {t('resetFilters')}
               </button>
             </div>
 
@@ -421,12 +431,12 @@ const MainAppContent: React.FC = () => {
                 {isLoadingMore ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Підвантаження з онлайн-бази...</span>
+                    <span>{t('loadingMore')}</span>
                   </>
                 ) : (
                   <>
                     <PlusCircle className="w-4 h-4" />
-                    <span>Завантажити більше контенту з бази</span>
+                    <span>{t('loadMore')}</span>
                   </>
                 )}
               </button>
@@ -486,8 +496,8 @@ const MainAppContent: React.FC = () => {
               />
 
               <MediaRow
-                title="🇺🇦 Українське кіно та дубляж"
-                badge="UA ТОП"
+                title={t('ukrainianRow')}
+                badge={t('ukrainianBadge')}
                 items={liveCatalogPool
                   .filter(
                     (i) =>
@@ -549,7 +559,7 @@ const MainAppContent: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4">
           <p className="flex flex-wrap items-center justify-center gap-1.5 font-medium text-slate-400">
             <span>CinemaVault PRO v3.0</span> •{' '}
-            <span>Multi-Server (VidSrc / Ashdi UA / HDRezka / IMDb)</span> • <span>🍿 4K HDR</span>
+            <span>{t('footerLine')}</span> • <span>🍿 4K HDR</span>
           </p>
         </div>
       </footer>
@@ -598,7 +608,7 @@ const MainAppContent: React.FC = () => {
       {activePlayback && (
         <VideoPlayer
           media={activePlayback.media}
-          title={activePlayback.media.title}
+          title={title(activePlayback.media)}
           subtitle={
             activePlayback.episode
               ? `${activePlayback.episode.seasonNumber} ${t('seasonAbbr')} • ${activePlayback.episode.episodeNumber} ${t('episodeAbbr')}: ${activePlayback.episode.title}`

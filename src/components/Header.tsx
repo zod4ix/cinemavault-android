@@ -22,6 +22,8 @@ interface HeaderProps {
   focusTrigger?: number;
 }
 
+const COMMIT_DELAY_MS = 450;
+
 export const Header: React.FC<HeaderProps> = ({
   searchQuery,
   onSearchChange,
@@ -37,9 +39,16 @@ export const Header: React.FC<HeaderProps> = ({
   isFavoritesActive,
   focusTrigger = 0,
 }) => {
-  const { language, setLanguage, t } = useLanguage();
+  const { language, setLanguage, t, tg, title } = useLanguage();
   const [showLangMenu, setShowLangMenu] = useState<boolean>(false);
   const [isSearchFocused, setIsSearchFocused] = useState<boolean>(false);
+
+  // The text the user is typing lives HERE (never re-created by the parent), so typing can never be
+  // interrupted by a re-render / layout switch of the page below. It is committed to the app state
+  // after a short pause or on submit.
+  const [draft, setDraft] = useState<string>(searchQuery);
+  const commitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastCommitted = useRef<string>(searchQuery);
 
   const desktopInputRef = useRef<HTMLInputElement>(null);
   const mobileInputRef = useRef<HTMLInputElement>(null);
@@ -47,7 +56,46 @@ export const Header: React.FC<HeaderProps> = ({
   const searchWrapperMobileRef = useRef<HTMLDivElement>(null);
   const langMenuRef = useRef<HTMLDivElement>(null);
 
-  // Focus whichever search input is visible on screen when triggered from BottomNav
+  // External resets (clear button elsewhere, back gesture, category change) update the draft
+  useEffect(() => {
+    if (searchQuery !== lastCommitted.current) {
+      lastCommitted.current = searchQuery;
+      setDraft(searchQuery);
+    }
+  }, [searchQuery]);
+
+  const commit = (value: string) => {
+    if (commitTimer.current) clearTimeout(commitTimer.current);
+    lastCommitted.current = value;
+    onSearchChange(value);
+  };
+
+  const handleType = (value: string) => {
+    setDraft(value);
+    setIsSearchFocused(true);
+    if (commitTimer.current) clearTimeout(commitTimer.current);
+    if (value.trim().length === 0) {
+      commit('');
+      return;
+    }
+    commitTimer.current = setTimeout(() => {
+      lastCommitted.current = value;
+      onSearchChange(value);
+    }, COMMIT_DELAY_MS);
+  };
+
+  const clearSearch = () => {
+    setDraft('');
+    commit('');
+  };
+
+  useEffect(() => {
+    return () => {
+      if (commitTimer.current) clearTimeout(commitTimer.current);
+    };
+  }, []);
+
+  // Focus whichever search input is visible when triggered from BottomNav
   useEffect(() => {
     if (focusTrigger <= 0) return;
     if (window.innerWidth < 768) {
@@ -58,7 +106,7 @@ export const Header: React.FC<HeaderProps> = ({
     setIsSearchFocused(true);
   }, [focusTrigger]);
 
-  // Close dropdowns on outside pointerdown (works reliably on Android touchscreens!)
+  // Close dropdowns on outside pointerdown (works reliably on Android touchscreens)
   useEffect(() => {
     const handlePointerDown = (e: PointerEvent) => {
       const target = e.target as Node;
@@ -82,7 +130,7 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'cartoons', label: `🧸 ${t('cartoons')}` },
     { id: 'anime', label: `⛩️ ${t('anime')}` },
     { id: '4k', label: `💎 ${t('hdr4k')}` },
-    { id: 'ukrainian', label: `🇺🇦 Українською` },
+    { id: 'ukrainian', label: `🇺🇦 ${t('ukrainianTab')}` },
   ];
 
   const currentLang = LANGUAGES.find((l) => l.code === language) || LANGUAGES[0];
@@ -92,11 +140,14 @@ export const Header: React.FC<HeaderProps> = ({
     setIsSearchFocused(false);
     mobileInputRef.current?.blur();
     desktopInputRef.current?.blur();
-    onSearchSubmit(searchQuery);
+    if (commitTimer.current) clearTimeout(commitTimer.current);
+    lastCommitted.current = draft;
+    onSearchChange(draft);
+    onSearchSubmit(draft);
   };
 
   const renderSuggestionsDropdown = () => {
-    if (!isSearchFocused || searchQuery.trim().length < 2) return null;
+    if (!isSearchFocused || draft.trim().length < 2) return null;
     if (quickSuggestions.length === 0 && !isSearchingLive) return null;
 
     return (
@@ -104,10 +155,10 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="px-3.5 py-2 bg-black/50 border-b border-white/10 flex items-center justify-between text-[11px] text-slate-400">
           <span>
             {isSearchingLive
-              ? 'Пошук у світових каталогах...'
-              : `Швидкі результати (${quickSuggestions.length})`}
+              ? t('searchingCatalogs')
+              : `${t('quickResults')} (${quickSuggestions.length})`}
           </span>
-          <span className="text-amber-400 font-semibold">IMDb • TMDB • UA</span>
+          <span className="text-amber-400 font-semibold">IMDb • TMDB</span>
         </div>
 
         {quickSuggestions.length > 0 ? (
@@ -125,7 +176,7 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 <img
                   src={item.posterPath}
-                  alt={item.title}
+                  alt={title(item)}
                   onError={(e) => {
                     (e.target as HTMLImageElement).src = createPosterFallback(
                       item.title,
@@ -136,9 +187,7 @@ export const Header: React.FC<HeaderProps> = ({
                   className="w-10 h-14 object-cover rounded-lg bg-slate-800 shrink-0"
                 />
                 <div className="flex-1 min-w-0">
-                  <h4 className="text-xs sm:text-sm font-bold text-white truncate">
-                    {item.title}
-                  </h4>
+                  <h4 className="text-xs sm:text-sm font-bold text-white truncate">{title(item)}</h4>
                   <div className="flex items-center gap-2 text-[11px] text-slate-400">
                     <span>{item.year}</span>
                     <span>•</span>
@@ -146,7 +195,7 @@ export const Header: React.FC<HeaderProps> = ({
                       <Star className="w-3 h-3 fill-amber-400" /> {item.rating.toFixed(1)}
                     </span>
                     <span>•</span>
-                    <span className="truncate">{item.genres[0] || 'Кіно'}</span>
+                    <span className="truncate">{tg(item.genres[0] || t('genreFilm'))}</span>
                   </div>
                 </div>
                 <Play className="w-4 h-4 text-red-500 shrink-0 mr-1" />
@@ -156,7 +205,9 @@ export const Header: React.FC<HeaderProps> = ({
         ) : (
           <div className="p-4 flex items-center justify-center gap-2 text-xs text-slate-300">
             <Loader2 className="w-4 h-4 text-red-500 animate-spin" />
-            <span>Шукаємо «{searchQuery}»...</span>
+            <span>
+              {t('searchingFor')} «{draft}»...
+            </span>
           </div>
         )}
       </div>
@@ -166,13 +217,12 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="sticky top-0 z-40 bg-[#07090e]/95 backdrop-blur-xl border-b border-white/10 shadow-lg">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-        {/* Top Row: Compact on Phone, Spacious on Tablet/Desktop */}
         <div className="flex items-center justify-between h-14 sm:h-18 gap-2 sm:gap-4">
           {/* Brand Logo */}
           <div
             onClick={() => {
               onSelectCategory('trending');
-              onSearchChange('');
+              clearSearch();
             }}
             className="flex items-center gap-2 cursor-pointer shrink-0 select-none"
           >
@@ -182,7 +232,7 @@ export const Header: React.FC<HeaderProps> = ({
                 Cinema<span className="text-red-500">Vault</span>
               </span>
               <span className="text-[9px] sm:text-[11px] text-amber-400 font-bold tracking-wider block mt-0.5">
-                UA CINEMA • 4K
+                CINEMA • 4K
               </span>
             </div>
           </div>
@@ -193,24 +243,25 @@ export const Header: React.FC<HeaderProps> = ({
               <Search className="w-4 h-4 text-red-500 absolute left-3.5 pointer-events-none" />
               <input
                 ref={desktopInputRef}
-                type="search"
+                type="text"
+                inputMode="search"
                 enterKeyHint="search"
+                autoComplete="off"
+                autoCorrect="off"
+                spellCheck={false}
                 placeholder={t('searchPlaceholder')}
-                value={searchQuery}
+                value={draft}
                 onFocus={() => setIsSearchFocused(true)}
-                onChange={(e) => {
-                  onSearchChange(e.target.value);
-                  setIsSearchFocused(true);
-                }}
+                onChange={(e) => handleType(e.target.value)}
                 className="w-full bg-[#111726] border border-white/15 focus:border-red-500 rounded-2xl pl-10 pr-28 py-2.5 text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500/30 transition-all"
               />
               {isSearchingLive && (
                 <Loader2 className="w-4 h-4 text-amber-400 animate-spin absolute right-24" />
               )}
-              {searchQuery && (
+              {draft && (
                 <button
                   type="button"
-                  onClick={() => onSearchChange('')}
+                  onClick={clearSearch}
                   className="absolute right-20 p-1 rounded-full text-slate-400 hover:text-white"
                 >
                   <X className="w-4 h-4" />
@@ -220,7 +271,7 @@ export const Header: React.FC<HeaderProps> = ({
                 type="submit"
                 className="absolute right-1.5 px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition-colors"
               >
-                Знайти
+                {t('searchBtn')}
               </button>
             </form>
             {renderSuggestionsDropdown()}
@@ -233,7 +284,7 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 onClick={() => setShowLangMenu(!showLangMenu)}
                 className="flex items-center gap-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-slate-200 transition-colors"
-                title="Змінити мову"
+                title={t('changeLanguage')}
               >
                 <span className="text-sm leading-none">{currentLang.flag}</span>
                 <span className="hidden sm:inline font-bold uppercase">{currentLang.code}</span>
@@ -263,7 +314,7 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </div>
 
-            {/* Favorites Button (Hidden on tiny phones since BottomNav has Favorites, shown on sm+) */}
+            {/* Favorites Button (BottomNav has it on phones) */}
             <button
               onClick={onOpenFavorites}
               className={`hidden sm:flex relative p-2 sm:p-2.5 rounded-xl border transition-all ${
@@ -288,36 +339,37 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <Heart className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-600 fill-red-600 shrink-0" />
               <span className="hidden sm:inline">{t('donateBtn')}</span>
-              <span className="sm:hidden">Донат</span>
+              <span className="sm:hidden">{t('donateShort')}</span>
             </button>
           </div>
         </div>
 
-        {/* Dedicated Mobile Search Bar (With Live Autocomplete Dropdown!) */}
+        {/* Dedicated Mobile Search Bar */}
         <div ref={searchWrapperMobileRef} className="md:hidden pb-2 relative">
           <form onSubmit={handleFormSubmit} className="relative flex items-center">
             <Search className="w-4 h-4 text-red-500 absolute left-3 pointer-events-none" />
             <input
               ref={mobileInputRef}
-              type="search"
+              type="text"
+              inputMode="search"
               enterKeyHint="search"
+              autoComplete="off"
+              autoCorrect="off"
+              spellCheck={false}
               placeholder={t('searchPlaceholder')}
-              value={searchQuery}
+              value={draft}
               onFocus={() => setIsSearchFocused(true)}
-              onChange={(e) => {
-                onSearchChange(e.target.value);
-                setIsSearchFocused(true);
-              }}
+              onChange={(e) => handleType(e.target.value)}
               className="w-full bg-[#111726] border border-white/15 focus:border-red-500 rounded-xl pl-9 pr-24 py-2 text-[13px] text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500/30"
             />
             {isSearchingLive && (
               <Loader2 className="w-3.5 h-3.5 text-amber-400 animate-spin absolute right-20" />
             )}
-            {searchQuery && (
+            {draft && (
               <button
                 type="button"
-                onClick={() => onSearchChange('')}
-                className="absolute right-16 p-1 rounded-full text-slate-400 hover:text-white"
+                onClick={clearSearch}
+                className="absolute right-[4.25rem] p-1 rounded-full text-slate-400 hover:text-white"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -326,13 +378,13 @@ export const Header: React.FC<HeaderProps> = ({
               type="submit"
               className="absolute right-1 px-2.5 py-1 rounded-lg bg-red-600 active:bg-red-500 text-white text-xs font-bold"
             >
-              Знайти
+              {t('searchBtn')}
             </button>
           </form>
           {renderSuggestionsDropdown()}
         </div>
 
-        {/* Sleek Horizontal Category Pills */}
+        {/* Category Pills */}
         <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto py-1.5 sm:py-2 scrollbar-none text-xs border-t border-white/5">
           {categories.map((cat) => {
             const isActive =

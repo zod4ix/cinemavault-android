@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { 
   X, Play, Heart, Download, Check, Star, Wifi, HardDrive, 
-  Layers, Clock, Copy, Sparkles, Globe, Youtube, Loader2, Users
+  Layers, Clock, Copy, Sparkles, Globe, Youtube, Loader2, Users, ExternalLink
 } from 'lucide-react';
 import { MediaItem, Season, Episode, MediaSource, TorrentItem } from '../types/movie';
 import { tmdbService, createPosterFallback } from '../services/tmdb';
 import { rezkaService } from '../services/rezka';
+import { getCinemetaSeasons } from '../services/cinemeta';
 import { torrentService } from '../services/torrent';
 import { useLanguage } from '../i18n/LanguageContext';
+import { useOverview } from '../i18n/useOverview';
+import { ServerHealth } from '../services/servers';
 
 interface MediaModalProps {
   media: MediaItem | null;
@@ -24,7 +27,8 @@ export const MediaModal: React.FC<MediaModalProps> = ({
   isFavorite,
   onToggleFavorite,
 }) => {
-  const { t } = useLanguage();
+  const { t, tg, title } = useLanguage();
+  const overview = useOverview(media);
   const [activeTab, setActiveTab] = useState<'online' | 'torrents' | 'episodes'>('online');
   const [sources, setSources] = useState<MediaSource[]>([]);
   const [torrents, setTorrents] = useState<TorrentItem[]>([]);
@@ -35,27 +39,47 @@ export const MediaModal: React.FC<MediaModalProps> = ({
   const [copiedMagnet, setCopiedMagnet] = useState<string | null>(null);
   const [downloadProgress, setDownloadProgress] = useState<{ [key: string]: number }>({});
   const [backdropSrc, setBackdropSrc] = useState<string>('');
+  const [serverHealth, setServerHealth] = useState<Record<string, ServerHealth>>({});
 
   useEffect(() => {
     if (!media) return;
     setBackdropSrc(media.backdropPath || media.posterPath || createPosterFallback(media.title, media.year, media.rating));
 
-    // Resolve sources & torrents
-    rezkaService.resolveSources(media, 1, 1).then(setSources);
+    // Resolve sources with health probing
+    rezkaService.resolveSources(media, 1, 1, {
+      withHealth: true,
+      onHealth: (id, h) => setServerHealth((prev) => ({ ...prev, [id]: h })),
+    }).then(setSources);
+
+    // Live search torrents
     torrentService.searchTorrents(media).then(setTorrents);
 
-    // Load seasons & real episodes from TVMaze / API
+    // Load real seasons & episodes: first try Cinemeta (if IMDb id is available), else TVMaze / tmdbService
     if (media.mediaType === 'tv' || media.mediaType === 'anime') {
       setActiveTab('episodes');
       setLoadingEpisodes(true);
-      tmdbService.getSeasonsLive(media).then((s) => {
-        setSeasons(s);
-        if (s.length > 0) {
-          setSelectedSeason(s[0].seasonNumber);
-          setSelectedEpisode(s[0].episodes[0]);
+
+      const loadSeasons = async () => {
+        let loaded: Season[] = [];
+        if (media.imdbId) {
+          try {
+            loaded = await getCinemetaSeasons(media.imdbId);
+          } catch {
+            loaded = [];
+          }
+        }
+        if (loaded.length === 0) {
+          loaded = await tmdbService.getSeasonsLive(media);
+        }
+        setSeasons(loaded);
+        if (loaded.length > 0) {
+          setSelectedSeason(loaded[0].seasonNumber);
+          setSelectedEpisode(loaded[0].episodes[0]);
         }
         setLoadingEpisodes(false);
-      });
+      };
+
+      loadSeasons();
     } else {
       setSeasons([]);
       setSelectedEpisode(undefined);
@@ -66,7 +90,10 @@ export const MediaModal: React.FC<MediaModalProps> = ({
   // Update sources when selected episode changes
   useEffect(() => {
     if (!media || !selectedEpisode) return;
-    rezkaService.resolveSources(media, selectedEpisode.seasonNumber, selectedEpisode.episodeNumber).then(setSources);
+    rezkaService.resolveSources(media, selectedEpisode.seasonNumber, selectedEpisode.episodeNumber, {
+      withHealth: true,
+      onHealth: (id, h) => setServerHealth((prev) => ({ ...prev, [id]: h })),
+    }).then(setSources);
   }, [media, selectedEpisode]);
 
   if (!media) return null;
@@ -75,6 +102,14 @@ export const MediaModal: React.FC<MediaModalProps> = ({
     navigator.clipboard.writeText(magnet);
     setCopiedMagnet(id);
     setTimeout(() => setCopiedMagnet(null), 2500);
+  };
+
+  const handleOpenTorrentApp = (magnet: string) => {
+    try {
+      window.location.href = magnet;
+    } catch {
+      window.open(magnet, '_system');
+    }
   };
 
   const handleFakeDownload = (name: string) => {
@@ -100,6 +135,11 @@ export const MediaModal: React.FC<MediaModalProps> = ({
     }
   };
 
+  const displayTitle = title(media);
+  const localizedGenres = media.genres && media.genres.length > 0
+    ? media.genres.map(tg).join(', ')
+    : t('genreFilm');
+
   return (
     <div 
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/85 backdrop-blur-md animate-fadeIn"
@@ -113,7 +153,7 @@ export const MediaModal: React.FC<MediaModalProps> = ({
         <div className="relative h-52 sm:h-72 w-full shrink-0 overflow-hidden bg-slate-900">
           <img
             src={backdropSrc}
-            alt={media.title}
+            alt={displayTitle}
             onError={() => setBackdropSrc(createPosterFallback(media.title, media.year, media.rating))}
             className="w-full h-full object-cover object-center filter brightness-75"
           />
@@ -123,13 +163,14 @@ export const MediaModal: React.FC<MediaModalProps> = ({
           <button
             onClick={onClose}
             className="absolute top-4 right-4 p-2.5 rounded-full bg-black/60 hover:bg-red-600 text-white backdrop-blur-md border border-white/15 transition-all z-20"
+            aria-label={t('closePlayer')}
           >
             <X className="w-5 h-5" />
           </button>
 
           {/* Quick Header Overlay */}
           <div className="absolute bottom-4 left-4 right-4 sm:left-6 sm:right-6 flex flex-col sm:flex-row sm:items-end justify-between gap-3">
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-red-600 text-white uppercase">
                   {getMediaLabel()}
@@ -150,11 +191,11 @@ export const MediaModal: React.FC<MediaModalProps> = ({
                   </span>
                 )}
               </div>
-              <h2 className="text-xl sm:text-3xl font-black text-white drop-shadow-md leading-tight">
-                {media.title}
+              <h2 className="text-xl sm:text-3xl font-black text-white drop-shadow-md leading-tight line-clamp-2">
+                {displayTitle}
               </h2>
-              {media.originalTitle && media.originalTitle !== media.title && (
-                <p className="text-xs text-slate-400 font-medium">{media.originalTitle}</p>
+              {media.originalTitle && media.originalTitle !== displayTitle && (
+                <p className="text-xs text-slate-400 font-medium truncate">{media.originalTitle}</p>
               )}
             </div>
 
@@ -176,6 +217,7 @@ export const MediaModal: React.FC<MediaModalProps> = ({
                     ? 'bg-red-600 text-white border-red-500' 
                     : 'bg-black/60 text-slate-300 hover:text-white border-white/20'
                 }`}
+                title={t('inFavorites')}
               >
                 <Heart className={`w-5 h-5 ${isFavorite ? 'fill-white' : ''}`} />
               </button>
@@ -235,7 +277,7 @@ export const MediaModal: React.FC<MediaModalProps> = ({
             <span>•</span>
             <span className="text-slate-200 font-semibold">{media.year} {t('year')}</span>
             <span>•</span>
-            <span className="text-slate-300">{media.genres.join(', ')}</span>
+            <span className="text-slate-300">{localizedGenres}</span>
             {media.duration && (
               <>
                 <span>•</span>
@@ -247,18 +289,18 @@ export const MediaModal: React.FC<MediaModalProps> = ({
           </div>
 
           <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-            {media.overview}
+            {overview}
           </p>
 
           {(media.director || (media.cast && media.cast.length > 0)) && (
             <div className="p-3 rounded-xl bg-white/5 border border-white/10 text-xs space-y-1 text-slate-300">
               {media.director && (
-                <div><span className="text-slate-400 font-semibold">Режисер:</span> {media.director}</div>
+                <div><span className="text-slate-400 font-semibold">{t('director')}</span> {media.director}</div>
               )}
               {media.cast && media.cast.length > 0 && (
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <Users className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                  <span className="text-slate-400 font-semibold">У ролях:</span>
+                  <span className="text-slate-400 font-semibold">{t('cast')}</span>
                   <span>{media.cast.join(', ')}</span>
                 </div>
               )}
@@ -271,7 +313,7 @@ export const MediaModal: React.FC<MediaModalProps> = ({
               {loadingEpisodes ? (
                 <div className="py-12 flex flex-col items-center justify-center gap-3 text-slate-400">
                   <Loader2 className="w-8 h-8 text-red-500 animate-spin" />
-                  <span className="text-xs">Завантаження списку сезонів та серій з бази...</span>
+                  <span className="text-xs">{t('loadingEpisodes')}</span>
                 </div>
               ) : (
                 <>
@@ -291,7 +333,7 @@ export const MediaModal: React.FC<MediaModalProps> = ({
                               : 'bg-white/5 text-slate-300 hover:bg-white/10'
                           }`}
                         >
-                          {s.name} ({s.episodes.length} сер.)
+                          {s.name || `${t('seasonWord')} ${s.seasonNumber}`} ({s.episodes.length} {t('episodesShort')})
                         </button>
                       ))}
                     </div>
@@ -315,9 +357,11 @@ export const MediaModal: React.FC<MediaModalProps> = ({
                           >
                             <div className="space-y-1 min-w-0">
                               <span className="text-xs font-bold text-white block truncate">
-                                С{ep.seasonNumber}:Е{ep.episodeNumber.toString().padStart(2, '0')} — {ep.title}
+                                {t('seasonLetter')}{ep.seasonNumber}:{t('episodeLetter')}{ep.episodeNumber.toString().padStart(2, '0')} — {ep.title}
                               </span>
-                              <span className="text-[11px] text-slate-400 block line-clamp-1">{ep.overview}</span>
+                              {ep.overview && (
+                                <span className="text-[11px] text-slate-400 block line-clamp-1">{ep.overview}</span>
+                              )}
                               {ep.airDate && (
                                 <span className="text-[10px] text-amber-400/80 block">{ep.airDate}</span>
                               )}
@@ -346,85 +390,88 @@ export const MediaModal: React.FC<MediaModalProps> = ({
           {activeTab === 'online' && (
             <div className="space-y-4">
               <div className="text-xs text-slate-400 flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-amber-400" />
+                <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
                 <span>{t('autoSearchNotice')}</span>
               </div>
 
               <div className="space-y-3">
-                {sources.map((src) => (
-                  <div
-                    key={src.id}
-                    className="p-4 rounded-xl bg-white/5 border border-white/10 hover:border-white/25 transition-all space-y-3"
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <div className="flex items-center gap-3">
-                        {src.type === 'embed' ? (
-                          <Globe className="w-5 h-5 text-amber-400 shrink-0" />
-                        ) : src.type === 'trailer' ? (
-                          <Youtube className="w-5 h-5 text-red-500 shrink-0" />
-                        ) : (
-                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-                        )}
-                        <div>
-                          <h4 className="font-bold text-white text-sm sm:text-base">{src.title}</h4>
-                          <span className="text-xs text-slate-400">{t('ping')}: {src.pingMs} ms • {t('working100')}</span>
+                {sources.map((src) => {
+                  const srvId = src.id.split('-')[0];
+                  const health = serverHealth[srvId] || (src.status === 'working' ? 'ok' : 'unknown');
+                  const isOk = health === 'ok';
+
+                  return (
+                    <div
+                      key={src.id}
+                      className="p-4 rounded-xl bg-white/5 border border-white/10 hover:border-white/25 transition-all space-y-3"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="flex items-center gap-3">
+                          {src.type === 'embed' ? (
+                            <Globe className="w-5 h-5 text-amber-400 shrink-0" />
+                          ) : src.type === 'trailer' ? (
+                            <Youtube className="w-5 h-5 text-red-500 shrink-0" />
+                          ) : (
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                          )}
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-bold text-white text-sm sm:text-base">{src.title}</h4>
+                              <span
+                                className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                                  isOk
+                                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                                    : 'bg-white/10 text-slate-300'
+                                }`}
+                              >
+                                {isOk ? t('statusOk') : t('statusUnknown')}
+                              </span>
+                            </div>
+                            <span className="text-xs text-slate-400">
+                              {t('playbackLanguages')}{' '}
+                              <span className="text-slate-300 font-medium">
+                                {src.id.includes('ashdi') ? '🇺🇦 UA' : 'EN / Multi Audio'}
+                              </span>
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {src.type === 'online' && (
+                            <button
+                              onClick={() => handleFakeDownload(src.id)}
+                              className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              <span>
+                                {downloadProgress[src.id] !== undefined
+                                  ? downloadProgress[src.id] >= 100
+                                    ? t('downloaded')
+                                    : `${downloadProgress[src.id]}%`
+                                  : t('download')}
+                              </span>
+                            </button>
+                          )}
+
+                          <button
+                            onClick={() => onPlayOnline(media, src, selectedEpisode)}
+                            className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-red-600/30 active:scale-95 transition-all"
+                          >
+                            <Play className="w-4 h-4 fill-white" />
+                            <span>{t('watchNow')}</span>
+                          </button>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        {src.type === 'online' && (
-                          <button
-                            onClick={() => handleFakeDownload(src.id)}
-                            className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                            <span>
-                              {downloadProgress[src.id] !== undefined
-                                ? downloadProgress[src.id] >= 100
-                                  ? t('downloaded')
-                                  : `${downloadProgress[src.id]}%`
-                                : t('download')}
-                            </span>
-                          </button>
-                        )}
-
-                        <button
-                          onClick={() => onPlayOnline(media, src, selectedEpisode)}
-                          className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-red-600/30 active:scale-95 transition-all"
-                        >
-                          <Play className="w-4 h-4 fill-white" />
-                          <span>{t('watchNow')}</span>
-                        </button>
+                      {/* Info & Hints */}
+                      <div className="text-[11px] text-slate-400 flex flex-wrap items-center gap-3 pt-1 border-t border-white/5">
+                        <span>{t('qualityHint')}</span>
+                        <span>•</span>
+                        <span>{t('langHintMulti')}</span>
                       </div>
                     </div>
-
-                    {/* Audio tracks tags */}
-                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                      <span className="text-[11px] text-slate-400 mr-1">{t('audioTracks')}</span>
-                      {src.audioTracks.map((a) => (
-                        <span
-                          key={a.id}
-                          className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-black/40 border border-white/10 text-slate-300"
-                        >
-                          {a.name}
-                        </span>
-                      ))}
-                    </div>
-
-                    {/* Qualities */}
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-[11px] text-slate-400 mr-1">{t('availableQuality')}</span>
-                      {src.qualities.map((q) => (
-                        <span
-                          key={q.label}
-                          className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/10 text-amber-300 border border-amber-500/20"
-                        >
-                          {q.label}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -432,69 +479,85 @@ export const MediaModal: React.FC<MediaModalProps> = ({
           {/* TAB 3: TORRENTS */}
           {activeTab === 'torrents' && (
             <div className="space-y-4">
-              <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs text-blue-200">
+              <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs text-blue-200 leading-relaxed">
                 💡 {t('torrentsTip')}
               </div>
 
-              <div className="space-y-3">
-                {torrents.map((tItem) => (
-                  <div
-                    key={tItem.id}
-                    className="p-4 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 transition-all space-y-2.5"
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-600/20 text-red-400 border border-red-600/30">
-                            {tItem.tracker}
-                          </span>
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                            {tItem.quality}
-                          </span>
-                          <span className="text-xs font-mono text-emerald-400 font-bold">
-                            ▲ {tItem.seeds} {t('seeds')}
-                          </span>
-                          <span className="text-xs font-mono text-slate-400">
-                            {t('size')} {tItem.size}
-                          </span>
+              {torrents.length === 0 ? (
+                <div className="py-12 text-center text-slate-400 space-y-2">
+                  <HardDrive className="w-8 h-8 mx-auto text-slate-500" />
+                  <p className="text-xs">{t('torrentsNone')}</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {torrents.map((tItem) => (
+                    <div
+                      key={tItem.id}
+                      className="p-4 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 transition-all space-y-2.5"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-600/20 text-red-400 border border-red-600/30">
+                              {tItem.tracker}
+                            </span>
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                              {tItem.quality}
+                            </span>
+                            <span className="text-xs font-mono text-emerald-400 font-bold">
+                              ▲ {tItem.seeds} {t('seeds')}
+                            </span>
+                            <span className="text-xs font-mono text-slate-400">
+                              {t('size')} {tItem.size}
+                            </span>
+                          </div>
+                          <h4 className="font-semibold text-white text-xs sm:text-sm line-clamp-2">{tItem.title}</h4>
+                          <p className="text-xs text-slate-400">{tItem.audio}</p>
                         </div>
-                        <h4 className="font-semibold text-white text-xs sm:text-sm line-clamp-2">{tItem.title}</h4>
-                        <p className="text-xs text-slate-400">{tItem.audio}</p>
-                      </div>
 
-                      <div className="flex items-center gap-2 shrink-0 pt-2 sm:pt-0">
-                        <button
-                          onClick={() => handleCopyMagnet(tItem.magnet, tItem.id)}
-                          className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors"
-                          title="Скопіювати Magnet-посилання"
-                        >
-                          {copiedMagnet === tItem.id ? (
-                            <>
-                              <Check className="w-3.5 h-3.5 text-emerald-400" />
-                              <span className="text-emerald-400">{t('copied')}</span>
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="w-3.5 h-3.5" />
-                              <span>Magnet</span>
-                            </>
-                          )}
-                        </button>
+                        <div className="flex items-center gap-2 shrink-0 pt-2 sm:pt-0">
+                          <button
+                            onClick={() => handleCopyMagnet(tItem.magnet, tItem.id)}
+                            className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                            title={t('copyMagnetTitle')}
+                          >
+                            {copiedMagnet === tItem.id ? (
+                              <>
+                                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                <span className="text-emerald-400">{t('copied')}</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3.5 h-3.5" />
+                                <span>Magnet</span>
+                              </>
+                            )}
+                          </button>
 
-                        <button
-                          onClick={() => {
-                            if (sources[0]) onPlayOnline(media, sources[0], selectedEpisode);
-                          }}
-                          className="px-4 py-2 rounded-xl bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-red-600/30 active:scale-95 transition-all"
-                        >
-                          <Play className="w-4 h-4 fill-white" />
-                          <span>{t('streaming')}</span>
-                        </button>
+                          <button
+                            onClick={() => handleOpenTorrentApp(tItem.magnet)}
+                            className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-600/30 active:scale-95 transition-all"
+                            title="Відкрити в торент-клієнті (Flud, LibreTorrent)"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                            <span>{t('openTorrent')}</span>
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              if (sources[0]) onPlayOnline(media, sources[0], selectedEpisode);
+                            }}
+                            className="px-4 py-2 rounded-xl bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-red-600/30 active:scale-95 transition-all"
+                          >
+                            <Play className="w-4 h-4 fill-white" />
+                            <span>{t('streaming')}</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

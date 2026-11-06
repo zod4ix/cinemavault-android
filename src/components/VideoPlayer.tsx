@@ -3,10 +3,11 @@ import Hls from 'hls.js';
 import {
   Play, Pause, RotateCcw, RotateCw, Volume2, VolumeX,
   Maximize, Minimize, ArrowLeft, Settings, Check, Radio,
-  Server, SkipForward, SkipBack, Smartphone, Link2
+  Server, SkipForward, SkipBack, Smartphone, Link2, ChevronRight, AlertCircle
 } from 'lucide-react';
 import { MediaItem, AudioTrack, StreamQuality, StreamServer } from '../types/movie';
-import { buildServersForMedia } from '../services/rezka';
+import { buildServers, ensureIds, resolveUaServer, probeServer, ServerHealth } from '../services/servers';
+import { rememberWorkingServer } from '../services/rezka';
 import { storageService } from '../services/storage';
 import { useLanguage } from '../i18n/LanguageContext';
 
@@ -40,6 +41,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   qualities,
   audioTracks,
   embedUrl,
+  servers: initialServers,
   initialMode = 'embed',
   onClose,
   episodeId,
@@ -55,25 +57,52 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [activeSeason, setActiveSeason] = useState<number>(initialSeason || 1);
   const [activeEpisode, setActiveEpisode] = useState<number>(initialEpisode || 1);
   const [isLandscapeLocked, setIsLandscapeLocked] = useState<boolean>(false);
+  const [serverHealthMap, setServerHealthMap] = useState<Record<string, ServerHealth>>({});
+  const [autoFailoverMsg, setAutoFailoverMsg] = useState<string | null>(null);
+
+  // Background ensure IDs + UA dubbing lookup for current season
+  const [serversVersion, setServersVersion] = useState<number>(0);
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      ensureIds(media),
+      resolveUaServer(media, activeSeason),
+    ]).then(() => {
+      if (active) setServersVersion((v) => v + 1);
+    });
+    return () => {
+      active = false;
+    };
+  }, [media, activeSeason]);
 
   // Dynamically build all servers for current movie or season/episode
-  const availableServers = useMemo(
-    () => buildServersForMedia(media, activeSeason, activeEpisode),
-    [media, activeSeason, activeEpisode]
-  );
+  const availableServers = useMemo(() => {
+    const list = buildServers(media, activeSeason, activeEpisode);
+    if (initialServers && initialServers.length > 0) {
+      // Merge in any already-passed initial servers if not present
+      const map = new Map<string, StreamServer>();
+      list.forEach((s) => map.set(s.id, s));
+      initialServers.forEach((s) => {
+        if (!map.has(s.id)) map.set(s.id, s);
+      });
+      return Array.from(map.values());
+    }
+    return list;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [media, activeSeason, activeEpisode, serversVersion]);
 
   // Determine initial server based on embedUrl or initialMode
   const getInitialServerId = () => {
-    if (initialMode === 'native') return 'native-hls';
+    if (initialMode === 'native') return 'custom-stream';
     if (initialMode === 'trailer') {
       const tr = availableServers.find((s) => s.mode === 'trailer');
       if (tr) return tr.id;
     }
     if (embedUrl) {
-      const matched = availableServers.find((s) => embedUrl.includes(s.url.split('?')[0]));
+      const matched = availableServers.find((s) => s.url && embedUrl.includes(s.url.split('?')[0]));
       if (matched) return matched.id;
     }
-    return availableServers[0]?.id || 'native-hls';
+    return availableServers[0]?.id || 'vidlink';
   };
 
   const [selectedServerId, setSelectedServerId] = useState<string>(getInitialServerId);
@@ -94,7 +123,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     nonEmbedQualities[0] || { label: '1080p', url: defaultNativeUrl }
   );
   const [selectedAudio, setSelectedAudio] = useState<AudioTrack>(
-    audioTracks[0] || { id: 'default', name: 'Український Дубляж', language: 'uk' }
+    audioTracks[0] || { id: 'default', name: 'Auto (Original / Dub)', language: 'uk' }
   );
 
   const [isPlaying, setIsPlaying] = useState<boolean>(true);
@@ -110,6 +139,14 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Probe current active server health on mount or when switching
+  useEffect(() => {
+    if (!activeServer || activeServer.mode !== 'embed') return;
+    probeServer(activeServer.url).then((h) => {
+      setServerHealthMap((prev) => ({ ...prev, [activeServer.id]: h }));
+    });
+  }, [activeServer]);
+
   // Ensure landscape lock is released when closing player
   useEffect(() => {
     return () => {
@@ -123,7 +160,24 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   useEffect(() => {
     setIframeLoading(true);
-  }, [activeServer?.url]);
+    if (activeServer) {
+      rememberWorkingServer(activeServer.id);
+    }
+  }, [activeServer?.url, activeServer?.id]);
+
+  // Helper to switch to the next server
+  const switchToNextServer = () => {
+    const embedServers = availableServers.filter((s) => s.mode === 'embed');
+    if (embedServers.length <= 1) return;
+    const currentIndex = embedServers.findIndex((s) => s.id === activeServer?.id);
+    const nextIndex = (currentIndex + 1) % embedServers.length;
+    const nextServer = embedServers[nextIndex];
+    if (nextServer) {
+      setSelectedServerId(nextServer.id);
+      setAutoFailoverMsg(`${t('connectingTo')} ${nextServer.name}...`);
+      setTimeout(() => setAutoFailoverMsg(null), 3000);
+    }
+  };
 
   const toggleAndroidLandscape = () => {
     const next = !isLandscapeLocked;
@@ -179,7 +233,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     };
   }, [activeServer, selectedQuality.url, customStreamUrl, media.id, episodeId]);
 
-  // Save watch history immediately & periodically
+  // Save watch history periodically
   useEffect(() => {
     storageService.saveProgress({
       mediaId: media.id,
@@ -311,7 +365,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             <button
               onClick={onClose}
               className="p-2 rounded-xl bg-white/10 hover:bg-red-600 text-white transition-all active:scale-95 shrink-0"
-              aria-label="Закрити плеєр"
+              aria-label={t('closePlayer')}
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
@@ -319,7 +373,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               <h2 className="text-white font-bold text-xs sm:text-base truncate">{title}</h2>
               <p className="text-[10px] sm:text-xs text-amber-400 font-medium truncate">
                 {isSeries
-                  ? `Сезон ${activeSeason} • Серія ${activeEpisode}`
+                  ? `${t('seasonWord')} ${activeSeason} • ${t('episodeWord')} ${activeEpisode}`
                   : subtitle || `${media.year} • ${media.quality || '1080p HD'}`}
               </p>
             </div>
@@ -333,7 +387,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                   onClick={() => setActiveEpisode((prev) => Math.max(1, prev - 1))}
                   disabled={activeEpisode <= 1}
                   className="p-1 rounded-lg hover:bg-white/10 disabled:opacity-30 text-white"
-                  title="Попередня серія"
+                  title={t('prevEpisode')}
                 >
                   <SkipBack className="w-3.5 h-3.5" />
                 </button>
@@ -348,7 +402,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                   {Array.from({ length: Math.max(media.seasonsCount || 4, activeSeason) }, (_, i) => i + 1).map(
                     (sNum) => (
                       <option key={sNum} value={sNum} className="bg-slate-900 text-white">
-                        С{sNum}
+                        {t('seasonLetter')}{sNum}
                       </option>
                     )
                   )}
@@ -359,20 +413,32 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                   onChange={(e) => setActiveEpisode(Number(e.target.value))}
                   className="bg-transparent text-[11px] font-bold text-white focus:outline-none"
                 >
-                  {Array.from({ length: 26 }, (_, i) => i + 1).map((eNum) => (
+                  {Array.from({ length: 30 }, (_, i) => i + 1).map((eNum) => (
                     <option key={eNum} value={eNum} className="bg-slate-900 text-white">
-                      Е{eNum}
+                      {t('episodeLetter')}{eNum}
                     </option>
                   ))}
                 </select>
                 <button
                   onClick={() => setActiveEpisode((prev) => prev + 1)}
                   className="p-1 rounded-lg hover:bg-white/10 text-white"
-                  title="Наступна серія"
+                  title={t('nextEpisode')}
                 >
                   <SkipForward className="w-3.5 h-3.5" />
                 </button>
               </div>
+            )}
+
+            {/* Next Server Quick Failover Button */}
+            {availableServers.filter((s) => s.mode === 'embed').length > 1 && (
+              <button
+                onClick={switchToNextServer}
+                className="px-2.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-[11px] font-bold flex items-center gap-1 shadow-md shadow-red-600/30 active:scale-95 transition-all"
+                title={t('nextServer')}
+              >
+                <span>{t('nextServer')}</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
             )}
 
             {/* Rotate Phone to Landscape / Fullscreen Button */}
@@ -383,10 +449,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                   ? 'bg-amber-500 text-slate-950 border-amber-400'
                   : 'bg-white/10 text-slate-200 border-white/15 hover:bg-white/20'
               }`}
-              title="Повернути екран горизонтально"
+              title={isLandscapeLocked ? t('rotateNormal') : t('rotateLandscape')}
             >
               <Smartphone className={`w-3.5 h-3.5 ${isLandscapeLocked ? 'rotate-90' : ''} transition-transform`} />
-              <span className="hidden sm:inline">{isLandscapeLocked ? 'Звичайний' : 'Горизонтально'}</span>
+              <span className="hidden sm:inline">
+                {isLandscapeLocked ? t('rotateNormal') : t('rotateLandscape')}
+              </span>
             </button>
           </div>
         </div>
@@ -394,10 +462,13 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         {/* Row 2: Multi-Server Switcher Pills (Scrollable on Phone!) */}
         <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-0.5">
           <span className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1 shrink-0 mr-1">
-            <Server className="w-3 h-3 text-red-500" /> Сервер:
+            <Server className="w-3 h-3 text-red-500" /> {t('serverLabel')}
           </span>
           {availableServers.map((srv) => {
             const active = activeServer?.id === srv.id;
+            const health = serverHealthMap[srv.id];
+            const isUa = srv.id.includes('ashdi') || srv.langs?.includes('UA');
+
             return (
               <button
                 key={srv.id}
@@ -408,6 +479,13 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/15 hover:text-white'
                 }`}
               >
+                {/* Health dot */}
+                {health === 'ok' ? (
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                ) : isUa ? (
+                  <span>🇺🇦</span>
+                ) : null}
+
                 <span>{srv.name}</span>
                 <span
                   className={`text-[9px] px-1 py-0.2 rounded ${
@@ -425,7 +503,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               onClick={() => setShowCustomUrlInput(!showCustomUrlInput)}
               className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30 whitespace-nowrap flex items-center gap-1 shrink-0"
             >
-              <Link2 className="w-3 h-3" /> Власний .m3u8/.mp4
+              <Link2 className="w-3 h-3" /> {t('customStream')}
             </button>
           )}
         </div>
@@ -437,7 +515,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               type="url"
               value={customStreamUrl}
               onChange={(e) => setCustomStreamUrl(e.target.value)}
-              placeholder="Вставте пряме посилання на потік (.m3u8, .mp4, TorrServe)..."
+              placeholder={t('customStreamPlaceholder')}
               className="flex-1 bg-black/60 border border-white/20 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-red-500"
             />
             <button
@@ -450,18 +528,34 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         )}
       </div>
 
+      {/* Auto Failover Notification Toast */}
+      {autoFailoverMsg && (
+        <div className="absolute top-24 left-1/2 -translate-x-1/2 z-40 bg-black/90 border border-amber-500 text-amber-300 px-4 py-2 rounded-xl text-xs font-bold shadow-2xl flex items-center gap-2 animate-fadeIn">
+          <AlertCircle className="w-4 h-4 text-amber-400" />
+          <span>{autoFailoverMsg}</span>
+        </div>
+      )}
+
       {/* MAIN VIDEO VIEWPORT */}
       <div className="relative flex-1 w-full bg-black flex items-center justify-center overflow-hidden">
         {activeServer && activeServer.mode !== 'native' ? (
           <>
             {iframeLoading && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#05070c] z-10 pointer-events-none">
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#05070c] z-10">
                 <div className="w-11 h-11 rounded-full border-4 border-red-600/30 border-t-red-600 animate-spin" />
                 <p className="text-xs text-slate-300 font-medium">
-                  Підключення до <span className="text-amber-400 font-bold">{activeServer.name}</span>...
+                  {t('connectingTo')} <span className="text-amber-400 font-bold">{activeServer.name}</span>...
                 </p>
-                <p className="text-[11px] text-slate-500 px-6 text-center">
-                  Якщо сервер довго відповідає, натисніть сусідню кнопку сервера вгорі
+                <div className="flex items-center gap-2 pt-2">
+                  <button
+                    onClick={switchToNextServer}
+                    className="px-4 py-1.5 rounded-xl bg-white/10 hover:bg-red-600 text-white text-xs font-bold border border-white/15 transition-all"
+                  >
+                    {t('nextServer')}
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-500 px-6 text-center pt-1">
+                  {t('serverSlowHint')}
                 </p>
               </div>
             )}

@@ -690,7 +690,7 @@ const BASE_CATALOG: MediaItem[] = [
 export const CURATED_CATALOG: MediaItem[] = [...BASE_CATALOG, ...EXTRA_CATALOG];
 
 // Native-first HTTP JSON helper: uses Android CapacitorHttp (0 CORS restrictions!) on mobile, standard fetch on web
-async function httpGetJson(url: string): Promise<any | null> {
+export async function httpGetJson(url: string): Promise<any | null> {
   try {
     if (Capacitor.isNativePlatform()) {
       const response = await CapacitorHttp.get({
@@ -757,7 +757,7 @@ const GENRE_MAP_TO_UA: { [key: string]: string } = {
   supernatural: 'Містика',
 };
 
-function normalizeGenre(g: string): string {
+export function normalizeGenre(g: string): string {
   const lower = g.toLowerCase().trim();
   return GENRE_MAP_TO_UA[lower] || g;
 }
@@ -910,7 +910,7 @@ const POPULAR_UA_EN_DICT: { [key: string]: string } = {
   'клинок': 'demon slayer',
 };
 
-function transliterateToEnglish(input: string): string {
+export function transliterateToEnglish(input: string): string {
   const lower = input.toLowerCase().trim();
   for (const [uaKey, enVal] of Object.entries(POPULAR_UA_EN_DICT)) {
     if (lower === uaKey || lower.startsWith(uaKey + ' ')) {
@@ -924,11 +924,11 @@ function transliterateToEnglish(input: string): string {
 }
 
 // Runtime cache so any dynamically fetched item is accessible by ID
-const dynamicItemsCache = new Map<string, MediaItem>();
+export const dynamicItemsCache = new Map<string, MediaItem>();
 CURATED_CATALOG.forEach((item) => dynamicItemsCache.set(item.id.toString(), item));
 
 // 1. IMDb Official Global Search API (15,000,000+ Movies & Series with exact tt... IMDb IDs & Amazon Posters!)
-async function searchImdbSuggestions(query: string): Promise<MediaItem[]> {
+export async function searchImdbSuggestions(query: string): Promise<MediaItem[]> {
   try {
     const clean = query
       .toLowerCase()
@@ -1008,18 +1008,18 @@ async function searchImdbSuggestions(query: string): Promise<MediaItem[]> {
 }
 
 // 2. Wikidata Deep Multilingual Resolver (Extracts Ukrainian title + English title + P345 IMDb ID + P4947/P4983 TMDB ID + P1651 YouTube Trailer!)
-interface WikidataResolvedResult {
+export interface WikidataResolvedResult {
   englishQueries: string[];
   mediaItems: MediaItem[];
 }
 
-async function resolveViaWikidataDeep(query: string): Promise<WikidataResolvedResult> {
+export async function resolveViaWikidataDeep(query: string): Promise<WikidataResolvedResult> {
   const englishQueries: string[] = [];
   const mediaItems: MediaItem[] = [];
 
   try {
-    const isNonAscii = /[^\u0000-\u007f]/.test(query);
-    const langsToTry = isNonAscii ? ['uk', 'ru'] : ['en', 'pl', 'es'];
+    const isCyrillic = /[а-яіїєґё]/i.test(query);
+    const langsToTry = isCyrillic ? ['uk', 'ru'] : ['en', 'pl', 'es'];
 
     const entityIds: string[] = [];
     for (const lang of langsToTry) {
@@ -1170,7 +1170,7 @@ async function searchItunesMovies(query: string, country: string = 'UA'): Promis
 }
 
 // 4. Search TVMaze API for TV Series, Shows, Cartoons & Anime
-async function searchTvMazeShows(query: string): Promise<MediaItem[]> {
+export async function searchTvMazeShows(query: string): Promise<MediaItem[]> {
   try {
     const url = `https://api.tvmaze.com/search/shows?q=${encodeURIComponent(query)}`;
     const data = await httpGetJson(url);
@@ -1231,7 +1231,7 @@ async function searchTvMazeShows(query: string): Promise<MediaItem[]> {
 }
 
 // 5. Search Jikan v4 (MyAnimeList) API for Anime
-async function searchJikanAnime(query: string): Promise<MediaItem[]> {
+export async function searchJikanAnime(query: string): Promise<MediaItem[]> {
   try {
     const url = `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&limit=14&sfw=true`;
     const json = await httpGetJson(url);
@@ -1641,10 +1641,8 @@ export const tmdbService = {
             id: `ep-${ep.id}`,
             episodeNumber: ep.number || 1,
             seasonNumber: sNum,
-            title: ep.name || `Епізод ${ep.number}`,
-            overview:
-              (ep.summary || '').replace(/<[^>]+>/g, '').trim() ||
-              `Серія ${ep.number} сезону ${sNum}.`,
+            title: ep.name || '',
+            overview: (ep.summary || '').replace(/<[^>]+>/g, '').trim(),
             stillPath: ep.image?.original || ep.image?.medium || item.backdropPath,
             airDate: ep.airdate || item.releaseDate,
             duration: ep.runtime || 45,
@@ -1655,7 +1653,7 @@ export const tmdbService = {
         for (const [seasonNumber, episodes] of seasonsMap.entries()) {
           seasons.push({
             seasonNumber,
-            name: `Сезон ${seasonNumber}`,
+            name: `S${seasonNumber}`,
             episodes,
           });
         }
@@ -1685,15 +1683,15 @@ export const tmdbService = {
           id: `${item.id}-s${s}e${e}`,
           episodeNumber: e,
           seasonNumber: s,
-          title: `Епізод ${e}`,
-          overview: `Офіційний реліз ${e}-ї серії ${s}-го сезону «${item.title}». Доступно в усіх озвучках та якості до 4K.`,
+          title: '',
+          overview: '',
           airDate: `2024-0${Math.min(9, s)}-${Math.min(28, 10 + e)}`,
           stillPath: item.backdropPath,
         });
       }
       seasons.push({
         seasonNumber: s,
-        name: `Сезон ${s}`,
+        name: `S${s}`,
         episodes,
       });
     }

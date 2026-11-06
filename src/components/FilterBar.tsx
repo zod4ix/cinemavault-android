@@ -1,6 +1,8 @@
 import React from 'react';
 import { SlidersHorizontal, ArrowUpDown, Calendar, Sparkles } from 'lucide-react';
 import { CatalogFilter } from '../types/movie';
+import { useLanguage } from '../i18n/LanguageContext';
+import { FILTER_GENRES, QUICK_TAGS } from '../i18n/translations';
 
 interface FilterBarProps {
   filter: CatalogFilter;
@@ -9,32 +11,13 @@ interface FilterBarProps {
   onQuickSearch?: (term: string) => void;
 }
 
-const GENRES = [
-  { id: 'all', label: 'Усі жанри' },
-  { id: 'Фантастика', label: 'Фантастика' },
-  { id: 'Бойовик', label: 'Бойовик' },
-  { id: 'Пригоди', label: 'Пригоди' },
-  { id: 'Драма', label: 'Драма' },
-  { id: 'Комедія', label: 'Комедія' },
-  { id: 'Фентезі', label: 'Фентезі' },
-  { id: 'Трилер', label: 'Трилер' },
-  { id: 'Кримінал', label: 'Кримінал' },
-  { id: 'Анімація', label: 'Анімація' },
-  { id: 'Сімейний', label: 'Сімейний' },
-];
-
 const YEARS = [
-  { id: 'all', label: 'Усі роки' },
+  { id: 'all', key: 'allYears' as const },
   { id: '2024+', label: '2024–2026' },
   { id: '2023', label: '2023' },
   { id: '2020-2022', label: '2020–2022' },
   { id: '2010-2019', label: '2010–2019' },
-  { id: 'classic', label: 'До 2010' },
-];
-
-const QUICK_TAGS = [
-  'Дюна', 'Інтерстеллар', 'Бетмен', 'Месники', 'Гра престолів',
-  'Відьмак', 'Матриця', 'Гаррі Поттер', 'Термінатор', 'Наруто', 'Шрек', 'Аватар'
+  { id: 'classic', key: 'before2010' as const },
 ];
 
 export const FilterBar: React.FC<FilterBarProps> = ({
@@ -43,27 +26,42 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   totalCount,
   onQuickSearch,
 }) => {
+  const { language, t, tg } = useLanguage();
+  const quickTags = QUICK_TAGS[language] || QUICK_TAGS.uk;
+
   return (
     <div className="bg-[#0b101b]/90 border border-white/10 rounded-2xl p-4 space-y-3.5 shadow-xl">
       {/* Top Row: Genre Pills */}
       <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-1">
         <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400 pr-2 shrink-0">
           <SlidersHorizontal className="w-3.5 h-3.5 text-red-500" />
-          <span>Жанри:</span>
+          <span>{t('genresLabel')}</span>
         </div>
-        {GENRES.map((g) => {
-          const active = filter.genre === g.id;
+
+        <button
+          onClick={() => onChange({ genre: 'all' })}
+          className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+            filter.genre === 'all'
+              ? 'bg-red-600 text-white shadow-md shadow-red-600/30'
+              : 'bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white'
+          }`}
+        >
+          {t('allGenres')}
+        </button>
+
+        {FILTER_GENRES.map((canonicalGenre) => {
+          const active = filter.genre === canonicalGenre;
           return (
             <button
-              key={g.id}
-              onClick={() => onChange({ genre: g.id })}
+              key={canonicalGenre}
+              onClick={() => onChange({ genre: canonicalGenre })}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
                 active
                   ? 'bg-red-600 text-white shadow-md shadow-red-600/30'
                   : 'bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white'
               }`}
             >
-              {g.label}
+              {tg(canonicalGenre)}
             </button>
           );
         })}
@@ -76,6 +74,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
           <Calendar className="w-3.5 h-3.5 text-amber-400 shrink-0 mr-1" />
           {YEARS.map((y) => {
             const active = filter.year === y.id;
+            const label = y.key ? t(y.key) : y.label;
             return (
               <button
                 key={y.id}
@@ -86,7 +85,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
                     : 'bg-white/5 text-slate-400 hover:text-white'
                 }`}
               >
-                {y.label}
+                {label}
               </button>
             );
           })}
@@ -102,7 +101,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
                 filter.sortBy === 'popularity' ? 'bg-white/15 text-white' : 'text-slate-400 hover:text-white'
               }`}
             >
-              Популярні
+              {t('sortPopular')}
             </button>
             <button
               onClick={() => onChange({ sortBy: 'rating' })}
@@ -110,7 +109,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
                 filter.sortBy === 'rating' ? 'bg-white/15 text-amber-400' : 'text-slate-400 hover:text-white'
               }`}
             >
-              За рейтингом ★
+              {t('sortRating')}
             </button>
             <button
               onClick={() => onChange({ sortBy: 'year' })}
@@ -118,7 +117,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
                 filter.sortBy === 'year' ? 'bg-white/15 text-emerald-400' : 'text-slate-400 hover:text-white'
               }`}
             >
-              Новіші
+              {t('sortNew')}
             </button>
           </div>
 
@@ -132,9 +131,9 @@ export const FilterBar: React.FC<FilterBarProps> = ({
       {onQuickSearch && (
         <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pt-1">
           <span className="text-[11px] text-amber-400/90 font-semibold flex items-center gap-1 shrink-0 mr-1">
-            <Sparkles className="w-3 h-3" /> Швидкий пошук:
+            <Sparkles className="w-3 h-3" /> {t('quickSearch')}
           </span>
-          {QUICK_TAGS.map((tag) => (
+          {quickTags.map((tag) => (
             <button
               key={tag}
               onClick={() => onQuickSearch(tag)}
