@@ -40,7 +40,8 @@ export const FilterBar: React.FC<FilterBarProps> = ({
 
         <button
           onClick={() => onChange({ genre: 'all' })}
-          className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+          tabIndex={0}
+          className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all tv-btn-focus focus:outline-none ${
             filter.genre === 'all'
               ? 'bg-red-600 text-white shadow-md shadow-red-600/30'
               : 'bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white'
@@ -55,7 +56,8 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             <button
               key={canonicalGenre}
               onClick={() => onChange({ genre: canonicalGenre })}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+              tabIndex={0}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all tv-btn-focus focus:outline-none ${
                 active
                   ? 'bg-red-600 text-white shadow-md shadow-red-600/30'
                   : 'bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white'
@@ -79,7 +81,8 @@ export const FilterBar: React.FC<FilterBarProps> = ({
               <button
                 key={y.id}
                 onClick={() => onChange({ year: y.id })}
-                className={`px-2.5 py-1 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
+                tabIndex={0}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium whitespace-nowrap transition-all tv-btn-focus focus:outline-none ${
                   active
                     ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold'
                     : 'bg-white/5 text-slate-400 hover:text-white'
@@ -97,7 +100,8 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 ml-1.5" />
             <button
               onClick={() => onChange({ sortBy: 'popularity' })}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
+              tabIndex={0}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all tv-btn-focus focus:outline-none ${
                 filter.sortBy === 'popularity' ? 'bg-white/15 text-white' : 'text-slate-400 hover:text-white'
               }`}
             >
@@ -105,7 +109,8 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             </button>
             <button
               onClick={() => onChange({ sortBy: 'rating' })}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
+              tabIndex={0}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all tv-btn-focus focus:outline-none ${
                 filter.sortBy === 'rating' ? 'bg-white/15 text-amber-400' : 'text-slate-400 hover:text-white'
               }`}
             >
@@ -113,7 +118,8 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             </button>
             <button
               onClick={() => onChange({ sortBy: 'year' })}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
+              tabIndex={0}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all tv-btn-focus focus:outline-none ${
                 filter.sortBy === 'year' ? 'bg-white/15 text-emerald-400' : 'text-slate-400 hover:text-white'
               }`}
             >
@@ -137,7 +143,8 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             <button
               key={tag}
               onClick={() => onQuickSearch(tag)}
-              className="px-2.5 py-0.5 rounded-full text-[11px] bg-white/5 hover:bg-red-600/20 text-slate-300 hover:text-red-300 border border-white/10 hover:border-red-500/30 whitespace-nowrap transition-all"
+              tabIndex={0}
+              className="px-2.5 py-0.5 rounded-full text-[11px] bg-white/5 hover:bg-red-600/20 text-slate-300 hover:text-red-300 border border-white/10 hover:border-red-500/30 whitespace-nowrap transition-all tv-btn-focus focus:outline-none"
             >
               {tag}
             </button>

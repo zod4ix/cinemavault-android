@@ -330,7 +330,7 @@ const MainAppContent: React.FC = () => {
       <main className="flex-1 pb-10">
         {/* 1. LIVE SEARCH VIEW */}
         {searchQuery.trim() ? (
-          <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 pt-4 sm:pt-6 space-y-5">
+          <div className="max-w-[1700px] mx-auto px-3.5 sm:px-6 lg:px-8 xl:px-12 pt-4 sm:pt-6 space-y-5 tv-safe-container">
             <FilterBar
               filter={filter}
               onChange={(upd) => setFilter((prev) => ({ ...prev, ...upd }))}
@@ -356,7 +356,7 @@ const MainAppContent: React.FC = () => {
             </div>
 
             {searchResults.length > 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-5">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8 gap-3 sm:gap-5">
                 {searchResults.map((item) => (
                   <MediaCard
                     key={item.id}
@@ -384,14 +384,14 @@ const MainAppContent: React.FC = () => {
           </div>
         ) : isFavoritesActive ? (
           /* 2. FAVORITES VIEW */
-          <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 pt-6">
+          <div className="max-w-[1700px] mx-auto px-3.5 sm:px-6 lg:px-8 xl:px-12 pt-6 tv-safe-container">
             <div className="flex items-center gap-2 mb-5">
               <Heart className="w-6 h-6 text-red-500 fill-red-500" />
               <h2 className="text-xl sm:text-2xl font-bold text-white">{t('savedTitle')}</h2>
             </div>
 
             {favorites.length > 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-5">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8 gap-3 sm:gap-5">
                 {favorites.map((item) => (
                   <MediaCard
                     key={item.id}
@@ -412,7 +412,7 @@ const MainAppContent: React.FC = () => {
           </div>
         ) : isCustomFilterActive ? (
           /* 3. CATEGORY / FILTERED CATALOG GRID VIEW */
-          <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 pt-5 space-y-5">
+          <div className="max-w-[1700px] mx-auto px-3.5 sm:px-6 lg:px-8 xl:px-12 pt-5 space-y-5 tv-safe-container">
             <FilterBar
               filter={filter}
               onChange={(upd) => setFilter((prev) => ({ ...prev, ...upd }))}
@@ -438,13 +438,14 @@ const MainAppContent: React.FC = () => {
                     sortBy: 'popularity',
                   })
                 }
-                className="text-xs text-slate-400 hover:text-white underline shrink-0"
+                tabIndex={0}
+                className="text-xs text-slate-400 hover:text-white underline shrink-0 tv-btn-focus focus:outline-none p-1 rounded"
               >
                 {t('resetFilters')}
               </button>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-5">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8 gap-3 sm:gap-5">
               {filteredCatalog.map((item) => (
                 <MediaCard
                   key={item.id}
@@ -462,7 +463,8 @@ const MainAppContent: React.FC = () => {
               <button
                 onClick={handleLoadMoreCatalog}
                 disabled={isLoadingMore}
-                className="px-5 py-3 rounded-2xl bg-white/10 hover:bg-red-600 text-white font-bold text-xs sm:text-sm flex items-center gap-2 border border-white/15 transition-all active:scale-95"
+                tabIndex={0}
+                className="px-5 py-3 rounded-2xl bg-white/10 hover:bg-red-600 text-white font-bold text-xs sm:text-sm flex items-center gap-2 border border-white/15 transition-all active:scale-95 tv-btn-focus focus:outline-none"
               >
                 {isLoadingMore ? (
                   <>
@@ -593,9 +595,10 @@ const MainAppContent: React.FC = () => {
 
       {/* Footer */}
       <footer className="border-t border-white/10 bg-[#05070a] py-6 text-center text-xs text-slate-500">
-        <div className="max-w-7xl mx-auto px-4">
+        <div className="max-w-[1700px] mx-auto px-4">
           <p className="flex flex-wrap items-center justify-center gap-1.5 font-medium text-slate-400">
-            <span>CinemaVault PRO v3.0</span> •{' '}
+            <span>CinemaVault PRO v3.3</span> •{' '}
+            <span className="text-amber-400/90 font-bold">Smart TV & Universal Edition</span> •{' '}
             <span>{t('footerLine')}</span> • <span>🍿 4K HDR</span>
           </p>
         </div>

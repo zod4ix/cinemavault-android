@@ -121,17 +121,19 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
         <>
           <button
             onClick={handlePrev}
-            className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-20 p-2 sm:p-3 rounded-full bg-black/40 hover:bg-black/75 text-white/70 hover:text-white backdrop-blur-md border border-white/10 transition-all active:scale-90 opacity-0 group-hover:opacity-100 sm:opacity-80"
+            tabIndex={0}
+            className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-20 p-2.5 sm:p-3.5 rounded-full bg-black/50 hover:bg-red-600 text-white/80 hover:text-white backdrop-blur-md border border-white/15 transition-all active:scale-90 opacity-80 hover:opacity-100 focus:opacity-100 tv-btn-focus focus:outline-none"
             aria-label="Попередній фільм"
           >
-            <ChevronLeft className="w-4 h-4 sm:w-6 sm:h-6" />
+            <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
           </button>
           <button
             onClick={handleNext}
-            className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-20 p-2 sm:p-3 rounded-full bg-black/40 hover:bg-black/75 text-white/70 hover:text-white backdrop-blur-md border border-white/10 transition-all active:scale-90 opacity-0 group-hover:opacity-100 sm:opacity-80"
+            tabIndex={0}
+            className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-20 p-2.5 sm:p-3.5 rounded-full bg-black/50 hover:bg-red-600 text-white/80 hover:text-white backdrop-blur-md border border-white/15 transition-all active:scale-90 opacity-80 hover:opacity-100 focus:opacity-100 tv-btn-focus focus:outline-none"
             aria-label="Наступний фільм"
           >
-            <ChevronRight className="w-4 h-4 sm:w-6 sm:h-6" />
+            <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
           </button>
         </>
       )}
@@ -196,7 +198,8 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
           <div className="flex flex-wrap items-center gap-2 sm:gap-3 pt-1">
             <button
               onClick={() => onPlay(activeMedia)}
-              className="px-5 sm:px-7 py-2.5 sm:py-3.5 rounded-2xl bg-red-600 hover:bg-red-500 active:scale-95 text-white font-extrabold text-xs sm:text-sm flex items-center gap-2 shadow-xl shadow-red-600/35 transition-all"
+              tabIndex={0}
+              className="px-5 sm:px-7 py-2.5 sm:py-3.5 rounded-2xl bg-red-600 hover:bg-red-500 active:scale-95 text-white font-extrabold text-xs sm:text-sm flex items-center gap-2 shadow-xl shadow-red-600/35 transition-all tv-btn-focus focus:outline-none"
             >
               <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-white" />
               <span>{t('watchNow')}</span>
@@ -204,7 +207,8 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
 
             <button
               onClick={() => onOpenDetails(activeMedia)}
-              className="px-4 sm:px-5 py-2.5 sm:py-3.5 rounded-2xl bg-white/15 hover:bg-white/25 active:scale-95 text-white font-bold text-xs sm:text-sm flex items-center gap-2 backdrop-blur-md border border-white/20 transition-all"
+              tabIndex={0}
+              className="px-4 sm:px-5 py-2.5 sm:py-3.5 rounded-2xl bg-white/15 hover:bg-white/25 active:scale-95 text-white font-bold text-xs sm:text-sm flex items-center gap-2 backdrop-blur-md border border-white/20 transition-all tv-btn-focus focus:outline-none"
             >
               <Info className="w-4 h-4 sm:w-5 sm:h-5" />
               <span>{t('detailsAndEpisodes')}</span>
@@ -212,7 +216,8 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
 
             <button
               onClick={() => onToggleFavorite(activeMedia)}
-              className={`p-2.5 sm:p-3.5 rounded-2xl border backdrop-blur-md transition-all ${
+              tabIndex={0}
+              className={`p-2.5 sm:p-3.5 rounded-2xl border backdrop-blur-md transition-all tv-btn-focus focus:outline-none ${
                 isFavorite
                   ? 'bg-red-600 text-white border-red-500 shadow-lg shadow-red-600/30'
                   : 'bg-black/60 text-slate-200 hover:text-white border-white/20'
@@ -232,10 +237,11 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
                 <button
                   key={idx}
                   onClick={() => onIndexChange(idx)}
-                  className={`h-1.5 rounded-full transition-all duration-300 ${
+                  tabIndex={0}
+                  className={`h-2 rounded-full transition-all duration-300 tv-btn-focus focus:outline-none ${
                     idx === currentIndex
-                      ? 'w-6 bg-red-600 shadow-sm shadow-red-600/50'
-                      : 'w-1.5 bg-white/30 hover:bg-white/60'
+                      ? 'w-7 bg-red-600 shadow-sm shadow-red-600/50'
+                      : 'w-2 bg-white/30 hover:bg-white/60'
                   }`}
                   aria-label={`Перейти до слайду ${idx + 1}`}
                 />

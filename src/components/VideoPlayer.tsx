@@ -136,8 +136,16 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [showSettingsMenu, setShowSettingsMenu] = useState<'none' | 'quality' | 'audio'>('none');
   const [bufferedEnd, setBufferedEnd] = useState<number>(0);
   const [iframeLoading, setIframeLoading] = useState<boolean>(true);
+  const [osdMessage, setOsdMessage] = useState<string | null>(null);
 
   const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const osdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showOsd = (msg: string) => {
+    if (osdTimerRef.current) clearTimeout(osdTimerRef.current);
+    setOsdMessage(msg);
+    osdTimerRef.current = setTimeout(() => setOsdMessage(null), 1500);
+  };
 
   // Probe current active server health on mount or when switching
   useEffect(() => {
@@ -376,6 +384,125 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
+  // Smart TV Remote & Keyboard Navigation Listener (DPAD, Space, Arrows, Volume, Media Keys)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if user is typing in custom stream input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      switch (e.key) {
+        case ' ':
+        case 'k':
+        case 'K':
+          e.preventDefault();
+          togglePlay();
+          showOsd(isPlaying ? '⏸ Пауза' : '▶ Відтворення');
+          break;
+        case 'Enter':
+          // If a button is focused, allow standard button activation
+          if (document.activeElement && document.activeElement.tagName === 'BUTTON') {
+            return;
+          }
+          e.preventDefault();
+          togglePlay();
+          showOsd(isPlaying ? '⏸ Пауза' : '▶ Відтворення');
+          break;
+        case 'ArrowLeft':
+        case 'j':
+        case 'J':
+          e.preventDefault();
+          seek(-10);
+          showOsd('⏪ -10 сек');
+          break;
+        case 'ArrowRight':
+        case 'l':
+        case 'L':
+          e.preventDefault();
+          seek(10);
+          showOsd('⏩ +10 сек');
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          if (videoRef.current && activeServer?.mode === 'native') {
+            const nextVol = Math.min(1, Number((volume + 0.1).toFixed(2)));
+            videoRef.current.volume = nextVol;
+            setVolume(nextVol);
+            setIsMuted(false);
+            showOsd(`🔊 ${Math.round(nextVol * 100)}%`);
+          } else {
+            showOsd('🔊 Гучність +');
+          }
+          break;
+        case 'ArrowDown':
+          e.preventDefault();
+          if (videoRef.current && activeServer?.mode === 'native') {
+            const nextVol = Math.max(0, Number((volume - 0.1).toFixed(2)));
+            videoRef.current.volume = nextVol;
+            setVolume(nextVol);
+            setIsMuted(nextVol === 0);
+            showOsd(nextVol === 0 ? '🔇 Без звуку' : `🔉 ${Math.round(nextVol * 100)}%`);
+          } else {
+            showOsd('🔉 Гучність -');
+          }
+          break;
+        case 'm':
+        case 'M':
+          e.preventDefault();
+          toggleMute();
+          showOsd(isMuted ? '🔊 Звук увімкнено' : '🔇 Без звуку');
+          break;
+        case 'f':
+        case 'F':
+          e.preventDefault();
+          toggleFullscreen();
+          showOsd(isFullscreen ? '🗗 Звичайний екран' : '🗖 Повний екран');
+          break;
+        case 'Escape':
+          e.preventDefault();
+          onClose();
+          break;
+      }
+    };
+
+    // Listen to native hardware remote media keys forwarded from MainActivity
+    const handleRemoteMedia = (e: any) => {
+      const keyCode = e.detail?.keyCode;
+      if (keyCode === 85) { // KEYCODE_MEDIA_PLAY_PAUSE
+        togglePlay();
+        showOsd(isPlaying ? '⏸ Пауза' : '▶ Відтворення');
+      } else if (keyCode === 126) { // KEYCODE_MEDIA_PLAY
+        if (videoRef.current && videoRef.current.paused) videoRef.current.play();
+        setIsPlaying(true);
+        showOsd('▶ Відтворення');
+      } else if (keyCode === 127) { // KEYCODE_MEDIA_PAUSE
+        if (videoRef.current && !videoRef.current.paused) videoRef.current.pause();
+        setIsPlaying(false);
+        showOsd('⏸ Пауза');
+      } else if (keyCode === 90) { // KEYCODE_MEDIA_FAST_FORWARD
+        seek(10);
+        showOsd('⏩ +10 сек');
+      } else if (keyCode === 89) { // KEYCODE_MEDIA_REWIND
+        seek(-10);
+        showOsd('⏪ -10 сек');
+      } else if (keyCode === 87 && isSeries) { // KEYCODE_MEDIA_NEXT
+        setActiveEpisode((prev) => prev + 1);
+        showOsd('⏭ Наступна серія');
+      } else if (keyCode === 88 && isSeries) { // KEYCODE_MEDIA_PREVIOUS
+        setActiveEpisode((prev) => Math.max(1, prev - 1));
+        showOsd('⏮ Попередня серія');
+      } else if (keyCode === 86) { // KEYCODE_MEDIA_STOP
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('cinema-remote-media', handleRemoteMedia);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('cinema-remote-media', handleRemoteMedia);
+    };
+  }, [isPlaying, volume, isMuted, isFullscreen, activeServer?.mode, isSeries, onClose]);
+
   return (
     <div
       ref={containerRef}
@@ -390,7 +517,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           <div className="flex items-center gap-2 min-w-0">
             <button
               onClick={onClose}
-              className="p-2 rounded-xl bg-white/10 hover:bg-red-600 text-white transition-all active:scale-95 shrink-0"
+              tabIndex={0}
+              className="p-2.5 rounded-xl bg-white/10 hover:bg-red-600 text-white transition-all active:scale-95 shrink-0 tv-btn-focus focus:outline-none"
               aria-label={t('closePlayer')}
             >
               <ArrowLeft className="w-5 h-5" />
@@ -412,7 +540,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 <button
                   onClick={() => setActiveEpisode((prev) => Math.max(1, prev - 1))}
                   disabled={activeEpisode <= 1}
-                  className="p-1 rounded-lg hover:bg-white/10 disabled:opacity-30 text-white"
+                  tabIndex={0}
+                  className="p-1.5 rounded-lg hover:bg-white/10 disabled:opacity-30 text-white tv-btn-focus focus:outline-none"
                   title={t('prevEpisode')}
                 >
                   <SkipBack className="w-3.5 h-3.5" />
@@ -423,7 +552,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     setActiveSeason(Number(e.target.value));
                     setActiveEpisode(1);
                   }}
-                  className="bg-transparent text-[11px] font-bold text-amber-400 focus:outline-none"
+                  tabIndex={0}
+                  className="bg-transparent text-[11px] font-bold text-amber-400 focus:outline-none cursor-pointer"
                 >
                   {Array.from({ length: Math.max(media.seasonsCount || 4, activeSeason) }, (_, i) => i + 1).map(
                     (sNum) => (
@@ -437,7 +567,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 <select
                   value={activeEpisode}
                   onChange={(e) => setActiveEpisode(Number(e.target.value))}
-                  className="bg-transparent text-[11px] font-bold text-white focus:outline-none"
+                  tabIndex={0}
+                  className="bg-transparent text-[11px] font-bold text-white focus:outline-none cursor-pointer"
                 >
                   {Array.from({ length: 30 }, (_, i) => i + 1).map((eNum) => (
                     <option key={eNum} value={eNum} className="bg-slate-900 text-white">
@@ -447,7 +578,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 </select>
                 <button
                   onClick={() => setActiveEpisode((prev) => prev + 1)}
-                  className="p-1 rounded-lg hover:bg-white/10 text-white"
+                  tabIndex={0}
+                  className="p-1.5 rounded-lg hover:bg-white/10 text-white tv-btn-focus focus:outline-none"
                   title={t('nextEpisode')}
                 >
                   <SkipForward className="w-3.5 h-3.5" />
@@ -459,7 +591,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             {availableServers.filter((s) => s.mode === 'embed').length > 1 && (
               <button
                 onClick={switchToNextServer}
-                className="px-2.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-[11px] font-bold flex items-center gap-1 shadow-md shadow-red-600/30 active:scale-95 transition-all"
+                tabIndex={0}
+                className="px-2.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-[11px] font-bold flex items-center gap-1 shadow-md shadow-red-600/30 active:scale-95 transition-all tv-btn-focus focus:outline-none"
                 title={t('nextServer')}
               >
                 <span>{t('nextServer')}</span>
@@ -470,7 +603,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             {/* Rotate Phone to Landscape / Fullscreen Button */}
             <button
               onClick={toggleAndroidLandscape}
-              className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold flex items-center gap-1 border transition-all ${
+              tabIndex={0}
+              className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold flex items-center gap-1 border transition-all tv-btn-focus focus:outline-none ${
                 isLandscapeLocked
                   ? 'bg-amber-500 text-slate-950 border-amber-400'
                   : 'bg-white/10 text-slate-200 border-white/15 hover:bg-white/20'
@@ -499,7 +633,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               <button
                 key={srv.id}
                 onClick={() => setSelectedServerId(srv.id)}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap flex items-center gap-1.5 border transition-all shrink-0 ${
+                tabIndex={0}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap flex items-center gap-1.5 border transition-all shrink-0 tv-btn-focus focus:outline-none ${
                   active
                     ? 'bg-red-600 text-white border-red-500 shadow-md shadow-red-600/30'
                     : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/15 hover:text-white'
@@ -527,7 +662,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           {activeServer?.mode === 'native' && (
             <button
               onClick={() => setShowCustomUrlInput(!showCustomUrlInput)}
-              className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30 whitespace-nowrap flex items-center gap-1 shrink-0"
+              tabIndex={0}
+              className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30 whitespace-nowrap flex items-center gap-1 shrink-0 tv-btn-focus focus:outline-none"
             >
               <Link2 className="w-3 h-3" /> {t('customStream')}
             </button>
@@ -564,6 +700,13 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
       {/* MAIN VIDEO VIEWPORT */}
       <div className="relative flex-1 w-full bg-black flex items-center justify-center overflow-hidden">
+        {/* On-Screen Display (OSD) feedback for Remote Control and Air Mouse */}
+        {osdMessage && (
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-none bg-black/90 border border-white/25 text-white px-6 py-3.5 rounded-2xl text-base sm:text-xl font-black shadow-2xl backdrop-blur-md animate-fadeIn flex items-center gap-3">
+            <span>{osdMessage}</span>
+          </div>
+        )}
+
         {activeServer && activeServer.mode !== 'native' ? (
           <>
             {iframeLoading && (
@@ -653,7 +796,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               <div className="flex items-center justify-center gap-6 sm:gap-10 pointer-events-auto">
                 <button
                   onClick={() => seek(-10)}
-                  className="p-3.5 rounded-full bg-white/15 hover:bg-white/25 text-white backdrop-blur-md active:scale-90 transition-transform"
+                  tabIndex={0}
+                  className="p-3.5 rounded-full bg-white/15 hover:bg-white/25 text-white backdrop-blur-md active:scale-90 transition-transform tv-btn-focus focus:outline-none"
                   title={t('rewind10')}
                 >
                   <RotateCcw className="w-6 h-6 sm:w-8 sm:h-8" />
@@ -661,7 +805,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
                 <button
                   onClick={togglePlay}
-                  className="p-5 rounded-full bg-red-600 hover:bg-red-500 text-white shadow-xl shadow-red-600/40 active:scale-95 transition-all"
+                  tabIndex={0}
+                  className="p-5 rounded-full bg-red-600 hover:bg-red-500 text-white shadow-xl shadow-red-600/40 active:scale-95 transition-all tv-btn-focus focus:outline-none"
                 >
                   {isPlaying ? (
                     <Pause className="w-8 h-8 sm:w-10 sm:h-10" />
@@ -672,7 +817,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
                 <button
                   onClick={() => seek(10)}
-                  className="p-3.5 rounded-full bg-white/15 hover:bg-white/25 text-white backdrop-blur-md active:scale-90 transition-transform"
+                  tabIndex={0}
+                  className="p-3.5 rounded-full bg-white/15 hover:bg-white/25 text-white backdrop-blur-md active:scale-90 transition-transform tv-btn-focus focus:outline-none"
                   title={t('forward10')}
                 >
                   <RotateCw className="w-6 h-6 sm:w-8 sm:h-8" />
@@ -705,10 +851,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
                 <div className="flex items-center justify-between text-white text-xs sm:text-sm">
                   <div className="flex items-center gap-3">
-                    <button onClick={togglePlay} className="hover:text-red-500">
+                    <button onClick={togglePlay} tabIndex={0} className="hover:text-red-500 tv-btn-focus focus:outline-none rounded-lg p-1">
                       {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
                     </button>
-                    <button onClick={toggleMute} className="hover:text-red-500">
+                    <button onClick={toggleMute} tabIndex={0} className="hover:text-red-500 tv-btn-focus focus:outline-none rounded-lg p-1">
                       {isMuted || volume === 0 ? (
                         <VolumeX className="w-5 h-5 text-red-500" />
                       ) : (
@@ -729,7 +875,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     </span>
                   </div>
 
-                  <button onClick={toggleFullscreen} className="p-1.5 rounded-lg hover:bg-white/10">
+                  <button onClick={toggleFullscreen} tabIndex={0} className="p-1.5 rounded-lg hover:bg-white/10 tv-btn-focus focus:outline-none">
                     {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
                   </button>
                 </div>

@@ -15,10 +15,11 @@ android/local.properties
 android/.idea/
 *.iml
 
-# Legacy APKs (Latest v3.2.0 APK is in root & GitHub Releases)
+# Legacy APKs
 CinemaVault-v1.0.0.apk
 CinemaVault-v2.0.0-PRO.apk
 CinemaVault-PRO-v3.0.apk
+CinemaVault-PRO-v3.2.0.apk
 
 # Environment & Logs
 .env

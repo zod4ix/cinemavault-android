@@ -34,17 +34,30 @@ export const MediaCard: React.FC<MediaCardProps> = ({
 
   return (
     <div
-      className="group relative flex flex-col cursor-pointer select-none"
+      tabIndex={0}
+      role="button"
+      aria-label={`${displayTitle} (${media.year})`}
+      className="group relative flex flex-col cursor-pointer select-none tv-card-focus rounded-2xl focus:outline-none transition-all duration-300"
       onClick={() => onClick(media)}
+      onFocus={(e) => {
+        // Auto-center card in horizontal or vertical viewports for Smart TV DPAD navigation
+        e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick(media);
+        }
+      }}
     >
       {/* Poster Image Container */}
-      <div className="relative aspect-[2/3] w-full rounded-2xl overflow-hidden bg-slate-900 border border-white/10 shadow-lg group-hover:shadow-2xl group-hover:shadow-red-600/15 group-hover:border-red-500/40 transition-all duration-300">
+      <div className="relative aspect-[2/3] w-full rounded-2xl overflow-hidden bg-slate-900 border border-white/10 shadow-lg group-hover:shadow-2xl group-hover:shadow-red-600/20 group-hover:border-red-500/50 group-focus-visible:border-red-500 transition-all duration-300">
         <img
           src={imgSrc}
           alt={displayTitle}
           loading="lazy"
           onError={() => setImgSrc(createPosterFallback(media.title, media.year, media.rating))}
-          className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
+          className="w-full h-full object-cover object-center group-hover:scale-105 group-focus-visible:scale-105 transition-transform duration-500"
         />
 
         {/* Subtle bottom gradient for readability */}
@@ -66,15 +79,25 @@ export const MediaCard: React.FC<MediaCardProps> = ({
           </div>
 
           <button
+            tabIndex={0}
             onClick={(e) => {
               e.stopPropagation();
               onToggleFavorite(media);
             }}
-            className={`p-1.5 rounded-full backdrop-blur-md transition-all ${
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.stopPropagation();
+                e.preventDefault();
+                onToggleFavorite(media);
+              }
+            }}
+            className={`p-2 rounded-full backdrop-blur-md transition-all tv-btn-focus focus:outline-none ${
               isFavorite
                 ? 'bg-red-600 text-white shadow-md shadow-red-600/40'
                 : 'bg-black/60 text-slate-300 hover:text-white active:bg-black/85'
             }`}
+            title={t('inFavorites')}
+            aria-label={t('inFavorites')}
           >
             <Heart className={`w-3.5 h-3.5 ${isFavorite ? 'fill-white' : ''}`} />
           </button>
@@ -98,12 +121,21 @@ export const MediaCard: React.FC<MediaCardProps> = ({
               </span>
             )}
             <button
+              tabIndex={0}
               onClick={(e) => {
                 e.stopPropagation();
                 onPlay(media);
               }}
-              className="p-1.5 rounded-full bg-red-600 hover:bg-red-500 active:scale-90 text-white shadow-lg shadow-red-600/50 transition-transform"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  onPlay(media);
+                }
+              }}
+              className="p-2 rounded-full bg-red-600 hover:bg-red-500 active:scale-90 text-white shadow-lg shadow-red-600/50 transition-transform tv-btn-focus focus:outline-none"
               title={t('watchNowTitle')}
+              aria-label={t('watchNowTitle')}
             >
               <Play className="w-3.5 h-3.5 fill-white ml-0.5" />
             </button>
@@ -113,7 +145,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
 
       {/* Meta */}
       <div className="mt-2 space-y-0.5 px-0.5">
-        <h3 className="font-bold text-xs sm:text-sm text-slate-100 group-hover:text-red-400 transition-colors line-clamp-1">
+        <h3 className="font-bold text-xs sm:text-sm text-slate-100 group-hover:text-red-400 group-focus-visible:text-red-400 transition-colors line-clamp-1">
           {displayTitle}
         </h3>
         <div className="flex items-center gap-1.5 text-[11px] text-slate-400">

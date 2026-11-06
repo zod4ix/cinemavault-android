@@ -97,6 +97,18 @@ export const MediaModal: React.FC<MediaModalProps> = ({
     }).then(setSources);
   }, [media, selectedEpisode]);
 
+  // Handle remote control Escape / Back key inside Modal
+  useEffect(() => {
+    if (!media) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [media, onClose]);
+
   if (!media) return null;
 
   const handleCopyMagnet = (magnet: string, id: string) => {
@@ -163,7 +175,8 @@ export const MediaModal: React.FC<MediaModalProps> = ({
           {/* Close button */}
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 p-2.5 rounded-full bg-black/60 hover:bg-red-600 text-white backdrop-blur-md border border-white/15 transition-all z-20"
+            tabIndex={0}
+            className="absolute top-4 right-4 p-2.5 rounded-full bg-black/60 hover:bg-red-600 text-white backdrop-blur-md border border-white/15 transition-all z-20 tv-btn-focus focus:outline-none"
             aria-label={t('closePlayer')}
           >
             <X className="w-5 h-5" />
@@ -205,7 +218,8 @@ export const MediaModal: React.FC<MediaModalProps> = ({
                 onClick={() => {
                   if (sources[0]) onPlayOnline(media, sources[0], selectedEpisode);
                 }}
-                className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-xl shadow-red-600/40 active:scale-95 transition-all"
+                tabIndex={0}
+                className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-xl shadow-red-600/40 active:scale-95 transition-all tv-btn-focus focus:outline-none"
               >
                 <Play className="w-4 h-4 fill-white" />
                 <span>{t('watchNow')}</span>
@@ -213,7 +227,8 @@ export const MediaModal: React.FC<MediaModalProps> = ({
 
               <button
                 onClick={() => onToggleFavorite(media)}
-                className={`p-2.5 rounded-xl border backdrop-blur-md transition-all shrink-0 ${
+                tabIndex={0}
+                className={`p-2.5 rounded-xl border backdrop-blur-md transition-all shrink-0 tv-btn-focus focus:outline-none ${
                   isFavorite 
                     ? 'bg-red-600 text-white border-red-500' 
                     : 'bg-black/60 text-slate-300 hover:text-white border-white/20'
@@ -231,7 +246,8 @@ export const MediaModal: React.FC<MediaModalProps> = ({
           {(media.mediaType === 'tv' || media.mediaType === 'anime') && (
             <button
               onClick={() => setActiveTab('episodes')}
-              className={`flex items-center gap-2 pb-3 px-3 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-all ${
+              tabIndex={0}
+              className={`flex items-center gap-2 pb-3 px-3 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-all tv-btn-focus focus:outline-none ${
                 activeTab === 'episodes'
                   ? 'border-red-500 text-red-500'
                   : 'border-transparent text-slate-400 hover:text-white'
@@ -244,7 +260,8 @@ export const MediaModal: React.FC<MediaModalProps> = ({
 
           <button
             onClick={() => setActiveTab('online')}
-            className={`flex items-center gap-2 pb-3 px-3 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-all ${
+            tabIndex={0}
+            className={`flex items-center gap-2 pb-3 px-3 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-all tv-btn-focus focus:outline-none ${
               activeTab === 'online'
                 ? 'border-red-500 text-red-500'
                 : 'border-transparent text-slate-400 hover:text-white'
@@ -256,7 +273,8 @@ export const MediaModal: React.FC<MediaModalProps> = ({
 
           <button
             onClick={() => setActiveTab('torrents')}
-            className={`flex items-center gap-2 pb-3 px-3 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-all ${
+            tabIndex={0}
+            className={`flex items-center gap-2 pb-3 px-3 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-all tv-btn-focus focus:outline-none ${
               activeTab === 'torrents'
                 ? 'border-red-500 text-red-500'
                 : 'border-transparent text-slate-400 hover:text-white'
@@ -339,11 +357,12 @@ export const MediaModal: React.FC<MediaModalProps> = ({
                       {seasons.map((s) => (
                         <button
                           key={s.seasonNumber}
+                          tabIndex={0}
                           onClick={() => {
                             setSelectedSeason(s.seasonNumber);
                             setSelectedEpisode(s.episodes[0]);
                           }}
-                          className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all ${
+                          className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all tv-btn-focus focus:outline-none ${
                             selectedSeason === s.seasonNumber
                               ? 'bg-red-600 text-white shadow-md shadow-red-600/30'
                               : 'bg-white/5 text-slate-300 hover:bg-white/10'
@@ -364,10 +383,20 @@ export const MediaModal: React.FC<MediaModalProps> = ({
                         return (
                           <div
                             key={ep.id}
+                            tabIndex={0}
+                            role="button"
+                            aria-label={`Серія ${ep.episodeNumber}: ${ep.title}`}
                             onClick={() => setSelectedEpisode(ep)}
-                            className={`p-3 rounded-xl border cursor-pointer flex items-center justify-between gap-3 transition-all ${
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                setSelectedEpisode(ep);
+                                if (sources[0]) onPlayOnline(media, sources[0], ep);
+                              }
+                            }}
+                            className={`p-3 rounded-xl border cursor-pointer flex items-center justify-between gap-3 transition-all tv-btn-focus focus:outline-none ${
                               isSelected
-                                ? 'bg-red-600/15 border-red-500 shadow-md shadow-red-600/10'
+                                ? 'bg-red-600/20 border-red-500 shadow-md shadow-red-600/10'
                                 : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20'
                             }`}
                           >
@@ -383,12 +412,13 @@ export const MediaModal: React.FC<MediaModalProps> = ({
                               )}
                             </div>
                             <button
+                              tabIndex={0}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setSelectedEpisode(ep);
                                 if (sources[0]) onPlayOnline(media, sources[0], ep);
                               }}
-                              className="p-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white shrink-0 active:scale-95 transition-transform shadow-md shadow-red-600/30"
+                              className="p-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white shrink-0 active:scale-95 transition-transform shadow-md shadow-red-600/30 tv-btn-focus focus:outline-none"
                               title={t('watchNow')}
                             >
                               <Play className="w-4 h-4 fill-white ml-0.5" />

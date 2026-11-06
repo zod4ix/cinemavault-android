@@ -6,6 +6,7 @@ import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Message;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -75,6 +76,11 @@ public class MainActivity extends BridgeActivity {
             WebView webView = this.bridge.getWebView();
             webView.setBackgroundColor(Color.parseColor("#07090E"));
 
+            // Enable focus & spatial navigation for Smart TV remotes, D-Pads and Air Mouse
+            webView.setFocusable(true);
+            webView.setFocusableInTouchMode(true);
+            webView.requestFocus();
+
             // Enable 1st-party and 3rd-party cookies (Mandatory for HLS video balancers in iframes!)
             CookieManager cookieManager = CookieManager.getInstance();
             cookieManager.setAcceptCookie(true);
@@ -88,6 +94,7 @@ public class MainActivity extends BridgeActivity {
             settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
             settings.setLoadWithOverviewMode(true);
             settings.setUseWideViewPort(true);
+            settings.setNeedInitialFocus(true);
             // Trap popup ads via onCreateWindow so balancers never redirect main app
             settings.setSupportMultipleWindows(true);
             settings.setJavaScriptCanOpenWindowsAutomatically(false);
@@ -188,6 +195,32 @@ public class MainActivity extends BridgeActivity {
                 }
             }
         });
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (event.getAction() == KeyEvent.ACTION_DOWN) {
+            int keyCode = event.getKeyCode();
+            switch (keyCode) {
+                case KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE:
+                case KeyEvent.KEYCODE_MEDIA_PLAY:
+                case KeyEvent.KEYCODE_MEDIA_PAUSE:
+                case KeyEvent.KEYCODE_MEDIA_FAST_FORWARD:
+                case KeyEvent.KEYCODE_MEDIA_REWIND:
+                case KeyEvent.KEYCODE_MEDIA_NEXT:
+                case KeyEvent.KEYCODE_MEDIA_PREVIOUS:
+                case KeyEvent.KEYCODE_MEDIA_STOP:
+                    if (this.bridge != null && this.bridge.getWebView() != null) {
+                        this.bridge.getWebView().evaluateJavascript(
+                            "window.dispatchEvent(new CustomEvent('cinema-remote-media', { detail: { keyCode: " + keyCode + " } }));",
+                            null
+                        );
+                        return true;
+                    }
+                    break;
+            }
+        }
+        return super.dispatchKeyEvent(event);
     }
 
     private void exitCustomFullscreenView() {

@@ -27,8 +27,20 @@ export const WatchHistory: React.FC<WatchHistoryProps> = ({ history, onPlayItem 
           return (
             <div
               key={`${item.mediaId}-${item.episodeId || ''}`}
+              tabIndex={0}
+              role="button"
+              aria-label={`Продовжити перегляд: ${item.title}`}
               onClick={() => onPlayItem(item)}
-              className="group relative w-[180px] sm:w-[220px] shrink-0 cursor-pointer select-none rounded-xl overflow-hidden bg-slate-900 border border-white/10 hover:border-white/30 transition-all"
+              onFocus={(e) => {
+                e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onPlayItem(item);
+                }
+              }}
+              className="group relative w-[180px] sm:w-[220px] shrink-0 cursor-pointer select-none rounded-xl overflow-hidden bg-slate-900 border border-white/10 hover:border-white/30 tv-card-focus focus:outline-none transition-all"
             >
               {/* Poster Backdrop */}
               <div className="relative aspect-video w-full overflow-hidden bg-slate-800">

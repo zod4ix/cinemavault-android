@@ -226,11 +226,21 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex items-center justify-between h-14 sm:h-18 gap-2 sm:gap-4">
           {/* Brand Logo */}
           <div
+            tabIndex={0}
+            role="button"
+            aria-label="На головну"
             onClick={() => {
               onSelectCategory('trending');
               clearSearch();
             }}
-            className="flex items-center gap-2 cursor-pointer shrink-0 select-none"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onSelectCategory('trending');
+                clearSearch();
+              }
+            }}
+            className="flex items-center gap-2 cursor-pointer shrink-0 select-none tv-btn-focus focus:outline-none rounded-xl p-1"
           >
             <CinemaLogo size="sm" />
             <div>
@@ -289,7 +299,8 @@ export const Header: React.FC<HeaderProps> = ({
             <div ref={langMenuRef} className="relative">
               <button
                 onClick={() => setShowLangMenu(!showLangMenu)}
-                className="flex items-center gap-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-slate-200 transition-colors"
+                tabIndex={0}
+                className="flex items-center gap-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-slate-200 transition-colors tv-btn-focus focus:outline-none"
                 title={t('changeLanguage')}
               >
                 <span className="text-sm leading-none">{currentLang.flag}</span>
@@ -302,11 +313,12 @@ export const Header: React.FC<HeaderProps> = ({
                   {LANGUAGES.map((lang) => (
                     <button
                       key={lang.code}
+                      tabIndex={0}
                       onClick={() => {
                         setLanguage(lang.code as SupportedLanguage);
                         setShowLangMenu(false);
                       }}
-                      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors text-left ${
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors text-left tv-btn-focus focus:outline-none ${
                         language === lang.code
                           ? 'bg-red-600 text-white'
                           : 'text-slate-300 hover:bg-white/10 hover:text-white'
@@ -324,7 +336,8 @@ export const Header: React.FC<HeaderProps> = ({
             {onOpenAuth && (
               <button
                 onClick={onOpenAuth}
-                className="relative p-2 sm:p-2.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white transition-all flex items-center gap-1.5"
+                tabIndex={0}
+                className="relative p-2 sm:p-2.5 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white transition-all flex items-center gap-1.5 tv-btn-focus focus:outline-none"
                 title="Хмарна синхронізація та профіль"
               >
                 {authProfile?.avatar ? (
@@ -345,7 +358,8 @@ export const Header: React.FC<HeaderProps> = ({
             {/* Favorites Button (BottomNav has it on phones) */}
             <button
               onClick={onOpenFavorites}
-              className={`hidden sm:flex relative p-2 sm:p-2.5 rounded-xl border transition-all ${
+              tabIndex={0}
+              className={`hidden sm:flex relative p-2 sm:p-2.5 rounded-xl border transition-all tv-btn-focus focus:outline-none ${
                 isFavoritesActive
                   ? 'bg-red-500/20 border-red-500 text-red-400'
                   : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 hover:text-white'
@@ -363,7 +377,8 @@ export const Header: React.FC<HeaderProps> = ({
             {/* Golden Donate Button */}
             <button
               onClick={onOpenDonate}
-              className="relative group overflow-hidden px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-extrabold text-xs sm:text-sm flex items-center gap-1.5 shadow-lg shadow-amber-500/20 active:scale-95 transition-all"
+              tabIndex={0}
+              className="relative group overflow-hidden px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-extrabold text-xs sm:text-sm flex items-center gap-1.5 shadow-lg shadow-amber-500/20 active:scale-95 transition-all tv-btn-focus focus:outline-none"
             >
               <Heart className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-600 fill-red-600 shrink-0" />
               <span className="hidden sm:inline">{t('donateBtn')}</span>
@@ -420,8 +435,9 @@ export const Header: React.FC<HeaderProps> = ({
             return (
               <button
                 key={cat.id}
+                tabIndex={0}
                 onClick={() => onSelectCategory(cat.id)}
-                className={`px-3 py-1 sm:py-1.5 rounded-full font-bold whitespace-nowrap transition-all ${
+                className={`px-3 py-1 sm:py-1.5 rounded-full font-bold whitespace-nowrap transition-all tv-btn-focus focus:outline-none ${
                   isActive
                     ? 'bg-gradient-to-r from-red-600 to-red-700 text-white shadow-md shadow-red-600/30'
                     : 'bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white'

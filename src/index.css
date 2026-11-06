@@ -56,3 +56,40 @@
 .animate-pulse-slow {
   animation: pulseSlow 16s ease-in-out infinite;
 }
+
+/* ========================================================
+   Smart TV, Air Mouse & Remote Control Navigation Styles
+   ======================================================== */
+
+/* High-contrast focus outline for DPAD remote & keyboard navigation */
+:focus-visible {
+  outline: none !important;
+  box-shadow: 0 0 0 3px #ef4444, 0 0 24px rgba(239, 68, 68, 0.7) !important;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+/* TV Card / Item focus pop */
+.tv-card-focus:focus-visible {
+  transform: scale(1.05) translateY(-4px) !important;
+  z-index: 30 !important;
+}
+
+/* TV Button focus pop */
+.tv-btn-focus:focus-visible {
+  transform: scale(1.06) !important;
+  z-index: 30 !important;
+}
+
+/* Smooth drag-to-scroll cursor for air mouse / physical mouse */
+.drag-scroll-active {
+  cursor: grabbing !important;
+  user-select: none !important;
+}
+
+/* Television 10-foot UI & Overscan Safe-Area Padding */
+@media screen and (min-width: 1280px) {
+  .tv-safe-container {
+    padding-left: clamp(1.5rem, 4vw, 3.5rem);
+    padding-right: clamp(1.5rem, 4vw, 3.5rem);
+  }
+}
