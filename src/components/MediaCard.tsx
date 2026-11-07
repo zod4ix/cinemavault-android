@@ -37,12 +37,8 @@ export const MediaCard: React.FC<MediaCardProps> = ({
       tabIndex={0}
       role="button"
       aria-label={`${displayTitle} (${media.year})`}
-      className="group relative flex flex-col cursor-pointer select-none tv-card-focus rounded-2xl focus:outline-none transition-all duration-300"
+      className="group relative flex flex-col cursor-pointer select-none tv-card-focus rounded-2xl focus:outline-none transition-all duration-300 w-full min-w-0"
       onClick={() => onClick(media)}
-      onFocus={(e) => {
-        // Auto-center card in horizontal or vertical viewports for Smart TV DPAD navigation
-        e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-      }}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();

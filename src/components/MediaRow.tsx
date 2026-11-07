@@ -32,7 +32,6 @@ export const MediaRow: React.FC<MediaRowProps> = ({
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (!rowRef.current) return;
-    // Only track primary left mouse button
     if (e.button !== 0) return;
     isMouseDownRef.current = true;
     hasDraggedRef.current = false;
@@ -48,7 +47,6 @@ export const MediaRow: React.FC<MediaRowProps> = ({
     const deltaX = e.clientX - startPosRef.current.x;
     const deltaY = e.clientY - startPosRef.current.y;
 
-    // Only initiate drag scroll if horizontal movement clearly exceeds 8px
     if (!hasDraggedRef.current && Math.abs(deltaX) > 8 && Math.abs(deltaX) > Math.abs(deltaY)) {
       hasDraggedRef.current = true;
       setIsDragging(true);
@@ -63,7 +61,6 @@ export const MediaRow: React.FC<MediaRowProps> = ({
     if (!isMouseDownRef.current) return;
     isMouseDownRef.current = false;
     if (hasDraggedRef.current) {
-      // Keep true momentarily so onClickCapture can discard the drag-release click
       setTimeout(() => {
         hasDraggedRef.current = false;
         setIsDragging(false);
@@ -73,9 +70,21 @@ export const MediaRow: React.FC<MediaRowProps> = ({
     }
   };
 
+  // Scroll by exact full page of whole cards so no half-card ever stops at the edge
   const scroll = (direction: 'left' | 'right') => {
-    if (rowRef.current) {
-      const scrollAmount = rowRef.current.clientWidth * 0.75;
+    if (!rowRef.current) return;
+    const firstCard = rowRef.current.firstElementChild as HTMLElement | null;
+    if (firstCard) {
+      const gap = window.innerWidth >= 768 ? 16 : window.innerWidth >= 640 ? 14 : 12;
+      const cardStep = firstCard.offsetWidth + gap;
+      const visibleCards = Math.max(1, Math.round(rowRef.current.clientWidth / cardStep));
+      const scrollAmount = visibleCards * cardStep;
+      rowRef.current.scrollBy({
+        left: direction === 'left' ? -scrollAmount : scrollAmount,
+        behavior: 'smooth',
+      });
+    } else {
+      const scrollAmount = rowRef.current.clientWidth;
       rowRef.current.scrollBy({
         left: direction === 'left' ? -scrollAmount : scrollAmount,
         behavior: 'smooth',
@@ -83,7 +92,6 @@ export const MediaRow: React.FC<MediaRowProps> = ({
     }
   };
 
-  // Convert mouse wheel to horizontal scroll for air mouse / physical mouse
   const handleWheel = (e: React.WheelEvent) => {
     if (!rowRef.current) return;
     if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
@@ -94,40 +102,44 @@ export const MediaRow: React.FC<MediaRowProps> = ({
   if (!items.length) return null;
 
   return (
-    <div className="space-y-3.5 my-8 relative group/row">
-      {/* Row Header */}
-      <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center gap-2.5">
-          <h2 className="text-lg sm:text-2xl font-bold text-white tracking-tight">{title}</h2>
+    <div className="space-y-3 my-6 sm:my-8 relative group/row w-full max-w-full overflow-hidden">
+      {/* Row Header: Single clean line, badge never wraps into 2 lines */}
+      <div className="flex items-center justify-between gap-2 px-3.5 sm:px-6 lg:px-8 w-full min-w-0">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <h2 className="text-base sm:text-xl lg:text-2xl font-extrabold text-white tracking-tight truncate">
+            {title}
+          </h2>
           {badge && (
-            <span className="text-[10px] sm:text-xs px-2.5 py-0.5 rounded-full font-semibold bg-red-600/20 text-red-400 border border-red-600/30">
+            <span className="shrink-0 whitespace-nowrap text-[10px] sm:text-xs px-2 sm:px-2.5 py-0.5 rounded-full font-semibold bg-red-600/20 text-red-400 border border-red-600/30">
               {badge}
             </span>
           )}
         </div>
 
-        {/* Scroll Buttons for Desktop / Smart TV / Air Mouse */}
-        <div className="flex items-center gap-2">
+        {/* Carousel Step Buttons */}
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
+            type="button"
             onClick={() => scroll('left')}
             tabIndex={0}
-            aria-label="Scroll left"
-            className="p-2 rounded-xl bg-white/5 hover:bg-red-600 text-slate-300 hover:text-white transition-all tv-btn-focus focus:outline-none"
+            aria-label="Попередні"
+            className="p-1.5 sm:p-2 rounded-xl bg-white/5 hover:bg-red-600 active:bg-red-600 text-slate-300 hover:text-white transition-all tv-btn-focus focus:outline-none border border-white/10"
           >
             <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
           <button
+            type="button"
             onClick={() => scroll('right')}
             tabIndex={0}
-            aria-label="Scroll right"
-            className="p-2 rounded-xl bg-white/5 hover:bg-red-600 text-slate-300 hover:text-white transition-all tv-btn-focus focus:outline-none"
+            aria-label="Наступні"
+            className="p-1.5 sm:p-2 rounded-xl bg-white/5 hover:bg-red-600 active:bg-red-600 text-slate-300 hover:text-white transition-all tv-btn-focus focus:outline-none border border-white/10"
           >
             <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         </div>
       </div>
 
-      {/* Row Scroll Container */}
+      {/* Row Scroll Container: Exact whole-card fractional widths + CSS Scroll Snap */}
       <div
         ref={rowRef}
         onMouseDown={handleMouseDown}
@@ -135,7 +147,7 @@ export const MediaRow: React.FC<MediaRowProps> = ({
         onMouseUp={handleMouseUpOrLeave}
         onMouseLeave={handleMouseUpOrLeave}
         onWheel={handleWheel}
-        className={`flex items-start gap-3 sm:gap-4 overflow-x-auto px-4 sm:px-6 lg:px-8 scrollbar-none scroll-smooth pb-3 ${
+        className={`flex items-start gap-3 sm:gap-3.5 md:gap-4 overflow-x-auto px-3.5 sm:px-6 lg:px-8 scroll-px-3.5 sm:scroll-px-6 lg:scroll-px-8 snap-x snap-mandatory scrollbar-none scroll-smooth pb-2 ${
           isDragging ? 'drag-scroll-active cursor-grabbing' : 'cursor-default'
         }`}
       >
@@ -144,9 +156,8 @@ export const MediaRow: React.FC<MediaRowProps> = ({
           return (
             <div
               key={media.id}
-              className="w-[145px] sm:w-[175px] md:w-[200px] lg:w-[220px] 2xl:w-[240px] shrink-0"
+              className="w-[calc((100%-12px)/2)] sm:w-[calc((100%-28px)/3)] md:w-[calc((100%-48px)/4)] lg:w-[calc((100%-64px)/5)] xl:w-[calc((100%-80px)/6)] shrink-0 snap-start"
               onClickCapture={(e) => {
-                // If user was actively dragging the row, suppress the card click
                 if (hasDraggedRef.current) {
                   e.stopPropagation();
                 }

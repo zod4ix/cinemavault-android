@@ -88,16 +88,23 @@ const MainAppContent: React.FC = () => {
   const latestSearchReqRef = useRef<number>(0);
   const infiniteSentinelRef = useRef<HTMLDivElement>(null);
 
-  // Initialize Self-Healing Guards & Smart 2D Spatial Navigation for TV Remotes
+  // Initialize Self-Healing Guards, Strict Horizontal Viewport Lock & Smart 2D Spatial Navigation
   useEffect(() => {
     selfHealService.initGlobalGuards();
     const cleanupSpatial = initSpatialNavigation();
+    const preventHorizontalDrift = () => {
+      if (window.scrollX !== 0) window.scrollTo(0, window.scrollY);
+      if (document.documentElement.scrollLeft !== 0) document.documentElement.scrollLeft = 0;
+      if (document.body.scrollLeft !== 0) document.body.scrollLeft = 0;
+    };
+    window.addEventListener('scroll', preventHorizontalDrift, { passive: true });
     return () => {
       cleanupSpatial();
+      window.removeEventListener('scroll', preventHorizontalDrift);
     };
   }, []);
 
-  // Automatic GitHub Update Check on Startup & Periodically
+  // Automatic GitHub Update Check on Startup, Foreground Resume & Periodically
   const runUpdateCheck = useCallback(async () => {
     const info = await updaterService.checkForUpdates();
     setUpdateInfo(info);
@@ -108,8 +115,19 @@ const MainAppContent: React.FC = () => {
 
   useEffect(() => {
     runUpdateCheck();
-    const interval = setInterval(runUpdateCheck, 1000 * 60 * 30);
-    return () => clearInterval(interval);
+    const interval = setInterval(runUpdateCheck, 1000 * 60 * 15);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        runUpdateCheck();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', runUpdateCheck);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', runUpdateCheck);
+    };
   }, [runUpdateCheck]);
 
   // Register native Android hardware/gesture Back Button handler
@@ -401,7 +419,7 @@ const MainAppContent: React.FC = () => {
   };
 
   return (
-    <div className="min-h-dvh bg-[#07090e] text-slate-100 flex flex-col selection:bg-red-600 selection:text-white pb-20 md:pb-0">
+    <div className="min-h-dvh w-full max-w-full overflow-x-hidden bg-[#07090e] text-slate-100 flex flex-col selection:bg-red-600 selection:text-white pb-20 md:pb-0">
       {/* Animated Startup Splash Screen */}
       {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} />}
 
@@ -492,7 +510,7 @@ const MainAppContent: React.FC = () => {
       />
 
       {/* Main Content */}
-      <main className="flex-1 pb-10">
+      <main className="flex-1 w-full max-w-full overflow-x-hidden pb-10">
         {/* 0. DEDICATED LIVE SPORTS HUB VIEW */}
         {isSportsActive ? (
           <SportsHub onBackHome={() => setIsSportsActive(false)} />
@@ -701,7 +719,7 @@ const MainAppContent: React.FC = () => {
                     </span>
                   </div>
                   <h3 className="text-base sm:text-xl font-black text-white group-hover:text-emerald-300 transition-colors">
-                    Спорт-Онлайн: прямі ефіри топ-матчів та спортивні телеканали (Суспільне Спорт, Setanta UA, MEGOGO, NBA TV)
+                    Спорт-Онлайн: безкоштовний сканер прямих трансляцій 1080p FHD, прямий HLS-ефір, хайлайти та повні записи матчів 24/7
                   </h3>
                 </div>
 
@@ -866,7 +884,7 @@ const MainAppContent: React.FC = () => {
       <footer className="border-t border-white/10 bg-[#05070a] py-6 text-center text-xs text-slate-500">
         <div className="max-w-[1700px] mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="flex flex-wrap items-center justify-center gap-1.5 font-medium text-slate-400">
-            <span>CinemaVault PRO v3.5.0</span> •{' '}
+            <span>CinemaVault PRO v3.5.1</span> •{' '}
             <span className="text-amber-400/90 font-bold">
               Smart TV, Mobile & Live Sports Edition
             </span>{' '}

@@ -1,6 +1,6 @@
 import { httpGetJson } from './tmdb';
 
-export const APP_VERSION = '3.5.0';
+export const APP_VERSION = '3.5.1';
 export const GITHUB_REPO = 'zod4ix/cinemavault-android';
 export const DEFAULT_APK_URL = `https://github.com/${GITHUB_REPO}/raw/main/CinemaVault-PRO-v${APP_VERSION}.apk`;
 export const GITHUB_RELEASE_PAGE = `https://github.com/${GITHUB_REPO}/releases/latest`;
@@ -73,17 +73,18 @@ export const updaterService = {
     let apkDownloadUrl = DEFAULT_APK_URL;
     let releasePageUrl = GITHUB_RELEASE_PAGE;
     let releaseNotes =
-      '• 🔴 СПОРТ LIVE HUB: прямі трансляції Ліги Чемпіонів, НБА, НФЛ, Боксу, Формули 1 та 24/7 телеканали (Суспільне Спорт, Setanta UA, MEGOGO, NBA TV, Sky F1)\n' +
-      '• 🇺🇦 Декілька українських каналів озвучення + канали англійською, польською, іспанською та мультиязичні студії\n' +
-      '• ⚡ Оновлений P2P Торрент-плеєр з інтеграцією Torrentio (4K HDR, UA, EN, PL, ES) без гальмувань\n' +
-      '• ♾️ Нескінченна бібліотека контенту з автопідвантаженням новинок та золотої класики\n' +
-      '• 🛡️ Система самовідновлення (Self-Healing), автооновлення з GitHub та покращена хмарна синхронізація';
+      '• 🎯 100% АДАПТИВНІСТЬ ТА БЛОКУВАННЯ ГОРИЗОНТАЛЬНОГО ЗМІЩЕННЯ: жодного сповзання екрану вбік на смартфонах, планшетах і TV\n' +
+      '• 🎠 ІНТЕРАКТИВНІ КАРУСЕЛІ З SNAP-ФІКСАЦІЄЮ: усі картки та кнопки відображаються цільними у полі зору без обрізаних половинок\n' +
+      '• 🏟️ СПОРТ LIVE SCANNER HUB: безкоштовний 5-потоковий сканер (Потік A 1080p / Потік B 540p / Direct HLS / Хайлайти / Повні записи) для НБА, ЛЧ, Топ-футболу, НФЛ, Ф1, Боксу/UFC, Тенісу та НХЛ\n' +
+      '• 🇺🇦 14+ мультимовних каналів (4 українські на чолі) + P2P Торрент-плеєр (Torrentio + TPB + YTS + EZTV)\n' +
+      '• 🛡️ Непрозора нижня навігація, Self-Healing Engine, GitHub Auto-Updater та Хмарний Профіль (CV-XXXXXX)';
     let publishedAt = new Date().toISOString().slice(0, 10);
 
     try {
+      const bust = Date.now();
       // 1. Check GitHub Releases API
       const rel = await httpGetJson(
-        `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`,
+        `https://api.github.com/repos/${GITHUB_REPO}/releases/latest?t=${bust}`,
         5500
       );
       if (rel && typeof rel.tag_name === 'string') {
@@ -112,7 +113,7 @@ export const updaterService = {
 
       // 2. Also check raw package.json on main branch (in case a new commit pushed a newer APK before creating a release tag)
       const pkg = await httpGetJson(
-        `https://raw.githubusercontent.com/${GITHUB_REPO}/main/package.json`,
+        `https://raw.githubusercontent.com/${GITHUB_REPO}/main/package.json?t=${bust}`,
         5000
       );
       if (pkg && typeof pkg.version === 'string') {

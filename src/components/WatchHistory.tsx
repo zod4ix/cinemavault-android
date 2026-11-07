@@ -13,15 +13,15 @@ export const WatchHistory: React.FC<WatchHistoryProps> = ({ history, onPlayItem 
   if (!history || history.length === 0) return null;
 
   return (
-    <div className="space-y-3.5 my-6 px-4 sm:px-6 lg:px-8">
-      <div className="flex items-center gap-2">
-        <h2 className="text-lg sm:text-2xl font-bold text-white tracking-tight">{t('continueWatching')}</h2>
-        <span className="text-[10px] sm:text-xs px-2 py-0.5 rounded-full font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+    <div className="space-y-3.5 my-6 px-3.5 sm:px-6 lg:px-8 w-full max-w-full overflow-hidden">
+      <div className="flex items-center gap-2 min-w-0">
+        <h2 className="text-base sm:text-2xl font-bold text-white tracking-tight truncate">{t('continueWatching')}</h2>
+        <span className="shrink-0 whitespace-nowrap text-[10px] sm:text-xs px-2 py-0.5 rounded-full font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">
           {t('savedPosition')}
         </span>
       </div>
 
-      <div className="flex items-start gap-3 sm:gap-4 overflow-x-auto scrollbar-none pb-2">
+      <div className="flex items-start gap-3 sm:gap-4 overflow-x-auto scrollbar-none snap-x snap-mandatory pb-2">
         {history.map((item) => {
           const percent = Math.min(100, Math.round((item.currentTime / item.duration) * 100));
           return (
@@ -31,16 +31,13 @@ export const WatchHistory: React.FC<WatchHistoryProps> = ({ history, onPlayItem 
               role="button"
               aria-label={`Продовжити перегляд: ${item.title}`}
               onClick={() => onPlayItem(item)}
-              onFocus={(e) => {
-                e.currentTarget.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-              }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
                   onPlayItem(item);
                 }
               }}
-              className="group relative w-[180px] sm:w-[220px] shrink-0 cursor-pointer select-none rounded-xl overflow-hidden bg-slate-900 border border-white/10 hover:border-white/30 tv-card-focus focus:outline-none transition-all"
+              className="group relative w-[calc((100%-12px)/2)] sm:w-[220px] shrink-0 snap-start cursor-pointer select-none rounded-xl overflow-hidden bg-slate-900 border border-white/10 hover:border-white/30 tv-card-focus focus:outline-none transition-all"
             >
               {/* Poster Backdrop */}
               <div className="relative aspect-video w-full overflow-hidden bg-slate-800">

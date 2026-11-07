@@ -33,11 +33,19 @@
   -webkit-backdrop-filter: none !important;
 }
 
-/* Ensure smooth hardware scrolling */
-html, body {
+/* Ensure smooth hardware scrolling and strict 100% horizontal viewport lock */
+html, body, #root {
   background-color: #07090e;
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden !important;
+  overflow-x: clip !important;
   overscroll-behavior: none;
+  overscroll-behavior-x: none;
   -webkit-font-smoothing: antialiased;
+  position: relative;
+  margin: 0;
+  padding: 0;
 }
 
 /* Universal pointer feedback for mouse & air mouse */

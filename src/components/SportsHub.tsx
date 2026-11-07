@@ -76,6 +76,7 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const channelsRowRef = useRef<HTMLDivElement>(null);
+  const tabsRowRef = useRef<HTMLDivElement>(null);
 
   // Load & auto-refresh live events every 60 seconds
   const loadSportsData = async (force = false) => {
@@ -236,8 +237,29 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
 
   const scrollChannels = (dir: 'left' | 'right') => {
     if (!channelsRowRef.current) return;
-    const amount = channelsRowRef.current.clientWidth * 0.75;
-    channelsRowRef.current.scrollBy({
+    const first = channelsRowRef.current.firstElementChild as HTMLElement | null;
+    if (first) {
+      const gap = 14;
+      const step = first.offsetWidth + gap;
+      const visible = Math.max(1, Math.round(channelsRowRef.current.clientWidth / step));
+      const amount = visible * step;
+      channelsRowRef.current.scrollBy({
+        left: dir === 'left' ? -amount : amount,
+        behavior: 'smooth',
+      });
+    } else {
+      const amount = channelsRowRef.current.clientWidth;
+      channelsRowRef.current.scrollBy({
+        left: dir === 'left' ? -amount : amount,
+        behavior: 'smooth',
+      });
+    }
+  };
+
+  const scrollTabs = (dir: 'left' | 'right') => {
+    if (!tabsRowRef.current) return;
+    const amount = Math.max(160, tabsRowRef.current.clientWidth * 0.65);
+    tabsRowRef.current.scrollBy({
       left: dir === 'left' ? -amount : amount,
       behavior: 'smooth',
     });
@@ -269,7 +291,7 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
   const heroEvent = liveEvents[0] || filteredEvents[0] || events[0];
 
   return (
-    <div className="min-h-screen bg-[#07090e] text-slate-100 pb-16">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-[#07090e] text-slate-100 pb-16">
       {/* Top Autonomous Free Stream Scanner Bar */}
       <div className="bg-gradient-to-r from-[#0b1322] via-[#0f172a] to-[#0b1322] border-b border-emerald-500/20 px-4 sm:px-6 lg:px-8 py-3">
         <div className="max-w-[1700px] mx-auto flex flex-wrap items-center justify-between gap-3">
@@ -421,7 +443,7 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
 
               {/* Right Live Scoreboard Card */}
               {heroEvent.homeTeam && heroEvent.awayTeam && (
-                <div className="bg-[#0d1424]/95 border border-white/15 rounded-3xl p-5 sm:p-6 shadow-2xl flex items-center justify-around gap-6 min-w-[290px] sm:min-w-[380px]">
+                <div className="bg-[#0d1424]/95 border border-white/15 rounded-3xl p-4 sm:p-6 shadow-2xl flex items-center justify-around gap-4 sm:gap-6 w-full lg:w-auto sm:min-w-[360px]">
                   <div className="flex flex-col items-center text-center gap-2 flex-1">
                     {heroEvent.homeTeam.logo ? (
                       <img
@@ -477,60 +499,101 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
       )}
 
       {/* Main Container */}
-      <div className="max-w-[1700px] mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-8 tv-safe-container">
-        {/* Sport Disciplines Filter Carousel */}
-        <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-1">
-          {SPORT_TABS.map((tab) => {
-            const active = selectedSport === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setSelectedSport(tab.id)}
-                tabIndex={0}
-                className={`px-4 py-2.5 rounded-2xl text-xs sm:text-sm font-extrabold whitespace-nowrap flex items-center gap-2 border transition-all shrink-0 tv-btn-focus focus:outline-none ${
-                  active
-                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-400 shadow-lg shadow-emerald-600/30'
-                    : 'bg-[#0e1525] text-slate-300 border-white/10 hover:bg-white/10 hover:text-white'
-                }`}
-              >
-                <span className="text-base">{tab.icon}</span>
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
+      <div className="w-full max-w-[1700px] mx-auto px-3.5 sm:px-6 lg:px-8 pt-6 space-y-8 tv-safe-container">
+        {/* Sport Disciplines Filter Carousel with Arrows & Snap */}
+        <div className="flex items-center gap-1.5 w-full min-w-0">
+          <button
+            type="button"
+            onClick={() => scrollTabs('left')}
+            tabIndex={0}
+            aria-label="Попередні види спорту"
+            className="p-2 rounded-xl bg-white/5 hover:bg-emerald-600 active:bg-emerald-600 text-slate-300 hover:text-white shrink-0 transition-all tv-btn-focus focus:outline-none border border-white/10"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+
+          <div
+            ref={tabsRowRef}
+            onWheel={(e) => {
+              if (tabsRowRef.current && Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+                tabsRowRef.current.scrollLeft += e.deltaY;
+              }
+            }}
+            className="flex-1 min-w-0 flex items-center gap-2 overflow-x-auto scrollbar-none snap-x snap-mandatory scroll-smooth pb-1"
+          >
+            {SPORT_TABS.map((tab) => {
+              const active = selectedSport === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={(e) => {
+                    if (tabsRowRef.current) {
+                      const cRect = tabsRowRef.current.getBoundingClientRect();
+                      const bRect = e.currentTarget.getBoundingClientRect();
+                      const offset = bRect.left - cRect.left + tabsRowRef.current.scrollLeft;
+                      tabsRowRef.current.scrollTo({
+                        left: Math.max(0, offset - tabsRowRef.current.clientWidth / 2 + bRect.width / 2),
+                        behavior: 'smooth',
+                      });
+                    }
+                    setSelectedSport(tab.id);
+                  }}
+                  tabIndex={0}
+                  className={`px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-2xl text-xs sm:text-sm font-extrabold whitespace-nowrap flex items-center gap-2 border transition-all shrink-0 snap-start tv-btn-focus focus:outline-none ${
+                    active
+                      ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white border-emerald-400 shadow-lg shadow-emerald-600/30'
+                      : 'bg-[#0e1525] text-slate-300 border-white/10 hover:bg-white/10 hover:text-white'
+                  }`}
+                >
+                  <span className="text-base">{tab.icon}</span>
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => scrollTabs('right')}
+            tabIndex={0}
+            aria-label="Наступні види спорту"
+            className="p-2 rounded-xl bg-white/5 hover:bg-emerald-600 active:bg-emerald-600 text-slate-300 hover:text-white shrink-0 transition-all tv-btn-focus focus:outline-none border border-white/10"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
         </div>
 
         {/* ========================================================
             1. 24/7 FREE LIVE SPORTS ARENA CHANNELS CAROUSEL
             ======================================================== */}
-        <section className="space-y-3.5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <Tv className="w-5 h-5 text-emerald-400" />
-              <h2 className="text-lg sm:text-2xl font-black text-white">
-                📡 Безкоштовні спортивні канали 24/7 (Прямий HLS та Live Потоки)
+        <section className="space-y-3.5 w-full min-w-0">
+          <div className="flex items-center justify-between gap-2 w-full min-w-0">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <Tv className="w-5 h-5 text-emerald-400 shrink-0" />
+              <h2 className="text-base sm:text-2xl font-black text-white truncate">
+                📡 Безкоштовні спортивні канали 24/7
               </h2>
-              <span className="hidden sm:inline-block px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                100% Free • Без прив&apos;язки до платних підписок
+              <span className="hidden md:inline-block shrink-0 whitespace-nowrap px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                100% Free • Direct HLS & Live
               </span>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 shrink-0">
               <button
                 onClick={() => scrollChannels('left')}
                 tabIndex={0}
-                className="p-2 rounded-xl bg-white/5 hover:bg-emerald-600 text-slate-300 hover:text-white transition-all tv-btn-focus focus:outline-none"
+                className="p-1.5 sm:p-2 rounded-xl bg-white/5 hover:bg-emerald-600 text-slate-300 hover:text-white transition-all tv-btn-focus focus:outline-none border border-white/10"
                 aria-label="Попередні канали"
               >
-                <ChevronLeft className="w-5 h-5" />
+                <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
               <button
                 onClick={() => scrollChannels('right')}
                 tabIndex={0}
-                className="p-2 rounded-xl bg-white/5 hover:bg-emerald-600 text-slate-300 hover:text-white transition-all tv-btn-focus focus:outline-none"
+                className="p-1.5 sm:p-2 rounded-xl bg-white/5 hover:bg-emerald-600 text-slate-300 hover:text-white transition-all tv-btn-focus focus:outline-none border border-white/10"
                 aria-label="Наступні канали"
               >
-                <ChevronRight className="w-5 h-5" />
+                <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
             </div>
           </div>
@@ -542,7 +605,7 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
                 channelsRowRef.current.scrollLeft += e.deltaY;
               }
             }}
-            className="flex items-stretch gap-3.5 overflow-x-auto scrollbar-none scroll-smooth pb-2"
+            className="flex items-stretch gap-3 sm:gap-3.5 overflow-x-auto scrollbar-none snap-x snap-mandatory scroll-smooth pb-2"
           >
             {filteredChannels.map((ch) => (
               <div
@@ -556,7 +619,7 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
                     openChannelPlayer(ch, 0);
                   }
                 }}
-                className="w-[240px] sm:w-[275px] shrink-0 rounded-2xl bg-[#0d1322] border border-white/10 hover:border-emerald-500/60 p-4 flex flex-col justify-between gap-3 cursor-pointer group transition-all tv-card-focus focus:outline-none shadow-lg"
+                className="w-[calc((100%-12px)/2)] sm:w-[calc((100%-28px)/3)] lg:w-[calc((100%-42px)/4)] xl:w-[calc((100%-56px)/5)] shrink-0 snap-start rounded-2xl bg-[#0d1322] border border-white/10 hover:border-emerald-500/60 p-3 sm:p-4 flex flex-col justify-between gap-2.5 sm:gap-3 cursor-pointer group transition-all tv-card-focus focus:outline-none shadow-lg"
               >
                 <div className="space-y-2.5">
                   <div className="flex items-center justify-between gap-2">
@@ -642,7 +705,7 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
                       openEventPlayer(ev, 0);
                     }
                   }}
-                  className="group relative rounded-2xl bg-[#0c1220] border border-white/12 hover:border-red-500/60 overflow-hidden shadow-xl flex flex-col justify-between p-4 sm:p-5 cursor-pointer transition-all tv-card-focus focus:outline-none"
+                  className="group relative rounded-2xl bg-[#0c1220] border border-white/15 hover:border-red-500/60 overflow-hidden shadow-xl flex flex-col justify-between p-4 sm:p-5 cursor-pointer transition-all tv-card-focus focus:outline-none"
                 >
                   {/* Top League & Live Status */}
                   <div className="flex items-center justify-between gap-2 mb-3">

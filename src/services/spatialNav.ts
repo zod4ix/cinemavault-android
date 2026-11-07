@@ -1,6 +1,7 @@
 /**
  * Smart 2D Geometric Spatial Navigation Engine for Android TV D-Pad Remotes,
  * Air Mice, and Keyboards.
+ * Uses preventScroll + container-isolated scrolling so the viewport NEVER shifts sideways!
  */
 
 const FOCUSABLE_SELECTOR =
@@ -14,6 +15,77 @@ function isVisible(el: HTMLElement): boolean {
   }
   const rect = el.getBoundingClientRect();
   return rect.width > 4 && rect.height > 4;
+}
+
+/**
+ * Safely scroll an element into view inside its horizontal carousel or vertical scroll container
+ * WITHOUT ever triggering horizontal scroll on window / documentElement / body.
+ */
+export function scrollElementIntoViewSafe(el: HTMLElement) {
+  if (!el) return;
+
+  // 1. Horizontal scroll: find nearest horizontal scroll container (.overflow-x-auto)
+  let parent = el.parentElement;
+  while (parent && parent !== document.body && parent !== document.documentElement) {
+    const style = window.getComputedStyle(parent);
+    if (
+      (style.overflowX === 'auto' || style.overflowX === 'scroll') &&
+      parent.scrollWidth > parent.clientWidth + 4
+    ) {
+      const parentRect = parent.getBoundingClientRect();
+      const elRect = el.getBoundingClientRect();
+      const offsetLeft = elRect.left - parentRect.left + parent.scrollLeft;
+      const targetScrollLeft = offsetLeft - parent.clientWidth / 2 + elRect.width / 2;
+      parent.scrollTo({
+        left: Math.max(0, targetScrollLeft),
+        behavior: 'smooth',
+      });
+      break;
+    }
+    parent = parent.parentElement;
+  }
+
+  // 2. Vertical scroll: check if inside a vertical modal scroll container or main window
+  const elRect = el.getBoundingClientRect();
+  const margin = 90;
+  let vertContainer: HTMLElement | null = el.parentElement;
+  while (
+    vertContainer &&
+    vertContainer !== document.body &&
+    vertContainer !== document.documentElement
+  ) {
+    const style = window.getComputedStyle(vertContainer);
+    if (
+      (style.overflowY === 'auto' || style.overflowY === 'scroll') &&
+      vertContainer.scrollHeight > vertContainer.clientHeight + 4
+    ) {
+      break;
+    }
+    vertContainer = vertContainer.parentElement;
+  }
+
+  if (
+    vertContainer &&
+    vertContainer !== document.body &&
+    vertContainer !== document.documentElement
+  ) {
+    const cRect = vertContainer.getBoundingClientRect();
+    if (elRect.top < cRect.top + 40) {
+      vertContainer.scrollBy({ top: elRect.top - cRect.top - 40, behavior: 'smooth' });
+    } else if (elRect.bottom > cRect.bottom - 40) {
+      vertContainer.scrollBy({ top: elRect.bottom - cRect.bottom + 40, behavior: 'smooth' });
+    }
+  } else {
+    if (elRect.top < margin) {
+      window.scrollTo({ top: Math.max(0, window.scrollY + elRect.top - margin), left: 0, behavior: 'smooth' });
+    } else if (elRect.bottom > window.innerHeight - margin) {
+      window.scrollTo({
+        top: window.scrollY + (elRect.bottom - (window.innerHeight - margin)),
+        left: 0,
+        behavior: 'smooth',
+      });
+    }
+  }
 }
 
 export function initSpatialNavigation(): () => void {
@@ -56,7 +128,7 @@ export function initSpatialNavigation(): () => void {
     // If nothing is currently focused inside scope, focus the first candidate
     if (!active || !scopeRoot.contains(active) || active === document.body) {
       e.preventDefault();
-      candidates[0].focus();
+      candidates[0].focus({ preventScroll: true });
       return;
     }
 
@@ -115,8 +187,8 @@ export function initSpatialNavigation(): () => void {
 
     if (bestCandidate) {
       e.preventDefault();
-      bestCandidate.focus({ preventScroll: false });
-      bestCandidate.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+      bestCandidate.focus({ preventScroll: true });
+      scrollElementIntoViewSafe(bestCandidate);
     }
   };
 
