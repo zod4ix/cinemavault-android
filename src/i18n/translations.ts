@@ -174,6 +174,16 @@ const uk = {
   addressCopied: 'Адресу успішно скопійовано!',
   memoCopied: 'MEMO скопійовано!',
   donateFooter: 'Дякуємо за підтримку вільного україномовного кінематографу! 🇺🇦',
+  sportLiveBtn: 'Спорт Live',
+  classicTab: 'Класика',
+  classicRow: '🏛️ Золота класика кіно та анімації',
+  classicBadge: 'Легендарні хіти',
+  noveltiesRow: '🔥 Гарячі новинки (2024–2026)',
+  noveltiesBadge: 'СВІЖІ РЕЛІЗИ',
+  infiniteCatalogTitle: '♾️ Нескінченна бібліотека кінотеатру',
+  infiniteCatalogSubtitle: 'Автоматичне підвантаження нових релізів, класики, мультфільмів та аніме',
+  updateAvailableToast: 'Доступне оновлення CinemaVault PRO!',
+  updateBtn: 'Оновити APK',
 };
 
 export type TranslationKey = keyof typeof uk;
@@ -329,6 +339,16 @@ const en: Dict = {
   addressCopied: 'Address copied to clipboard!',
   memoCopied: 'MEMO copied!',
   donateFooter: 'Thank you for supporting community cinema! 🍿',
+  sportLiveBtn: 'Live Sports',
+  classicTab: 'Classics',
+  classicRow: '🏛️ Golden Classics of Cinema & Animation',
+  classicBadge: 'Legendary Hits',
+  noveltiesRow: '🔥 Hot New Releases (2024–2026)',
+  noveltiesBadge: 'FRESH RELEASES',
+  infiniteCatalogTitle: '♾️ Infinite Cinema Library',
+  infiniteCatalogSubtitle: 'Auto-loading new releases, timeless classics, cartoons and anime',
+  updateAvailableToast: 'CinemaVault PRO update available!',
+  updateBtn: 'Update APK',
 };
 
 const pl: Dict = {
@@ -481,6 +501,16 @@ const pl: Dict = {
   addressCopied: 'Adres został pomyślnie skopiowany!',
   memoCopied: 'MEMO skopiowane!',
   donateFooter: 'Dziękujemy za wsparcie wolnego kina! 🍿',
+  sportLiveBtn: 'Sport Live',
+  classicTab: 'Klasyka',
+  classicRow: '🏛️ Złota Klasyka Kina i Animacji',
+  classicBadge: 'Legendarne hity',
+  noveltiesRow: '🔥 Gorące nowości (2024–2026)',
+  noveltiesBadge: 'NOWE PREMIERY',
+  infiniteCatalogTitle: '♾️ Nieskończona Biblioteka Kina',
+  infiniteCatalogSubtitle: 'Automatyczne ładowanie nowości, klasyki, kreskówek i anime',
+  updateAvailableToast: 'Dostępna aktualizacja CinemaVault PRO!',
+  updateBtn: 'Aktualizuj APK',
 };
 
 const es: Dict = {
@@ -633,6 +663,16 @@ const es: Dict = {
   addressCopied: '¡Dirección copiada con éxito!',
   memoCopied: '¡MEMO copiado!',
   donateFooter: '¡Gracias por apoyar el cine libre comunitario! 🍿',
+  sportLiveBtn: 'Deportes Live',
+  classicTab: 'Clásicos',
+  classicRow: '🏛️ Clásicos Dorados del Cine y Animación',
+  classicBadge: 'Éxitos legendarios',
+  noveltiesRow: '🔥 Nuevos Estrenos (2024–2026)',
+  noveltiesBadge: 'ESTRENOS',
+  infiniteCatalogTitle: '♾️ Biblioteca Infinita de Cine',
+  infiniteCatalogSubtitle: 'Carga automática de nuevos estrenos, clásicos, dibujos animados y anime',
+  updateAvailableToast: '¡Actualización de CinemaVault PRO disponible!',
+  updateBtn: 'Actualizar APK',
 };
 
 const ru: Dict = {
@@ -785,6 +825,16 @@ const ru: Dict = {
   addressCopied: 'Адрес успешно скопирован!',
   memoCopied: 'MEMO скопировано!',
   donateFooter: 'Спасибо за поддержку свободного кинотеатра! 🍿',
+  sportLiveBtn: 'Спорт Live',
+  classicTab: 'Классика',
+  classicRow: '🏛️ Золотая классика кино и анимации',
+  classicBadge: 'Легендарные хиты',
+  noveltiesRow: '🔥 Горячие новинки (2024–2026)',
+  noveltiesBadge: 'СВЕЖИЕ РЕЛИЗЫ',
+  infiniteCatalogTitle: '♾️ Бесконечная библиотека кинотеатра',
+  infiniteCatalogSubtitle: 'Автоматическая подгрузка новых релизов, классики, мультфильмов и аниме',
+  updateAvailableToast: 'Доступно обновление CinemaVault PRO!',
+  updateBtn: 'Обновить APK',
 };
 
 export const translations: Record<SupportedLanguage, Dict> = { uk, en, pl, es, ru };

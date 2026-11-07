@@ -12,6 +12,7 @@ import { torrentService } from '../services/torrent';
 import { useLanguage } from '../i18n/LanguageContext';
 import { useOverview } from '../i18n/useOverview';
 import { ServerHealth } from '../services/servers';
+import { openExternalDownload } from '../services/updater';
 
 interface MediaModalProps {
   media: MediaItem | null;
@@ -41,6 +42,8 @@ export const MediaModal: React.FC<MediaModalProps> = ({
   const [downloadProgress, setDownloadProgress] = useState<{ [key: string]: number }>({});
   const [backdropSrc, setBackdropSrc] = useState<string>('');
   const [serverHealth, setServerHealth] = useState<Record<string, ServerHealth>>({});
+  const [sourceLangFilter, setSourceLangFilter] = useState<string>('all');
+  const [torrentFilter, setTorrentFilter] = useState<string>('all');
 
   useEffect(() => {
     if (!media) return;
@@ -118,11 +121,7 @@ export const MediaModal: React.FC<MediaModalProps> = ({
   };
 
   const handleOpenTorrentApp = (magnet: string) => {
-    try {
-      window.location.href = magnet;
-    } catch {
-      window.open(magnet, '_system');
-    }
+    openExternalDownload(magnet);
   };
 
   const handlePlayTorrent = (tItem: TorrentItem) => {
@@ -464,19 +463,75 @@ export const MediaModal: React.FC<MediaModalProps> = ({
             </div>
           )}
 
-          {/* TAB 2: ONLINE SOURCES */}
+          {/* TAB 2: ONLINE SOURCES (MULTI-LANGUAGE CHANNELS) */}
           {activeTab === 'online' && (
             <div className="space-y-4">
+              {/* Language Filter Carousel for Channels */}
+              <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-1">
+                {[
+                  { id: 'all', label: '🌐 Усі канали' },
+                  { id: 'ua', label: '🇺🇦 Українська (Декілька каналів)' },
+                  { id: 'en', label: '🇬🇧 English (4K / 1080p)' },
+                  { id: 'pl', label: '🇵🇱 Polski (Lektor / Sub)' },
+                  { id: 'es', label: '🇪🇸 Español (Latino / ES)' },
+                  { id: 'multi', label: '🎭 Multi-Audio & Студії' },
+                ].map((lf) => (
+                  <button
+                    key={lf.id}
+                    onClick={() => setSourceLangFilter(lf.id)}
+                    tabIndex={0}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap border transition-all tv-btn-focus focus:outline-none ${
+                      sourceLangFilter === lf.id
+                        ? 'bg-red-600 text-white border-red-500 shadow-md shadow-red-600/30'
+                        : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/15'
+                    }`}
+                  >
+                    {lf.label}
+                  </button>
+                ))}
+              </div>
+
               <div className="text-xs text-slate-400 flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
                 <span>{t('autoSearchNotice')}</span>
               </div>
 
               <div className="space-y-3">
-                {sources.map((src) => {
-                  const srvId = src.id.split('-')[0];
+                {sources
+                  .filter((src) => {
+                    if (sourceLangFilter === 'all') return true;
+                    const idLow = src.id.toLowerCase();
+                    if (sourceLangFilter === 'ua') {
+                      return idLow.includes('ua-') || idLow.includes('ashdi') || idLow.includes('loadbox') || idLow.includes('videasy');
+                    }
+                    if (sourceLangFilter === 'en') {
+                      return idLow.includes('vidlink') || idLow.includes('vidsrc') || idLow.includes('vidfast') || idLow.includes('2embed');
+                    }
+                    if (sourceLangFilter === 'pl') {
+                      return idLow.includes('pl-') || idLow.includes('videasy') || idLow.includes('multiembed');
+                    }
+                    if (sourceLangFilter === 'es') {
+                      return idLow.includes('es-') || idLow.includes('vidlink') || idLow.includes('videasy');
+                    }
+                    return true;
+                  })
+                  .map((src) => {
+                  const srvId = src.id.split('-s')[0];
                   const health = serverHealth[srvId] || (src.status === 'working' ? 'ok' : 'unknown');
                   const isOk = health === 'ok';
+                  const idLow = src.id.toLowerCase();
+
+                  const getChannelLangDesc = () => {
+                    if (idLow.includes('ashdi')) return '🇺🇦 Повний український дубляж (UAKino / Ashdi VIP)';
+                    if (idLow.includes('ua-kino-rezka')) return '🇺🇦 Український дубляж та багатоголосе озвучення (КіноБаза UA)';
+                    if (idLow.includes('ua-videasy')) return '🇺🇦 Українська звукова доріжка та субтитри у 4K HDR';
+                    if (idLow.includes('ua-autoembed')) return '🇺🇦 Український та мультиязичний потік (AutoEmbed UA)';
+                    if (idLow.includes('pl-')) return '🇵🇱 Polski Lektor / Dubbing / Napisy PL + EN';
+                    if (idLow.includes('es-')) return '🇪🇸 Español Latino / Castellano + Subtítulos';
+                    if (idLow.includes('loadbox')) return '🎭 Мульти-студії: 🇺🇦 UA / 🇬🇧 EN / 🌐 Rezka / LostFilm';
+                    if (idLow.includes('videasy')) return '🌐 Усі мови додатку: 🇺🇦 UA / 🇬🇧 EN / 🇵🇱 PL / 🇪🇸 ES / Multi';
+                    return '🇬🇧 English Original 4K/1080p + Multi Subtitles';
+                  };
 
                   return (
                     <div
@@ -507,14 +562,8 @@ export const MediaModal: React.FC<MediaModalProps> = ({
                             </div>
                             <span className="text-xs text-slate-400">
                               {t('playbackLanguages')}{' '}
-                              <span className="text-slate-300 font-medium">
-                                {src.id.includes('ashdi')
-                                  ? '🇺🇦 Український дубляж (UAKino)'
-                                  : src.id.includes('loadbox')
-                                    ? '🇺🇦 UA Дубляж / Rezka / LostFilm / RU / 🇬🇧 EN'
-                                    : src.id.includes('videasy')
-                                      ? '🇺🇦 UA / 🇬🇧 EN / 🇵🇱 PL / 🇪🇸 ES / Multi Audio'
-                                      : '🇬🇧 English / Multi Audio'}
+                              <span className="text-slate-200 font-semibold">
+                                {getChannelLangDesc()}
                               </span>
                             </span>
                           </div>
@@ -539,7 +588,8 @@ export const MediaModal: React.FC<MediaModalProps> = ({
 
                           <button
                             onClick={() => onPlayOnline(media, src, selectedEpisode)}
-                            className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-red-600/30 active:scale-95 transition-all"
+                            tabIndex={0}
+                            className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-red-600/30 active:scale-95 transition-all tv-btn-focus focus:outline-none"
                           >
                             <Play className="w-4 h-4 fill-white" />
                             <span>{t('watchNow')}</span>
@@ -563,8 +613,34 @@ export const MediaModal: React.FC<MediaModalProps> = ({
           {/* TAB 3: TORRENTS */}
           {activeTab === 'torrents' && (
             <div className="space-y-4">
-              <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs text-blue-200 leading-relaxed">
-                💡 {t('torrentsTip')}
+              {/* Language & Quality Filter Pills for Torrents */}
+              <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-1">
+                {[
+                  { id: 'all', label: `⚡ Усі роздачі (${torrents.length})` },
+                  { id: 'ua', label: '🇺🇦 Українською' },
+                  { id: '4k', label: '💎 4K HDR / UHD' },
+                  { id: 'en', label: '🇬🇧 English' },
+                  { id: 'pl', label: '🇵🇱 Polski' },
+                  { id: 'es', label: '🇪🇸 Español' },
+                  { id: 'multi', label: '🌐 Multi-Audio' },
+                ].map((tf) => (
+                  <button
+                    key={tf.id}
+                    onClick={() => setTorrentFilter(tf.id)}
+                    tabIndex={0}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap border transition-all tv-btn-focus focus:outline-none ${
+                      torrentFilter === tf.id
+                        ? 'bg-purple-600 text-white border-purple-400 shadow-md shadow-purple-600/30'
+                        : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/15'
+                    }`}
+                  >
+                    {tf.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/25 text-xs text-purple-200 leading-relaxed">
+                ⚡ Вбудований P2P Торрент-плеєр: натисніть <strong>«Дивитися онлайн»</strong>, щоб миттєво запустити будь-який торрент прямо всередині додатку без очікування повного завантаження!
               </div>
 
               {torrents.length === 0 ? (
@@ -574,7 +650,19 @@ export const MediaModal: React.FC<MediaModalProps> = ({
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {torrents.map((tItem) => (
+                  {torrents
+                    .filter((tItem) => {
+                      if (torrentFilter === 'all') return true;
+                      const combined = `${tItem.audio} ${tItem.title} ${tItem.quality}`.toLowerCase();
+                      if (torrentFilter === 'ua') return combined.includes('ua') || combined.includes('укр') || combined.includes('🇺🇦');
+                      if (torrentFilter === '4k') return combined.includes('4k') || combined.includes('2160');
+                      if (torrentFilter === 'en') return combined.includes('en') || combined.includes('eng');
+                      if (torrentFilter === 'pl') return combined.includes('pl') || combined.includes('pol') || combined.includes('lektor');
+                      if (torrentFilter === 'es') return combined.includes('es') || combined.includes('esp') || combined.includes('latino');
+                      if (torrentFilter === 'multi') return combined.includes('multi') || combined.includes('dual');
+                      return true;
+                    })
+                    .map((tItem) => (
                     <div
                       key={tItem.id}
                       className="p-4 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 transition-all space-y-2.5"

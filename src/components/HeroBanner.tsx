@@ -40,14 +40,13 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
     setIsTransitioning(true);
     setBgSrc(
       activeMedia.backdropPath ||
-      activeMedia.posterPath ||
-      createPosterFallback(activeMedia.title, activeMedia.year, activeMedia.rating)
+        activeMedia.posterPath ||
+        createPosterFallback(activeMedia.title, activeMedia.year, activeMedia.rating)
     );
     const tId = setTimeout(() => setIsTransitioning(false), 300);
     return () => clearTimeout(tId);
   }, [activeMedia]);
 
-  // Auto-rotate every 7.5 seconds when not hovered or touched
   useEffect(() => {
     if (safeItems.length <= 1 || isHovered) return;
     const interval = setInterval(() => {
@@ -92,7 +91,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
 
   return (
     <div
-      className="group relative w-full h-[48vh] sm:h-[60vh] lg:h-[72vh] min-h-[360px] max-h-[700px] overflow-hidden select-none bg-[#07090e]"
+      className="group relative w-full min-h-[370px] sm:min-h-[460px] lg:min-h-[540px] overflow-hidden select-none bg-[#07090e] flex flex-col justify-end"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
       onTouchStart={handleTouchStart}
@@ -112,146 +111,148 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
       />
 
       {/* Cinematic Gradient Overlays */}
-      <div className="absolute inset-0 bg-gradient-to-t from-[#07090e] via-[#07090e]/60 to-transparent" />
-      <div className="absolute inset-0 bg-gradient-to-r from-[#07090e] via-[#07090e]/75 to-transparent w-full lg:w-3/4" />
+      <div className="absolute inset-0 bg-gradient-to-t from-[#07090e] via-[#07090e]/65 to-transparent" />
+      <div className="absolute inset-0 bg-gradient-to-r from-[#07090e] via-[#07090e]/80 to-transparent w-full lg:w-3/4" />
       <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-[#07090e]/80 to-transparent pointer-events-none" />
 
-      {/* Navigation Arrows (Visible on hover on desktop, or discreetly available) */}
-      {safeItems.length > 1 && (
-        <>
-          <button
-            onClick={handlePrev}
-            tabIndex={0}
-            className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-20 p-2.5 sm:p-3.5 rounded-full bg-black/50 hover:bg-red-600 text-white/80 hover:text-white backdrop-blur-md border border-white/15 transition-all active:scale-90 opacity-80 hover:opacity-100 focus:opacity-100 tv-btn-focus focus:outline-none"
-            aria-label="Попередній фільм"
-          >
-            <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
-          </button>
-          <button
-            onClick={handleNext}
-            tabIndex={0}
-            className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-20 p-2.5 sm:p-3.5 rounded-full bg-black/50 hover:bg-red-600 text-white/80 hover:text-white backdrop-blur-md border border-white/15 transition-all active:scale-90 opacity-80 hover:opacity-100 focus:opacity-100 tv-btn-focus focus:outline-none"
-            aria-label="Наступний фільм"
-          >
-            <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
-          </button>
-        </>
-      )}
-
-      {/* Hero Content */}
-      <div className="relative h-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col justify-end pb-10 sm:pb-14 z-10">
-        <div className="max-w-2xl space-y-2.5 sm:space-y-4">
-          {/* Badges */}
-          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-            <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md text-[10px] sm:text-[11px] font-extrabold bg-red-600 text-white uppercase tracking-wider flex items-center gap-1 shadow-md shadow-red-600/30">
-              <Sparkles className="w-3 h-3" />
-              {activeMedia.year >= 2024 ? 'НОВИНКА КАТАЛОГУ' : t('topRelease')}
-            </span>
-
-            {activeMedia.quality && (
-              <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md text-[10px] sm:text-[11px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                {activeMedia.quality}
+      {/* Hero Content Container (Zero-overlap flex layout) */}
+      <div className="relative w-full max-w-[1700px] mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-6 sm:pb-10 z-10 tv-safe-container">
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-5">
+          {/* Left Metadata & Action Buttons */}
+          <div className="max-w-2xl space-y-2.5 sm:space-y-3.5">
+            {/* Badges */}
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+              <span className="px-2.5 py-0.5 sm:py-1 rounded-md text-[10px] sm:text-[11px] font-extrabold bg-red-600 text-white uppercase tracking-wider flex items-center gap-1 shadow-md shadow-red-600/30">
+                <Sparkles className="w-3 h-3" />
+                {activeMedia.year >= 2024 ? 'НОВИНКА КАТАЛОГУ' : t('topRelease')}
               </span>
-            )}
 
-            {activeMedia.hasUkrainianAudio && (
-              <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md text-[10px] sm:text-[11px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/40">
-                🇺🇦 {t('voiced')}
-              </span>
-            )}
+              {activeMedia.quality && (
+                <span className="px-2.5 py-0.5 sm:py-1 rounded-md text-[10px] sm:text-[11px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                  {activeMedia.quality}
+                </span>
+              )}
 
-            {/* IMDb Badge */}
-            <div className="flex items-center gap-1.5 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md bg-black/70 backdrop-blur-md border border-white/15 shadow">
-              <span className="px-1 py-0.2 rounded text-[9px] sm:text-[10px] font-black bg-[#f5c518] text-black leading-none">
-                IMDb
-              </span>
-              <span className="text-amber-400 text-xs sm:text-sm font-extrabold">
-                {formatRating(activeMedia.rating)}
-              </span>
+              {activeMedia.hasUkrainianAudio && (
+                <span className="px-2.5 py-0.5 sm:py-1 rounded-md text-[10px] sm:text-[11px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/40">
+                  🇺🇦 {t('voiced')}
+                </span>
+              )}
+
+              {/* IMDb Badge */}
+              <div className="flex items-center gap-1.5 px-2.5 py-0.5 sm:py-1 rounded-md bg-black/75 border border-white/15 shadow">
+                <span className="px-1 py-0.2 rounded text-[9px] sm:text-[10px] font-black bg-[#f5c518] text-black leading-none">
+                  IMDb
+                </span>
+                <span className="text-amber-400 text-xs sm:text-sm font-extrabold">
+                  {formatRating(activeMedia.rating)}
+                </span>
+              </div>
+            </div>
+
+            {/* Title */}
+            <h1 className="text-2xl sm:text-4xl lg:text-5xl xl:text-6xl font-black text-white tracking-tight drop-shadow-xl leading-tight line-clamp-2">
+              {displayTitle}
+            </h1>
+
+            {/* Subtitle / Genres */}
+            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] sm:text-sm text-slate-300 font-medium">
+              <span className="font-bold text-white">{activeMedia.year}</span>
+              <span>•</span>
+              <span className="truncate max-w-[260px] sm:max-w-none">{localizedGenres}</span>
+              {activeMedia.duration && (
+                <>
+                  <span>•</span>
+                  <span>
+                    {activeMedia.duration} {t('min')}
+                  </span>
+                </>
+              )}
+            </div>
+
+            {/* Overview */}
+            <p className="text-xs sm:text-sm text-slate-300 line-clamp-2 sm:line-clamp-3 leading-relaxed max-w-xl drop-shadow">
+              {overview}
+            </p>
+
+            {/* Action Buttons */}
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 pt-1">
+              <button
+                onClick={() => onPlay(activeMedia)}
+                tabIndex={0}
+                className="px-5 sm:px-7 py-2.5 sm:py-3.5 rounded-2xl bg-red-600 hover:bg-red-500 active:scale-95 text-white font-extrabold text-xs sm:text-sm flex items-center gap-2 shadow-xl shadow-red-600/35 transition-all tv-btn-focus focus:outline-none"
+              >
+                <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-white" />
+                <span>{t('watchNow')}</span>
+              </button>
+
+              <button
+                onClick={() => onOpenDetails(activeMedia)}
+                tabIndex={0}
+                className="px-4 sm:px-5 py-2.5 sm:py-3.5 rounded-2xl bg-white/15 hover:bg-white/25 active:scale-95 text-white font-bold text-xs sm:text-sm flex items-center gap-2 border border-white/20 transition-all tv-btn-focus focus:outline-none"
+              >
+                <Info className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span>{t('detailsAndEpisodes')}</span>
+              </button>
+
+              <button
+                onClick={() => onToggleFavorite(activeMedia)}
+                tabIndex={0}
+                className={`p-2.5 sm:p-3.5 rounded-2xl border transition-all tv-btn-focus focus:outline-none ${
+                  isFavorite
+                    ? 'bg-red-600 text-white border-red-500 shadow-lg shadow-red-600/30'
+                    : 'bg-black/60 text-slate-200 hover:text-white border-white/20'
+                }`}
+                title={t('inFavorites')}
+              >
+                <Heart className={`w-4 h-4 sm:w-5 sm:h-5 ${isFavorite ? 'fill-white' : ''}`} />
+              </button>
             </div>
           </div>
 
-          {/* Title */}
-          <h1 className="text-2xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight drop-shadow-xl leading-tight line-clamp-2">
-            {displayTitle}
-          </h1>
+          {/* Right Carousel Navigation Controls & Slide Indicators (Zero Overlap!) */}
+          {safeItems.length > 1 && (
+            <div className="flex items-center gap-2 self-start lg:self-end shrink-0">
+              <button
+                onClick={handlePrev}
+                tabIndex={0}
+                className="p-2 sm:p-2.5 rounded-xl bg-black/65 hover:bg-red-600 text-white border border-white/15 transition-all active:scale-90 tv-btn-focus focus:outline-none"
+                aria-label="Попередній слайд"
+              >
+                <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+              </button>
 
-          {/* Subtitle / Genres */}
-          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] sm:text-sm text-slate-300 font-medium">
-            <span className="font-bold text-white">{activeMedia.year}</span>
-            <span>•</span>
-            <span className="truncate max-w-[230px] sm:max-w-none">{localizedGenres}</span>
-            {activeMedia.duration && (
-              <>
-                <span>•</span>
-                <span>{activeMedia.duration} {t('min')}</span>
-              </>
-            )}
-          </div>
+              <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-black/65 border border-white/15">
+                {safeItems.slice(0, 10).map((_, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => onIndexChange(idx)}
+                    tabIndex={0}
+                    className={`h-2 rounded-full transition-all duration-300 tv-btn-focus focus:outline-none ${
+                      idx === currentIndex
+                        ? 'w-6 bg-red-600 shadow-sm shadow-red-600/50'
+                        : 'w-2 bg-white/30 hover:bg-white/60'
+                    }`}
+                    aria-label={`Перейти до слайду ${idx + 1}`}
+                  />
+                ))}
+              </div>
 
-          {/* Overview */}
-          <p className="text-xs sm:text-sm text-slate-300 line-clamp-2 sm:line-clamp-3 leading-relaxed max-w-xl drop-shadow">
-            {overview}
-          </p>
+              <button
+                onClick={handleNext}
+                tabIndex={0}
+                className="p-2 sm:p-2.5 rounded-xl bg-black/65 hover:bg-red-600 text-white border border-white/15 transition-all active:scale-90 tv-btn-focus focus:outline-none"
+                aria-label="Наступний слайд"
+              >
+                <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
+              </button>
 
-          {/* Action Buttons */}
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3 pt-1">
-            <button
-              onClick={() => onPlay(activeMedia)}
-              tabIndex={0}
-              className="px-5 sm:px-7 py-2.5 sm:py-3.5 rounded-2xl bg-red-600 hover:bg-red-500 active:scale-95 text-white font-extrabold text-xs sm:text-sm flex items-center gap-2 shadow-xl shadow-red-600/35 transition-all tv-btn-focus focus:outline-none"
-            >
-              <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-white" />
-              <span>{t('watchNow')}</span>
-            </button>
-
-            <button
-              onClick={() => onOpenDetails(activeMedia)}
-              tabIndex={0}
-              className="px-4 sm:px-5 py-2.5 sm:py-3.5 rounded-2xl bg-white/15 hover:bg-white/25 active:scale-95 text-white font-bold text-xs sm:text-sm flex items-center gap-2 backdrop-blur-md border border-white/20 transition-all tv-btn-focus focus:outline-none"
-            >
-              <Info className="w-4 h-4 sm:w-5 sm:h-5" />
-              <span>{t('detailsAndEpisodes')}</span>
-            </button>
-
-            <button
-              onClick={() => onToggleFavorite(activeMedia)}
-              tabIndex={0}
-              className={`p-2.5 sm:p-3.5 rounded-2xl border backdrop-blur-md transition-all tv-btn-focus focus:outline-none ${
-                isFavorite
-                  ? 'bg-red-600 text-white border-red-500 shadow-lg shadow-red-600/30'
-                  : 'bg-black/60 text-slate-200 hover:text-white border-white/20'
-              }`}
-              title={t('inFavorites')}
-            >
-              <Heart className={`w-4 h-4 sm:w-5 sm:h-5 ${isFavorite ? 'fill-white' : ''}`} />
-            </button>
-          </div>
+              <span className="text-[11px] font-bold text-slate-300 bg-black/65 px-2.5 py-1.5 rounded-xl border border-white/15">
+                {currentIndex + 1} / {Math.min(10, safeItems.length)}
+              </span>
+            </div>
+          )}
         </div>
-
-        {/* Carousel Slide Indicators & Counter */}
-        {safeItems.length > 1 && (
-          <div className="absolute bottom-3 right-4 sm:bottom-6 sm:right-8 flex items-center gap-2 z-20">
-            <div className="flex items-center gap-1 sm:gap-1.5 px-2.5 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/10">
-              {safeItems.slice(0, 10).map((_, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => onIndexChange(idx)}
-                  tabIndex={0}
-                  className={`h-2 rounded-full transition-all duration-300 tv-btn-focus focus:outline-none ${
-                    idx === currentIndex
-                      ? 'w-7 bg-red-600 shadow-sm shadow-red-600/50'
-                      : 'w-2 bg-white/30 hover:bg-white/60'
-                  }`}
-                  aria-label={`Перейти до слайду ${idx + 1}`}
-                />
-              ))}
-            </div>
-            <span className="text-[10px] sm:text-xs font-bold text-slate-400 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-md border border-white/10">
-              {currentIndex + 1} / {Math.min(10, safeItems.length)}
-            </span>
-          </div>
-        )}
       </div>
     </div>
   );

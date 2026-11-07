@@ -693,7 +693,7 @@ export const CURATED_CATALOG: MediaItem[] = [...BASE_CATALOG, ...EXTRA_CATALOG].
 );
 
 // Native-first HTTP JSON helper: uses Android CapacitorHttp (0 CORS restrictions!) on mobile, standard fetch on web
-export async function httpGetJson(url: string): Promise<any | null> {
+export async function httpGetJson(url: string, timeoutMs: number = 7000): Promise<any | null> {
   try {
     if (Capacitor.isNativePlatform()) {
       const response = await CapacitorHttp.get({
@@ -703,8 +703,8 @@ export async function httpGetJson(url: string): Promise<any | null> {
           'User-Agent':
             'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36',
         },
-        connectTimeout: 7000,
-        readTimeout: 7000,
+        connectTimeout: timeoutMs,
+        readTimeout: timeoutMs,
       });
       if (response.status >= 200 && response.status < 300 && response.data != null) {
         if (typeof response.data === 'string') {
@@ -720,7 +720,10 @@ export async function httpGetJson(url: string): Promise<any | null> {
       return null;
     }
 
-    const res = await fetch(url);
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    const res = await fetch(url, { signal: ctrl.signal });
+    clearTimeout(timer);
     if (!res.ok) return null;
     const text = await res.text();
     const trimmed = text.trim();
@@ -1292,7 +1295,7 @@ export const tmdbService = {
   },
 
   getItems(
-    category?: 'trending' | 'ukrainian' | 'series' | 'cartoons' | 'anime' | 'movies' | '4k'
+    category?: 'trending' | 'ukrainian' | 'series' | 'cartoons' | 'anime' | 'movies' | '4k' | 'classic' | 'sports'
   ): MediaItem[] {
     switch (category) {
       case 'ukrainian':
@@ -1307,6 +1310,8 @@ export const tmdbService = {
         return CURATED_CATALOG.filter((i) => i.mediaType === 'movie');
       case '4k':
         return CURATED_CATALOG.filter((i) => i.quality === '4K HDR');
+      case 'classic':
+        return CURATED_CATALOG.filter((i) => i.year < 2012);
       case 'trending':
       default:
         return CURATED_CATALOG;
@@ -1535,26 +1540,63 @@ export const tmdbService = {
       }
 
       if (category === 'cartoons') {
-        const terms = ['pixar', 'dreamworks', 'disney', 'shrek', 'kung fu panda', 'minions'];
+        const terms = ['pixar', 'dreamworks', 'disney', 'shrek', 'kung fu panda', 'minions', 'lion king', 'ice age', 'madagascar'];
         const term = terms[(page - 1) % terms.length];
         return await searchImdbSuggestions(term);
       }
 
+      if (category === 'classic') {
+        const classicTerms = [
+          'godfather',
+          'the matrix',
+          'gladiator',
+          'jurassic park',
+          'back to the future',
+          'pulp fiction',
+          'terminator 2',
+          'alien',
+          'forrest gump',
+          'fight club',
+          'spirited away',
+          'the lion king',
+          'pirates of the caribbean',
+          'indiana jones',
+          'star wars',
+          'home alone',
+        ];
+        const term = classicTerms[(page - 1) % classicTerms.length];
+        const found = await searchImdbSuggestions(term);
+        return found.filter((i) => i.year < 2014);
+      }
+
       const movieTerms = [
+        '2026',
         '2025',
         '2024',
         'avengers',
+        'dune',
         'star wars',
         'harry potter',
         'mission impossible',
         'fast and furious',
         'james bond',
+        'batman',
+        'spider-man',
+        'interstellar',
+        'john wick',
+        'gladiator',
+        'oppenheimer',
       ];
       const term = movieTerms[(page - 1) % movieTerms.length];
       return await searchImdbSuggestions(term);
     } catch {
       return [];
     }
+  },
+
+  async fetchLiveDiscoverPage(category: string = 'trending', page: number = 1): Promise<MediaItem[]> {
+    const mapped = category === 'tv' ? 'series' : category === 'movie' ? 'movies' : category;
+    return this.fetchLiveCategory(mapped, page);
   },
 
   filterAndSort(items: MediaItem[], filter: Partial<CatalogFilter>): MediaItem[] {
@@ -1571,6 +1613,8 @@ export const tmdbService = {
         result = result.filter((i) => i.quality === '4K HDR');
       else if (filter.category === 'ukrainian')
         result = result.filter((i) => i.hasUkrainianAudio);
+      else if (filter.category === 'classic')
+        result = result.filter((i) => i.year < 2012);
     }
 
     if (filter.genre && filter.genre !== 'all') {

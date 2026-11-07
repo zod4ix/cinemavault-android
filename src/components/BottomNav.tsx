@@ -1,15 +1,17 @@
 import React from 'react';
-import { Home, Search, Film, Heart, Sparkles } from 'lucide-react';
+import { Home, Search, Film, Heart, Tv } from 'lucide-react';
 import { useLanguage } from '../i18n/LanguageContext';
 
 interface BottomNavProps {
   selectedCategory: string;
   isFavoritesActive: boolean;
   isSearchActive: boolean;
+  isSportsActive?: boolean;
   favoritesCount: number;
   onSelectCategory: (cat: any) => void;
   onOpenSearch: () => void;
   onOpenFavorites: () => void;
+  onOpenSports: () => void;
   onOpenDonate: () => void;
 }
 
@@ -17,20 +19,24 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   selectedCategory,
   isFavoritesActive,
   isSearchActive,
+  isSportsActive = false,
   favoritesCount,
   onSelectCategory,
   onOpenSearch,
   onOpenFavorites,
-  onOpenDonate,
+  onOpenSports,
 }) => {
   const { t } = useLanguage();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden bg-[#07090e]/98 backdrop-blur-xl border-t border-white/15 px-1 py-1 grid grid-cols-5 items-center select-none shadow-[0_-8px_24px_rgba(0,0,0,0.65)]">
+    <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden bg-[#07090e]/98 border-t border-white/15 px-1 py-1 grid grid-cols-5 items-center select-none shadow-[0_-8px_24px_rgba(0,0,0,0.65)]">
       <button
         onClick={() => onSelectCategory('trending')}
         className={`flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl transition-colors min-w-0 ${
-          selectedCategory === 'trending' && !isFavoritesActive && !isSearchActive
+          selectedCategory === 'trending' &&
+          !isFavoritesActive &&
+          !isSearchActive &&
+          !isSportsActive
             ? 'text-red-500 font-bold bg-red-500/10'
             : 'text-slate-400 active:text-white'
         }`}
@@ -52,9 +58,28 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       </button>
 
       <button
+        onClick={onOpenSports}
+        className={`relative flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl transition-colors min-w-0 ${
+          isSportsActive
+            ? 'text-emerald-400 font-extrabold bg-emerald-500/15'
+            : 'text-emerald-400/90 active:text-white'
+        }`}
+      >
+        <div className="relative">
+          <Tv className="w-5 h-5 shrink-0" />
+          <span className="absolute -top-0.5 -right-1.5 w-2 h-2 rounded-full bg-red-500 animate-ping" />
+          <span className="absolute -top-0.5 -right-1.5 w-2 h-2 rounded-full bg-red-600" />
+        </div>
+        <span className="text-[10px] truncate max-w-full px-1 font-bold">{t('sportLiveBtn')}</span>
+      </button>
+
+      <button
         onClick={() => onSelectCategory('movies')}
         className={`flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl transition-colors min-w-0 ${
-          selectedCategory === 'movies' && !isFavoritesActive && !isSearchActive
+          selectedCategory === 'movies' &&
+          !isFavoritesActive &&
+          !isSearchActive &&
+          !isSportsActive
             ? 'text-red-500 font-bold bg-red-500/10'
             : 'text-slate-400 active:text-white'
         }`}
@@ -80,14 +105,6 @@ export const BottomNav: React.FC<BottomNavProps> = ({
           )}
         </div>
         <span className="text-[10px] truncate max-w-full px-1">{t('favoritesTitle')}</span>
-      </button>
-
-      <button
-        onClick={onOpenDonate}
-        className="flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl text-amber-400 font-bold active:bg-amber-500/10 min-w-0"
-      >
-        <Sparkles className="w-5 h-5 shrink-0" />
-        <span className="text-[10px] truncate max-w-full px-1">{t('donateShort')}</span>
       </button>
     </nav>
   );

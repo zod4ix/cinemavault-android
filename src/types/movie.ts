@@ -114,7 +114,7 @@ export interface PlaybackProgress {
 }
 
 export interface CatalogFilter {
-  category: 'trending' | 'movies' | 'series' | 'cartoons' | 'anime' | '4k' | 'ukrainian';
+  category: 'trending' | 'movies' | 'series' | 'cartoons' | 'anime' | '4k' | 'ukrainian' | 'classic' | 'sports';
   genre: string;
   year: string;
   sortBy: 'popularity' | 'rating' | 'year';

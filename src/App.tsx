@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Header } from './components/Header';
 import { HeroBanner } from './components/HeroBanner';
 import { MediaRow } from './components/MediaRow';
@@ -9,18 +9,34 @@ import { WatchHistory } from './components/WatchHistory';
 import { MediaCard } from './components/MediaCard';
 import { FilterBar } from './components/FilterBar';
 import { BottomNav } from './components/BottomNav';
+import { SportsHub } from './components/SportsHub';
+import { UpdateModal } from './components/UpdateModal';
 import { tmdbService, CURATED_CATALOG } from './services/tmdb';
 import { searchEverywhere, fetchCatalogPage } from './services/search';
 import { isRussianOrSoviet } from './services/contentFilter';
 import { rezkaService } from './services/rezka';
 import { storageService } from './services/storage';
 import { MediaItem, MediaSource, Episode, PlaybackProgress, CatalogFilter } from './types/movie';
-import { Film, Heart, Loader2, PlusCircle, Sparkles } from 'lucide-react';
+import {
+  Film,
+  Heart,
+  Loader2,
+  PlusCircle,
+  Sparkles,
+  Tv,
+  Download,
+  ShieldCheck,
+  X,
+  Play,
+} from 'lucide-react';
 import { LanguageProvider, useLanguage } from './i18n/LanguageContext';
 import { SplashScreen } from './components/SplashScreen';
 import { AuthModal } from './components/AuthModal';
 import { authSyncService, UserProfile } from './services/authSync';
 import { fetchNovelties } from './services/novelties';
+import { updaterService, UpdateInfo, openExternalDownload } from './services/updater';
+import { selfHealService, SelfHealingBoundary } from './services/selfHeal';
+import { initSpatialNavigation } from './services/spatialNav';
 
 declare global {
   interface Window {
@@ -48,8 +64,14 @@ const MainAppContent: React.FC = () => {
   const [isLoadingMore, setIsLoadingMore] = useState<boolean>(false);
 
   const [isFavoritesActive, setIsFavoritesActive] = useState<boolean>(false);
+  const [isSportsActive, setIsSportsActive] = useState<boolean>(false);
   const [isDonateOpen, setIsDonateOpen] = useState<boolean>(false);
   const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
+  const [isUpdateOpen, setIsUpdateOpen] = useState<boolean>(false);
+
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [showUpdateBanner, setShowUpdateBanner] = useState<boolean>(false);
+
   const [authProfile, setAuthProfile] = useState<UserProfile | null>(authSyncService.getProfile());
   const [novelties, setNovelties] = useState<MediaItem[]>([]);
   const [heroIndex, setHeroIndex] = useState<number>(0);
@@ -64,8 +86,33 @@ const MainAppContent: React.FC = () => {
   const [favorites, setFavorites] = useState<MediaItem[]>([]);
   const [history, setHistory] = useState<PlaybackProgress[]>([]);
   const latestSearchReqRef = useRef<number>(0);
+  const infiniteSentinelRef = useRef<HTMLDivElement>(null);
 
-  // Register native Android hardware/gesture Back Button handler!
+  // Initialize Self-Healing Guards & Smart 2D Spatial Navigation for TV Remotes
+  useEffect(() => {
+    selfHealService.initGlobalGuards();
+    const cleanupSpatial = initSpatialNavigation();
+    return () => {
+      cleanupSpatial();
+    };
+  }, []);
+
+  // Automatic GitHub Update Check on Startup & Periodically
+  const runUpdateCheck = useCallback(async () => {
+    const info = await updaterService.checkForUpdates();
+    setUpdateInfo(info);
+    if (info.hasUpdate && !updaterService.isDismissed(info.latestVersion)) {
+      setShowUpdateBanner(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    runUpdateCheck();
+    const interval = setInterval(runUpdateCheck, 1000 * 60 * 30);
+    return () => clearInterval(interval);
+  }, [runUpdateCheck]);
+
+  // Register native Android hardware/gesture Back Button handler
   useEffect(() => {
     window.__cinemaHandleBack = () => {
       if (activePlayback) {
@@ -76,12 +123,20 @@ const MainAppContent: React.FC = () => {
         setSelectedMedia(null);
         return true;
       }
+      if (isUpdateOpen) {
+        setIsUpdateOpen(false);
+        return true;
+      }
       if (isDonateOpen) {
         setIsDonateOpen(false);
         return true;
       }
       if (isAuthOpen) {
         setIsAuthOpen(false);
+        return true;
+      }
+      if (isSportsActive) {
+        setIsSportsActive(false);
         return true;
       }
       if (searchQuery.trim()) {
@@ -101,17 +156,25 @@ const MainAppContent: React.FC = () => {
     return () => {
       delete window.__cinemaHandleBack;
     };
-  }, [activePlayback, selectedMedia, isDonateOpen, isAuthOpen, searchQuery, isFavoritesActive, filter]);
+  }, [
+    activePlayback,
+    selectedMedia,
+    isUpdateOpen,
+    isDonateOpen,
+    isAuthOpen,
+    isSportsActive,
+    searchQuery,
+    isFavoritesActive,
+    filter,
+  ]);
 
   // Load favorites, history, novelties & subscribe to cloud auth profile
-  useEffect(() => {
-    let active = true;
-
+  const refreshCatalogAndUserData = useCallback(() => {
     setFavorites(storageService.getFavorites());
     setHistory(storageService.getHistory());
 
     fetchNovelties().then((items) => {
-      if (!active || !items || items.length === 0) return;
+      if (!items || items.length === 0) return;
       setNovelties(items);
       setLiveCatalogPool((prev) => {
         const map = new Map<string, MediaItem>();
@@ -121,6 +184,11 @@ const MainAppContent: React.FC = () => {
         return Array.from(map.values());
       });
     });
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    refreshCatalogAndUserData();
 
     const unsub = authSyncService.subscribe((p) => {
       if (active) setAuthProfile(p);
@@ -130,20 +198,21 @@ const MainAppContent: React.FC = () => {
       active = false;
       unsub();
     };
-  }, [activePlayback]);
+  }, [activePlayback, refreshCatalogAndUserData]);
 
-  // Initial background fetch of extra live catalog items so rows & categories are rich
+  // Initial background fetch of extra live catalog items (movies, series, anime, classics)
   useEffect(() => {
     let active = true;
     Promise.all([
       fetchCatalogPage('movies', 1),
       fetchCatalogPage('series', 1),
       fetchCatalogPage('anime', 1),
-    ]).then(([movies, series, anime]) => {
+      fetchCatalogPage('classic', 1),
+    ]).then(([movies, series, anime, classics]) => {
       if (!active) return;
       setLiveCatalogPool((prev) => {
         const map = new Map<string, MediaItem>();
-        [...prev, ...movies, ...series, ...anime]
+        [...prev, ...movies, ...series, ...anime, ...classics]
           .filter((item) => !isRussianOrSoviet(item))
           .forEach((item) => {
             map.set(item.id.toString(), item);
@@ -156,7 +225,7 @@ const MainAppContent: React.FC = () => {
     };
   }, []);
 
-  // Live Multi-Engine Search with progressive partial emissions and race cancellation
+  // Live Multi-Engine Search with progressive partial emissions
   useEffect(() => {
     const q = searchQuery.trim();
     if (!q) {
@@ -186,6 +255,7 @@ const MainAppContent: React.FC = () => {
   const handleSearchSubmit = async (q: string) => {
     const clean = q.trim();
     if (!clean) return;
+    setIsSportsActive(false);
     const reqId = ++latestSearchReqRef.current;
     setIsSearchingLive(true);
     await searchEverywhere(
@@ -202,22 +272,53 @@ const MainAppContent: React.FC = () => {
     }
   };
 
-  const handleLoadMoreCatalog = async () => {
+  const handleLoadMoreCatalog = useCallback(async () => {
+    if (isLoadingMore) return;
     setIsLoadingMore(true);
-    const nextPage = catalogPage + 1;
-    const moreItems = await fetchCatalogPage(filter.category, nextPage, filter.genre);
-    setLiveCatalogPool((prev) => {
-      const map = new Map<string, MediaItem>();
-      [...prev, ...moreItems]
-        .filter((item) => !isRussianOrSoviet(item))
-        .forEach((item) => {
-          map.set(item.id.toString(), item);
+    try {
+      const nextPage = catalogPage + 1;
+      const moreItems = await fetchCatalogPage(filter.category, nextPage, filter.genre);
+      if (moreItems.length > 0) {
+        setLiveCatalogPool((prev) => {
+          const map = new Map<string, MediaItem>();
+          [...prev, ...moreItems]
+            .filter((item) => !isRussianOrSoviet(item))
+            .forEach((item) => {
+              map.set(item.id.toString(), item);
+            });
+          return Array.from(map.values());
         });
-      return Array.from(map.values());
-    });
-    setCatalogPage(nextPage);
-    setIsLoadingMore(false);
-  };
+      }
+      setCatalogPage(nextPage);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [isLoadingMore, catalogPage, filter.category, filter.genre]);
+
+  // Infinite Library Auto-Loader via IntersectionObserver
+  useEffect(() => {
+    const sentinel = infiniteSentinelRef.current;
+    if (!sentinel || isSportsActive || isFavoritesActive || Boolean(searchQuery.trim())) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && !isLoadingMore && catalogPage < 18) {
+          handleLoadMoreCatalog();
+        }
+      },
+      { rootMargin: '600px' }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [
+    isSportsActive,
+    isFavoritesActive,
+    searchQuery,
+    isLoadingMore,
+    catalogPage,
+    handleLoadMoreCatalog,
+  ]);
 
   const handleToggleFavorite = (media: MediaItem) => {
     storageService.toggleFavorite(media);
@@ -270,9 +371,7 @@ const MainAppContent: React.FC = () => {
 
   const cleanHomePool = liveCatalogPool.filter((i) => !isRussianOrSoviet(i));
   const heroCarouselItems =
-    novelties.length > 0
-      ? novelties.slice(0, 10)
-      : cleanHomePool.slice(0, 10);
+    novelties.length > 0 ? novelties.slice(0, 10) : cleanHomePool.slice(0, 10);
   const filteredCatalog = tmdbService.filterAndSort(cleanHomePool, filter);
   const isCustomFilterActive =
     filter.category !== 'trending' ||
@@ -282,13 +381,22 @@ const MainAppContent: React.FC = () => {
 
   const getCategoryTitle = () => {
     switch (filter.category) {
-      case 'movies': return t('movies');
-      case 'series': return t('series');
-      case 'cartoons': return t('cartoons');
-      case 'anime': return t('anime');
-      case '4k': return t('hdr4k');
-      case 'ukrainian': return t('ukrainianRow');
-      default: return t('allTrends');
+      case 'movies':
+        return t('movies');
+      case 'series':
+        return t('series');
+      case 'cartoons':
+        return t('cartoons');
+      case 'anime':
+        return t('anime');
+      case 'classic':
+        return t('classicRow');
+      case '4k':
+        return t('hdr4k');
+      case 'ukrainian':
+        return t('ukrainianRow');
+      default:
+        return t('allTrends');
     }
   };
 
@@ -297,12 +405,52 @@ const MainAppContent: React.FC = () => {
       {/* Animated Startup Splash Screen */}
       {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} />}
 
+      {/* GitHub Update Notification Toast Banner */}
+      {showUpdateBanner && updateInfo?.hasUpdate && (
+        <div className="bg-gradient-to-r from-amber-600 via-red-600 to-rose-700 text-white px-4 py-2.5 shadow-xl z-50">
+          <div className="max-w-[1700px] mx-auto flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm">
+            <div className="flex items-center gap-2 font-extrabold">
+              <Sparkles className="w-4 h-4 shrink-0 animate-spin" />
+              <span>
+                {t('updateAvailableToast')} Нова версія <strong>v{updateInfo.latestVersion}</strong> вже на GitHub!
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => openExternalDownload(updateInfo.apkDownloadUrl)}
+                className="px-3 py-1 rounded-lg bg-white text-slate-950 font-black text-xs flex items-center gap-1 shadow hover:bg-amber-100 transition-colors"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>{t('updateBtn')}</span>
+              </button>
+              <button
+                onClick={() => setIsUpdateOpen(true)}
+                className="px-2.5 py-1 rounded-lg bg-black/30 hover:bg-black/50 text-white font-bold text-xs"
+              >
+                Деталі
+              </button>
+              <button
+                onClick={() => {
+                  updaterService.dismissVersion(updateInfo.latestVersion);
+                  setShowUpdateBanner(false);
+                }}
+                className="p-1 rounded-lg hover:bg-black/30 text-white/80 hover:text-white"
+                aria-label="Закрити повідомлення"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <Header
         searchQuery={searchQuery}
         onSearchChange={(q) => {
           setSearchQuery(q);
           if (isFavoritesActive) setIsFavoritesActive(false);
+          if (q.trim() && isSportsActive) setIsSportsActive(false);
         }}
         onSearchSubmit={handleSearchSubmit}
         isSearchingLive={isSearchingLive}
@@ -310,9 +458,16 @@ const MainAppContent: React.FC = () => {
         onSelectMedia={setSelectedMedia}
         selectedCategory={filter.category}
         onSelectCategory={(cat) => {
+          if (cat === 'sports') {
+            setIsSportsActive(true);
+            setIsFavoritesActive(false);
+            setSearchQuery('');
+            return;
+          }
           setFilter((prev) => ({ ...prev, category: cat }));
           setSearchQuery('');
           setIsFavoritesActive(false);
+          setIsSportsActive(false);
         }}
         onOpenDonate={() => setIsDonateOpen(true)}
         onOpenAuth={() => setIsAuthOpen(true)}
@@ -320,16 +475,29 @@ const MainAppContent: React.FC = () => {
         favoritesCount={favorites.length}
         onOpenFavorites={() => {
           setIsFavoritesActive(!isFavoritesActive);
+          setIsSportsActive(false);
           setSearchQuery('');
         }}
         isFavoritesActive={isFavoritesActive}
+        isSportsActive={isSportsActive}
+        onOpenSports={() => {
+          setIsSportsActive(true);
+          setIsFavoritesActive(false);
+          setSearchQuery('');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+        onOpenUpdate={() => setIsUpdateOpen(true)}
+        hasAppUpdate={Boolean(updateInfo?.hasUpdate)}
         focusTrigger={searchFocusTrigger}
       />
 
       {/* Main Content */}
       <main className="flex-1 pb-10">
-        {/* 1. LIVE SEARCH VIEW */}
-        {searchQuery.trim() ? (
+        {/* 0. DEDICATED LIVE SPORTS HUB VIEW */}
+        {isSportsActive ? (
+          <SportsHub onBackHome={() => setIsSportsActive(false)} />
+        ) : searchQuery.trim() ? (
+          /* 1. LIVE SEARCH VIEW */
           <div className="max-w-[1700px] mx-auto px-3.5 sm:px-6 lg:px-8 xl:px-12 pt-4 sm:pt-6 space-y-5 tv-safe-container">
             <FilterBar
               filter={filter}
@@ -371,9 +539,7 @@ const MainAppContent: React.FC = () => {
             ) : isSearchingLive ? (
               <div className="py-20 text-center space-y-3">
                 <Loader2 className="w-10 h-10 text-red-500 animate-spin mx-auto" />
-                <p className="text-slate-300 text-sm font-medium px-4">
-                  {t('searchingLong')}
-                </p>
+                <p className="text-slate-300 text-sm font-medium px-4">{t('searchingLong')}</p>
               </div>
             ) : (
               <div className="py-16 text-center space-y-3">
@@ -458,8 +624,8 @@ const MainAppContent: React.FC = () => {
               ))}
             </div>
 
-            {/* Load More from Live Database */}
-            <div className="pt-4 flex justify-center">
+            {/* Infinite Scroll Sentinel + Manual Load More Button */}
+            <div ref={infiniteSentinelRef} className="pt-4 flex justify-center">
               <button
                 onClick={handleLoadMoreCatalog}
                 disabled={isLoadingMore}
@@ -490,18 +656,61 @@ const MainAppContent: React.FC = () => {
               onIndexChange={setHeroIndex}
               onPlay={handlePlayMedia}
               onOpenDetails={setSelectedMedia}
-              isFavorite={favorites.some((f) => f.id.toString() === (heroCarouselItems[heroIndex]?.id || ''))}
+              isFavorite={favorites.some(
+                (f) => f.id.toString() === (heroCarouselItems[heroIndex]?.id || '')
+              )}
               onToggleFavorite={handleToggleFavorite}
             />
 
             {/* Interactive Filter & Quick Search Bar right on Home Page */}
-            <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 mt-4 sm:mt-6">
+            <div className="max-w-[1700px] mx-auto px-3.5 sm:px-6 lg:px-8 mt-4 sm:mt-6 tv-safe-container">
               <FilterBar
                 filter={filter}
                 onChange={(upd) => setFilter((prev) => ({ ...prev, ...upd }))}
                 totalCount={cleanHomePool.length}
                 onQuickSearch={(term) => setSearchQuery(term)}
               />
+            </div>
+
+            {/* Live Sports Arena Quick Promo Banner on Home Page */}
+            <div className="max-w-[1700px] mx-auto px-3.5 sm:px-6 lg:px-8 mt-5 tv-safe-container">
+              <div
+                tabIndex={0}
+                role="button"
+                onClick={() => {
+                  setIsSportsActive(true);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setIsSportsActive(true);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }
+                }}
+                className="group relative rounded-2xl bg-gradient-to-r from-emerald-950/80 via-[#0d192b] to-blue-950/80 border border-emerald-500/35 hover:border-emerald-400 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer shadow-xl transition-all tv-card-focus focus:outline-none"
+              >
+                <div className="space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-red-600 text-white flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                      LIVE TРАНСЛЯЦІЇ 24/7
+                    </span>
+                    <span className="text-xs font-extrabold text-emerald-400">
+                      🏆 Ліга Чемпіонів • 🏀 НБА • 🏈 НФЛ • 🥊 Бокс • 🏎️ Формула 1 • 🎾 Теніс
+                    </span>
+                  </div>
+                  <h3 className="text-base sm:text-xl font-black text-white group-hover:text-emerald-300 transition-colors">
+                    Спорт-Онлайн: прямі ефіри топ-матчів та спортивні телеканали (Суспільне Спорт, Setanta UA, MEGOGO, NBA TV)
+                  </h3>
+                </div>
+
+                <div className="px-5 py-2.5 rounded-xl bg-emerald-600 group-hover:bg-emerald-500 text-white font-black text-xs sm:text-sm flex items-center gap-2 shrink-0 self-start sm:self-center shadow-lg shadow-emerald-600/30">
+                  <Tv className="w-4 h-4" />
+                  <span>Відкрити Спорт Live</span>
+                  <Play className="w-3.5 h-3.5 fill-white" />
+                </div>
+              </div>
             </div>
 
             {/* Watch History */}
@@ -511,8 +720,8 @@ const MainAppContent: React.FC = () => {
             {novelties.length > 0 && (
               <div className="pt-1">
                 <MediaRow
-                  title="🔥 Гарячі новинки (2024–2026)"
-                  badge="СВІЖІ РЕЛІЗИ"
+                  title={t('noveltiesRow')}
+                  badge={t('noveltiesBadge')}
                   items={novelties}
                   onSelectMedia={setSelectedMedia}
                   onPlayMedia={handlePlayMedia}
@@ -522,12 +731,12 @@ const MainAppContent: React.FC = () => {
               </div>
             )}
 
-            {/* Curated + Live Media Rows */}
+            {/* Curated + Live Media Carousels */}
             <div className="space-y-3 sm:space-y-4">
               <MediaRow
                 title={t('trendingRow')}
                 badge={t('trendingBadge')}
-                items={cleanHomePool.slice(0, 18)}
+                items={cleanHomePool.slice(0, 20)}
                 onSelectMedia={setSelectedMedia}
                 onPlayMedia={handlePlayMedia}
                 favorites={favorites}
@@ -538,11 +747,8 @@ const MainAppContent: React.FC = () => {
                 title={t('ukrainianRow')}
                 badge={t('ukrainianBadge')}
                 items={cleanHomePool
-                  .filter(
-                    (i) =>
-                      i.genres.includes('Українське кіно') || i.hasUkrainianAudio
-                  )
-                  .slice(0, 18)}
+                  .filter((i) => i.genres.includes('Українське кіно') || i.hasUkrainianAudio)
+                  .slice(0, 20)}
                 onSelectMedia={setSelectedMedia}
                 onPlayMedia={handlePlayMedia}
                 favorites={favorites}
@@ -552,7 +758,7 @@ const MainAppContent: React.FC = () => {
               <MediaRow
                 title={t('seriesRow')}
                 badge={t('seriesBadge')}
-                items={cleanHomePool.filter((i) => i.mediaType === 'tv').slice(0, 18)}
+                items={cleanHomePool.filter((i) => i.mediaType === 'tv').slice(0, 20)}
                 onSelectMedia={setSelectedMedia}
                 onPlayMedia={handlePlayMedia}
                 favorites={favorites}
@@ -562,7 +768,7 @@ const MainAppContent: React.FC = () => {
               <MediaRow
                 title={t('hdrRow')}
                 badge={t('hdrBadge')}
-                items={cleanHomePool.filter((i) => i.quality === '4K HDR').slice(0, 18)}
+                items={cleanHomePool.filter((i) => i.quality === '4K HDR').slice(0, 20)}
                 onSelectMedia={setSelectedMedia}
                 onPlayMedia={handlePlayMedia}
                 favorites={favorites}
@@ -572,7 +778,7 @@ const MainAppContent: React.FC = () => {
               <MediaRow
                 title={t('cartoonsRow')}
                 badge={t('cartoonsBadge')}
-                items={cleanHomePool.filter((i) => i.mediaType === 'cartoon').slice(0, 18)}
+                items={cleanHomePool.filter((i) => i.mediaType === 'cartoon').slice(0, 20)}
                 onSelectMedia={setSelectedMedia}
                 onPlayMedia={handlePlayMedia}
                 favorites={favorites}
@@ -582,25 +788,101 @@ const MainAppContent: React.FC = () => {
               <MediaRow
                 title={t('animeRow')}
                 badge={t('animeBadge')}
-                items={cleanHomePool.filter((i) => i.mediaType === 'anime').slice(0, 18)}
+                items={cleanHomePool.filter((i) => i.mediaType === 'anime').slice(0, 20)}
+                onSelectMedia={setSelectedMedia}
+                onPlayMedia={handlePlayMedia}
+                favorites={favorites}
+                onToggleFavorite={handleToggleFavorite}
+              />
+
+              {/* Classic Movies & Animation Carousel (< 2012) */}
+              <MediaRow
+                title={t('classicRow')}
+                badge={t('classicBadge')}
+                items={cleanHomePool.filter((i) => i.year < 2012).slice(0, 20)}
                 onSelectMedia={setSelectedMedia}
                 onPlayMedia={handlePlayMedia}
                 favorites={favorites}
                 onToggleFavorite={handleToggleFavorite}
               />
             </div>
+
+            {/* ========================================================
+                INFINITE AUTO-UPDATING LIBRARY FEED ON HOME PAGE
+                ======================================================== */}
+            <section className="max-w-[1700px] mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-4 tv-safe-container">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-6">
+                <div>
+                  <h2 className="text-lg sm:text-2xl font-black text-white flex items-center gap-2">
+                    <span>{t('infiniteCatalogTitle')}</span>
+                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-red-600/20 text-red-400 border border-red-500/30 font-bold">
+                      {cleanHomePool.length}+ тайтлів
+                    </span>
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">{t('infiniteCatalogSubtitle')}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8 gap-3 sm:gap-5">
+                {cleanHomePool.slice(12).map((item) => (
+                  <MediaCard
+                    key={`inf-${item.id}`}
+                    media={item}
+                    onClick={setSelectedMedia}
+                    onPlay={handlePlayMedia}
+                    isFavorite={favorites.some((f) => f.id.toString() === item.id.toString())}
+                    onToggleFavorite={handleToggleFavorite}
+                  />
+                ))}
+              </div>
+
+              {/* Infinite Scroll Sentinel */}
+              <div ref={infiniteSentinelRef} className="pt-6 flex justify-center">
+                <button
+                  onClick={handleLoadMoreCatalog}
+                  disabled={isLoadingMore}
+                  tabIndex={0}
+                  className="px-6 py-3 rounded-2xl bg-white/10 hover:bg-red-600 text-white font-bold text-xs sm:text-sm flex items-center gap-2 border border-white/15 transition-all active:scale-95 tv-btn-focus focus:outline-none"
+                >
+                  {isLoadingMore ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-red-500" />
+                      <span>{t('loadingMore')}</span>
+                    </>
+                  ) : (
+                    <>
+                      <PlusCircle className="w-4 h-4" />
+                      <span>{t('loadMore')}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </section>
           </>
         )}
       </main>
 
       {/* Footer */}
       <footer className="border-t border-white/10 bg-[#05070a] py-6 text-center text-xs text-slate-500">
-        <div className="max-w-[1700px] mx-auto px-4">
+        <div className="max-w-[1700px] mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="flex flex-wrap items-center justify-center gap-1.5 font-medium text-slate-400">
-            <span>CinemaVault PRO v3.4</span> •{' '}
-            <span className="text-amber-400/90 font-bold">Smart TV & Universal Edition</span> •{' '}
-            <span>{t('footerLine')}</span> • <span>🍿 4K HDR</span>
+            <span>CinemaVault PRO v3.5.0</span> •{' '}
+            <span className="text-amber-400/90 font-bold">
+              Smart TV, Mobile & Live Sports Edition
+            </span>{' '}
+            • <span>{t('footerLine')}</span> • <span>🍿 4K HDR & P2P</span>
           </p>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsUpdateOpen(true)}
+              tabIndex={0}
+              className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/15 text-emerald-400 font-bold text-xs flex items-center gap-1.5 border border-white/10 transition-colors tv-btn-focus focus:outline-none"
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Оновлення APK & Самовідновлення</span>
+            </button>
+          </div>
         </div>
       </footer>
 
@@ -609,20 +891,30 @@ const MainAppContent: React.FC = () => {
         selectedCategory={filter.category}
         isFavoritesActive={isFavoritesActive}
         isSearchActive={Boolean(searchQuery.trim())}
+        isSportsActive={isSportsActive}
         favoritesCount={favorites.length}
         onSelectCategory={(cat) => {
           setFilter((prev) => ({ ...prev, category: cat }));
           setSearchQuery('');
           setIsFavoritesActive(false);
+          setIsSportsActive(false);
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
         onOpenSearch={() => {
           setIsFavoritesActive(false);
+          setIsSportsActive(false);
           window.scrollTo({ top: 0, behavior: 'smooth' });
           setSearchFocusTrigger((c) => c + 1);
         }}
         onOpenFavorites={() => {
           setIsFavoritesActive(!isFavoritesActive);
+          setIsSportsActive(false);
+          setSearchQuery('');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+        onOpenSports={() => {
+          setIsSportsActive(true);
+          setIsFavoritesActive(false);
           setSearchQuery('');
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
@@ -686,14 +978,25 @@ const MainAppContent: React.FC = () => {
           setHistory(storageService.getHistory());
         }}
       />
+
+      {/* GitHub Auto-Updater & Self-Healing Modal */}
+      <UpdateModal
+        isOpen={isUpdateOpen}
+        onClose={() => setIsUpdateOpen(false)}
+        updateInfo={updateInfo}
+        onRefreshCheck={runUpdateCheck}
+        onRegenerateApp={refreshCatalogAndUserData}
+      />
     </div>
   );
 };
 
 export const App: React.FC = () => {
   return (
-    <LanguageProvider>
-      <MainAppContent />
-    </LanguageProvider>
+    <SelfHealingBoundary>
+      <LanguageProvider>
+        <MainAppContent />
+      </LanguageProvider>
+    </SelfHealingBoundary>
   );
 };

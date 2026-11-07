@@ -166,14 +166,14 @@ export async function searchEverywhere(
   return finalList;
 }
 
-/** Discovery feed for home rows / categories / "load more" — fully live from Cinemeta (+ Jikan for anime). */
+/** Discovery feed for home rows / categories / "load more" — fully live from Cinemeta (+ Jikan for anime + IMDb classics). */
 export async function fetchCatalogPage(
   category: CatalogFilter['category'],
   page: number,
   genreUa: string = 'all'
 ): Promise<MediaItem[]> {
   const genre = genreUa !== 'all' ? GENRE_TO_CINEMETA[genreUa] : undefined;
-  const skip = (page - 1) * 100;
+  const skip = (page - 1) * 50;
 
   try {
     let rawItems: MediaItem[] = [];
@@ -193,28 +193,64 @@ export async function fetchCatalogPage(
         else rawItems = await cinemetaCatalog('series', { genre: 'Animation', skip });
         break;
       }
+      case 'classic': {
+        const classicTerms = [
+          'the godfather',
+          'back to the future',
+          'lord of the rings',
+          'matrix',
+          'gladiator',
+          'lion king',
+          'jurassic park',
+          'terminator',
+          'indiana jones',
+          'pirates of the caribbean',
+          'toy story',
+          'spirited away',
+        ];
+        const term = classicTerms[(page - 1) % classicTerms.length];
+        const [cm, imdbClassics] = await Promise.all([
+          cinemetaCatalog('movie', { genre, skip: page * 50 }),
+          searchImdbSuggestions(term),
+        ]);
+        rawItems = [...cm.filter((i) => i.year < 2012), ...imdbClassics];
+        break;
+      }
       case '4k':
         rawItems = (await cinemetaCatalog('movie', { genre, skip })).filter((i) => i.year >= 2018);
         break;
-      case 'ukrainian':
-        rawItems = [];
+      case 'ukrainian': {
+        const uaTerms = ['ukrainian', 'dovbush', 'mavka', 'cyborgs', 'pamfir', 'zakhar berkut'];
+        const term = uaTerms[(page - 1) % uaTerms.length];
+        rawItems = await searchImdbSuggestions(term);
         break;
+      }
       case 'trending':
       default: {
-        const [m, s] = await Promise.all([
+        const [m, s, a] = await Promise.all([
           cinemetaCatalog('movie', { genre, skip }),
           cinemetaCatalog('series', { genre, skip }),
+          page <= 5 ? withTimeout(fetchJikanTop(page), 6000, [] as MediaItem[]) : Promise.resolve([]),
         ]);
         const out: MediaItem[] = [];
-        const len = Math.max(m.length, s.length);
+        const len = Math.max(m.length, s.length, a.length);
         for (let i = 0; i < len; i++) {
           if (m[i]) out.push(m[i]);
           if (s[i]) out.push(s[i]);
+          if (a[i]) out.push(a[i]);
         }
         rawItems = out;
         break;
       }
     }
+
+    if (rawItems.length === 0) {
+      rawItems = await tmdbService.fetchLiveDiscoverPage(
+        category === 'series' ? 'tv' : category === 'cartoons' ? 'cartoons' : 'movie',
+        page
+      );
+    }
+
     // Filter out Russian/Soviet films from home/discovery feeds (only accessible via explicit search)
     return rawItems.filter((item) => !isRussianOrSoviet(item));
   } catch {

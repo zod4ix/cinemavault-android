@@ -68,6 +68,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   // Active Menu: 'none' | 'audio' | 'quality' | 'torrents' | 'episodes'
   const [activeMenu, setActiveMenu] = useState<'none' | 'audio' | 'quality' | 'torrents' | 'episodes'>('none');
+  const [audioLangFilter, setAudioLangFilter] = useState<string>('all');
+  const [torrentLangFilter, setTorrentLangFilter] = useState<string>('all');
 
   // Live P2P Torrents
   const [torrentStreams, setTorrentStreams] = useState<TorrentItem[]>([]);
@@ -126,7 +128,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       });
     }
 
-    torrentStreams.slice(0, 3).forEach((tItem) => {
+    torrentStreams.forEach((tItem) => {
       const sId = `torrent-${tItem.id}`;
       if (!map.has(sId)) {
         map.set(sId, {
@@ -735,7 +737,14 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           <span className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1 shrink-0 mr-1">
             <Server className="w-3 h-3 text-red-500" /> {t('serverLabel')}
           </span>
-          {availableServers.map((srv) => {
+          {availableServers
+            .filter((srv, idx) => {
+              if (srv.mode !== 'torrent') return true;
+              if (activeServer?.id === srv.id) return true;
+              const firstTorrentIdx = availableServers.findIndex((s) => s.mode === 'torrent');
+              return idx - firstTorrentIdx < 4;
+            })
+            .map((srv) => {
             const active = activeServer?.id === srv.id;
             const health = serverHealthMap[srv.id];
             const isUa = srv.id.includes('ashdi') || srv.langs?.includes('UA');
@@ -862,55 +871,98 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               </button>
             </div>
 
-            {/* Content for Audio Menu */}
+            {/* Content for Audio / Multi-Language Channels Menu */}
             {activeMenu === 'audio' && (
-              <div className="space-y-2.5 max-h-[60vh] overflow-y-auto custom-scrollbar">
-                <p className="text-xs text-slate-400">
-                  Оберіть потрібну версію дубляжу. Сервер автоматично налаштує відповідний звуковий потік:
-                </p>
-                {availableServers.map((srv) => {
-                  const isCur = activeServer?.id === srv.id;
-                  const isUa = srv.id.includes('ashdi') || srv.langs?.includes('UA');
-                  const isRezka = srv.id.includes('loadbox');
-                  const isTorrent = srv.mode === 'torrent';
-
-                  return (
+              <div className="space-y-3 max-h-[64vh] overflow-y-auto custom-scrollbar">
+                {/* Language Filter Pills */}
+                <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-1">
+                  {[
+                    { id: 'all', label: '🌐 Усі мови' },
+                    { id: 'ua', label: '🇺🇦 Українська' },
+                    { id: 'en', label: '🇬🇧 English' },
+                    { id: 'pl', label: '🇵🇱 Polski' },
+                    { id: 'es', label: '🇪🇸 Español' },
+                    { id: 'multi', label: '🎭 Multi / RU' },
+                  ].map((lf) => (
                     <button
-                      key={srv.id}
-                      onClick={() => {
-                        setSelectedServerId(srv.id);
-                        if (isTorrent && srv.magnet) setCurrentMagnet(srv.magnet);
-                        setActiveMenu('none');
-                        showOsd(`🔊 ${srv.name}`);
-                      }}
+                      key={lf.id}
+                      onClick={() => setAudioLangFilter(lf.id)}
                       tabIndex={0}
-                      className={`w-full p-3 rounded-xl border text-left flex items-center justify-between transition-all tv-btn-focus focus:outline-none ${
-                        isCur
-                          ? 'bg-red-600 text-white border-red-500 shadow-md'
-                          : 'bg-white/5 border-white/10 text-slate-200 hover:bg-white/15'
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap border transition-all tv-btn-focus focus:outline-none ${
+                        audioLangFilter === lf.id
+                          ? 'bg-amber-500 text-slate-950 border-amber-400'
+                          : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/15'
                       }`}
                     >
-                      <div className="flex items-center gap-3">
-                        <span className="text-xl">
-                          {isUa ? '🇺🇦' : isRezka ? '🎭' : isTorrent ? '⚡' : '🌐'}
-                        </span>
-                        <div>
-                          <h4 className="font-bold text-sm">{srv.name}</h4>
-                          <p className="text-xs text-slate-300">
-                            {isUa
-                              ? 'Повний професійний український дубляж (UAKino)'
-                              : isRezka
-                                ? 'Багатоголосе озвучення (HDRezka / LostFilm / студії)'
-                                : isTorrent
-                                  ? 'P2P потік без стиснення з оригінальними доріжками'
-                                  : 'Оригінальний звук + субтитри (VidLink 4K / VidSrc)'}
-                          </p>
-                        </div>
-                      </div>
-                      {isCur && <Check className="w-5 h-5 text-white shrink-0" />}
+                      {lf.label}
                     </button>
-                  );
-                })}
+                  ))}
+                </div>
+
+                <p className="text-xs text-slate-400">
+                  Оберіть потрібний мовний канал. Спочатку представлені українські канали, далі — усі світові мови додатку:
+                </p>
+                {availableServers
+                  .filter((srv) => srv.mode !== 'torrent' || srv.id === activeServer?.id)
+                  .filter((srv) => {
+                    if (audioLangFilter === 'all') return true;
+                    const idLow = srv.id.toLowerCase();
+                    if (audioLangFilter === 'ua') return idLow.startsWith('ua-') || srv.langs?.includes('UA');
+                    if (audioLangFilter === 'en') return idLow.includes('vidlink') || idLow.includes('vidsrc') || idLow.includes('vidfast') || srv.langs?.includes('EN');
+                    if (audioLangFilter === 'pl') return idLow.startsWith('pl-') || srv.langs?.includes('PL');
+                    if (audioLangFilter === 'es') return idLow.startsWith('es-') || srv.langs?.includes('ES');
+                    return srv.langs?.includes('MULTI') || srv.langs?.includes('RU');
+                  })
+                  .map((srv) => {
+                    const isCur = activeServer?.id === srv.id;
+                    const idLow = srv.id.toLowerCase();
+                    const isUa = idLow.startsWith('ua-') || idLow.includes('ashdi');
+                    const isPl = idLow.startsWith('pl-');
+                    const isEs = idLow.startsWith('es-');
+                    const isRezka = idLow.includes('loadbox');
+                    const isTorrent = srv.mode === 'torrent';
+
+                    const getDesc = () => {
+                      if (idLow.includes('ashdi')) return '🇺🇦 Повний професійний український дубляж (UAKino / Ashdi)';
+                      if (idLow.includes('ua-kino-rezka')) return '🇺🇦 Українська озвучка та дубляж (КіноБаза UA)';
+                      if (idLow.includes('ua-videasy')) return '🇺🇦 Український потік 4K HDR + субтитри';
+                      if (idLow.includes('ua-autoembed')) return '🇺🇦 Український дубляж та багатоголосий переклад';
+                      if (isPl) return '🇵🇱 Polski Lektor / Dubbing / Napisy PL';
+                      if (isEs) return '🇪🇸 Español Latino / Castellano + Subtítulos';
+                      if (isRezka) return '🎭 Багатоголосе озвучення (UA / EN / Rezka / LostFilm / RU)';
+                      if (isTorrent) return '⚡ P2P потік без стиснення з оригінальними доріжками';
+                      return '🇬🇧 English Original 4K / 1080p + Multi Subtitles';
+                    };
+
+                    return (
+                      <button
+                        key={srv.id}
+                        onClick={() => {
+                          setSelectedServerId(srv.id);
+                          if (isTorrent && srv.magnet) setCurrentMagnet(srv.magnet);
+                          setActiveMenu('none');
+                          showOsd(`🔊 ${srv.name}`);
+                        }}
+                        tabIndex={0}
+                        className={`w-full p-3 rounded-xl border text-left flex items-center justify-between transition-all tv-btn-focus focus:outline-none ${
+                          isCur
+                            ? 'bg-red-600 text-white border-red-500 shadow-md'
+                            : 'bg-white/5 border-white/10 text-slate-200 hover:bg-white/15'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-xl">
+                            {isUa ? '🇺🇦' : isPl ? '🇵🇱' : isEs ? '🇪🇸' : isRezka ? '🎭' : isTorrent ? '⚡' : '🇬🇧'}
+                          </span>
+                          <div>
+                            <h4 className="font-bold text-sm">{srv.name}</h4>
+                            <p className="text-xs text-slate-300">{getDesc()}</p>
+                          </div>
+                        </div>
+                        {isCur && <Check className="w-5 h-5 text-white shrink-0" />}
+                      </button>
+                    );
+                  })}
               </div>
             )}
 
@@ -957,9 +1009,34 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
             {/* Content for Torrents Menu */}
             {activeMenu === 'torrents' && (
-              <div className="space-y-2.5 max-h-[60vh] overflow-y-auto custom-scrollbar">
+              <div className="space-y-3 max-h-[64vh] overflow-y-auto custom-scrollbar">
+                {/* Language & Quality Filter Pills */}
+                <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-1">
+                  {[
+                    { id: 'all', label: `⚡ Усі (${torrentStreams.length})` },
+                    { id: 'ua', label: '🇺🇦 Українською' },
+                    { id: '4k', label: '💎 4K HDR' },
+                    { id: 'en', label: '🇬🇧 English' },
+                    { id: 'pl', label: '🇵🇱 Polski' },
+                    { id: 'es', label: '🇪🇸 Español' },
+                  ].map((tf) => (
+                    <button
+                      key={tf.id}
+                      onClick={() => setTorrentLangFilter(tf.id)}
+                      tabIndex={0}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap border transition-all tv-btn-focus focus:outline-none ${
+                        torrentLangFilter === tf.id
+                          ? 'bg-purple-600 text-white border-purple-400'
+                          : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/15'
+                      }`}
+                    >
+                      {tf.label}
+                    </button>
+                  ))}
+                </div>
+
                 <p className="text-xs text-slate-400">
-                  Пряме програвання торрентів через вбудований P2P-рушій (без потреби завантаження файлу на диск):
+                  Пряме програвання торрентів через вбудований P2P-рушій (Torrentio + TPB + YTS + EZTV):
                 </p>
                 {torrentStreams.length === 0 ? (
                   <div className="py-8 text-center text-slate-400 space-y-2">
@@ -967,7 +1044,18 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     <p className="text-xs">Пошук відкритих P2P-роздач...</p>
                   </div>
                 ) : (
-                  torrentStreams.map((tItem) => (
+                  torrentStreams
+                    .filter((tItem) => {
+                      if (torrentLangFilter === 'all') return true;
+                      const c = `${tItem.audio} ${tItem.title} ${tItem.quality}`.toLowerCase();
+                      if (torrentLangFilter === 'ua') return c.includes('ua') || c.includes('укр') || c.includes('🇺🇦');
+                      if (torrentLangFilter === '4k') return c.includes('4k') || c.includes('2160');
+                      if (torrentLangFilter === 'en') return c.includes('en') || c.includes('eng');
+                      if (torrentLangFilter === 'pl') return c.includes('pl') || c.includes('pol') || c.includes('lektor');
+                      if (torrentLangFilter === 'es') return c.includes('es') || c.includes('esp') || c.includes('latino');
+                      return true;
+                    })
+                    .map((tItem) => (
                     <button
                       key={tItem.id}
                       onClick={() => {
