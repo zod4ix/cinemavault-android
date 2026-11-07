@@ -1,0 +1,77 @@
+<svg width="1024" height="1024" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bgGlow" cx="50%" cy="50%" r="55%">
+      <stop offset="0%" stop-color="#3b0a18" />
+      <stop offset="55%" stop-color="#11050c" />
+      <stop offset="100%" stop-color="#06080e" />
+    </radialGradient>
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1a0b12" />
+      <stop offset="50%" stop-color="#2a0d18" />
+      <stop offset="100%" stop-color="#0d0408" />
+    </linearGradient>
+    <linearGradient id="borderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b" />
+      <stop offset="35%" stop-color="#ef4444" />
+      <stop offset="70%" stop-color="#dc2626" />
+      <stop offset="100%" stop-color="#fbbf24" />
+    </linearGradient>
+    <linearGradient id="ringGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#dc2626" />
+      <stop offset="100%" stop-color="#f59e0b" />
+    </linearGradient>
+    <linearGradient id="playGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#ffd27d" />
+    </linearGradient>
+  </defs>
+
+  <!-- Rounded App Icon Background -->
+  <rect x="0" y="0" width="120" height="120" rx="26" fill="url(#bgGlow)" />
+  <rect x="2" y="2" width="116" height="116" rx="24" fill="none" stroke="url(#borderGrad)" stroke-width="1.5" stroke-opacity="0.45" />
+
+  <g transform="translate(10, 10)">
+    <!-- Outer Shield Hexagon -->
+    <polygon
+      points="50,4 92,26 92,74 50,96 8,74 8,26"
+      fill="url(#shieldGrad)"
+      stroke="url(#borderGrad)"
+      stroke-width="3.5"
+      stroke-linejoin="round"
+    />
+
+    <!-- Film Perforations on shield border -->
+    <circle cx="28" cy="22" r="2.6" fill="#f59e0b" opacity="0.9" />
+    <circle cx="72" cy="22" r="2.6" fill="#f59e0b" opacity="0.9" />
+    <circle cx="86" cy="50" r="2.6" fill="#ef4444" opacity="0.9" />
+    <circle cx="72" cy="78" r="2.6" fill="#ef4444" opacity="0.9" />
+    <circle cx="28" cy="78" r="2.6" fill="#f59e0b" opacity="0.9" />
+    <circle cx="14" cy="50" r="2.6" fill="#ef4444" opacity="0.9" />
+
+    <!-- Central Film Reel Outer Ring -->
+    <circle
+      cx="50"
+      cy="50"
+      r="26"
+      stroke="url(#ringGrad)"
+      stroke-width="2.8"
+      stroke-dasharray="6 3"
+    />
+
+    <!-- Vault Core Circle -->
+    <circle
+      cx="50"
+      cy="50"
+      r="19"
+      fill="#17060b"
+      stroke="url(#borderGrad)"
+      stroke-width="2.2"
+    />
+
+    <!-- Central Play Arrow -->
+    <polygon
+      points="45,38 62,50 45,62"
+      fill="url(#playGrad)"
+    />
+  </g>
+</svg>
