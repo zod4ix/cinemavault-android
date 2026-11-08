@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   Download,
@@ -34,6 +34,16 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
   const [isHealing, setIsHealing] = useState(false);
   const [healDoneMsg, setHealDoneMsg] = useState<string | null>(null);
   const [copiedUrl, setCopiedUrl] = useState(false);
+  const downloadBtnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      const tId = setTimeout(() => {
+        downloadBtnRef.current?.focus({ preventScroll: true });
+      }, 60);
+      return () => clearTimeout(tId);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -82,6 +92,7 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
 
   return (
     <div
+      data-modal-scope="true"
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/85 animate-fadeIn select-none"
       onClick={onClose}
     >
@@ -159,8 +170,9 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
           </div>
 
           {/* Direct Download Action Buttons */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" data-nav-row="update-actions">
             <button
+              ref={downloadBtnRef}
               onClick={() => openExternalDownload(apkUrl)}
               tabIndex={0}
               className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xl shadow-red-600/30 active:scale-95 transition-all tv-btn-focus focus:outline-none"

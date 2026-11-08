@@ -501,7 +501,7 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
       {/* Main Container */}
       <div className="w-full max-w-[1700px] mx-auto px-3.5 sm:px-6 lg:px-8 pt-6 space-y-8 tv-safe-container">
         {/* Sport Disciplines Filter Carousel with Arrows & Snap */}
-        <div className="flex items-center gap-1.5 w-full min-w-0">
+        <div data-nav-row="sports-tabs" className="flex items-center gap-1.5 w-full min-w-0">
           <button
             type="button"
             onClick={() => scrollTabs('left')}
@@ -600,6 +600,7 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
 
           <div
             ref={channelsRowRef}
+            data-nav-row="sports-channels"
             onWheel={(e) => {
               if (channelsRowRef.current && Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
                 channelsRowRef.current.scrollLeft += e.deltaY;
@@ -784,11 +785,13 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
                       {ev.streams.slice(0, 4).map((node, idx) => (
                         <button
                           key={node.id}
+                          type="button"
+                          tabIndex={0}
                           onClick={(e) => {
                             e.stopPropagation();
                             openEventPlayer(ev, idx);
                           }}
-                          className="px-2 py-1 rounded-md bg-white/5 hover:bg-emerald-600/30 text-[10px] font-bold text-slate-200 border border-white/10 hover:border-emerald-400/50 whitespace-nowrap transition-colors"
+                          className="px-2 py-1 rounded-md bg-white/5 hover:bg-emerald-600/30 text-[10px] font-bold text-slate-200 border border-white/10 hover:border-emerald-400/50 whitespace-nowrap transition-colors tv-btn-focus focus:outline-none"
                         >
                           {node.slot ? `Потік ${node.slot}` : node.badge}
                         </button>
@@ -796,11 +799,13 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
                     </div>
 
                     <button
+                      type="button"
+                      tabIndex={0}
                       onClick={(e) => {
                         e.stopPropagation();
                         openEventPlayer(ev, 0);
                       }}
-                      className="px-3.5 py-1.5 rounded-xl bg-red-600 group-hover:bg-red-500 text-white text-xs font-extrabold flex items-center gap-1.5 shrink-0 shadow-md shadow-red-600/30"
+                      className="px-3.5 py-1.5 rounded-xl bg-red-600 group-hover:bg-red-500 text-white text-xs font-extrabold flex items-center gap-1.5 shrink-0 shadow-md shadow-red-600/30 tv-btn-focus focus:outline-none"
                     >
                       <Play className="w-3.5 h-3.5 fill-white" />
                       <span>Потік A</span>
@@ -861,11 +866,13 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
                       {ev.streams.slice(0, 3).map((node, idx) => (
                         <button
                           key={node.id}
+                          type="button"
+                          tabIndex={0}
                           onClick={(e) => {
                             e.stopPropagation();
                             openEventPlayer(ev, idx);
                           }}
-                          className="px-2 py-0.5 rounded bg-white/5 hover:bg-white/15 text-[10px] font-bold text-slate-300 border border-white/10 whitespace-nowrap"
+                          className="px-2 py-0.5 rounded bg-white/5 hover:bg-white/15 text-[10px] font-bold text-slate-300 border border-white/10 whitespace-nowrap tv-btn-focus focus:outline-none"
                         >
                           {node.slot ? `Потік ${node.slot}` : node.badge}
                         </button>
@@ -891,7 +898,10 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
         <div className="fixed inset-0 z-50 bg-black flex flex-col select-none animate-fadeIn">
           {/* Top Control, Quick Match Selector & Stream Switcher Bar */}
           <div className="shrink-0 bg-[#070a12] border-b border-white/15 px-3 sm:px-5 py-2.5 space-y-2 z-30">
-            <div className="flex flex-wrap items-center justify-between gap-2">
+            <div
+              data-nav-row="sports-player-top"
+              className="flex flex-wrap items-center justify-between gap-2"
+            >
               <div className="flex items-center gap-2.5 min-w-0">
                 <button
                   onClick={() => setActivePlayback(null)}
@@ -972,7 +982,10 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
             </div>
 
             {/* Stream Nodes Carousel Bar (Потік A / B / C / D / E) */}
-            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-0.5">
+            <div
+              data-nav-row="sports-player-streams"
+              className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-0.5"
+            >
               <span className="text-[10px] font-bold text-emerald-400 uppercase flex items-center gap-1 shrink-0 mr-1">
                 <Sparkles className="w-3 h-3" /> Вільні потоки:
               </span>
@@ -1021,8 +1034,10 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
                   <span className="text-emerald-400">{activeNode.name}</span>
                 </p>
                 <button
+                  type="button"
+                  tabIndex={0}
                   onClick={() => switchToNextStreamNode('Швидке перемикання')}
-                  className="px-4 py-2 rounded-xl bg-white/10 hover:bg-emerald-600 text-white text-xs font-bold border border-white/15 transition-all"
+                  className="px-4 py-2 rounded-xl bg-white/10 hover:bg-emerald-600 text-white text-xs font-bold border border-white/15 transition-all tv-btn-focus focus:outline-none"
                 >
                   Увімкнути наступний потік (Потік B / C / D)
                 </button>

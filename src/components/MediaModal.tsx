@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, Play, Heart, Download, Check, Wifi, HardDrive, 
   Layers, Clock, Copy, Sparkles, Globe, Youtube, Loader2, Users, ExternalLink
@@ -44,6 +44,15 @@ export const MediaModal: React.FC<MediaModalProps> = ({
   const [serverHealth, setServerHealth] = useState<Record<string, ServerHealth>>({});
   const [sourceLangFilter, setSourceLangFilter] = useState<string>('all');
   const [torrentFilter, setTorrentFilter] = useState<string>('all');
+  const watchNowBtnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!media) return;
+    const tId = setTimeout(() => {
+      watchNowBtnRef.current?.focus({ preventScroll: true });
+    }, 100);
+    return () => clearTimeout(tId);
+  }, [media?.id]);
 
   useEffect(() => {
     if (!media) return;
@@ -238,8 +247,10 @@ export const MediaModal: React.FC<MediaModalProps> = ({
               )}
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
+            <div data-nav-row="modal-hero-actions" className="flex items-center gap-2 shrink-0">
               <button
+                ref={watchNowBtnRef}
+                type="button"
                 onClick={() => {
                   if (sources[0]) onPlayOnline(media, sources[0], selectedEpisode);
                 }}
@@ -251,6 +262,7 @@ export const MediaModal: React.FC<MediaModalProps> = ({
               </button>
 
               <button
+                type="button"
                 onClick={() => onToggleFavorite(media)}
                 tabIndex={0}
                 className={`p-2.5 rounded-xl border backdrop-blur-md transition-all shrink-0 tv-btn-focus focus:outline-none ${
@@ -267,7 +279,10 @@ export const MediaModal: React.FC<MediaModalProps> = ({
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex items-center gap-2 px-4 sm:px-6 pt-3 border-b border-white/10 bg-[#0c101a] shrink-0 overflow-x-auto scrollbar-none">
+        <div
+          data-nav-row="modal-tabs"
+          className="flex items-center gap-2 px-4 sm:px-6 pt-3 border-b border-white/10 bg-[#0c101a] shrink-0 overflow-x-auto scrollbar-none"
+        >
           {(media.mediaType === 'tv' || media.mediaType === 'anime') && (
             <button
               onClick={() => setActiveTab('episodes')}
@@ -572,8 +587,10 @@ export const MediaModal: React.FC<MediaModalProps> = ({
                         <div className="flex items-center gap-2">
                           {src.type === 'online' && (
                             <button
+                              type="button"
+                              tabIndex={0}
                               onClick={() => handleFakeDownload(src.id)}
-                              className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                              className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors tv-btn-focus focus:outline-none"
                             >
                               <Download className="w-3.5 h-3.5" />
                               <span>
@@ -689,8 +706,10 @@ export const MediaModal: React.FC<MediaModalProps> = ({
 
                         <div className="flex items-center gap-2 shrink-0 pt-2 sm:pt-0">
                           <button
+                            type="button"
+                            tabIndex={0}
                             onClick={() => handleCopyMagnet(tItem.magnet, tItem.id)}
-                            className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                            className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors tv-btn-focus focus:outline-none"
                             title={t('copyMagnetTitle')}
                           >
                             {copiedMagnet === tItem.id ? (
@@ -707,8 +726,10 @@ export const MediaModal: React.FC<MediaModalProps> = ({
                           </button>
 
                           <button
+                            type="button"
+                            tabIndex={0}
                             onClick={() => handleOpenTorrentApp(tItem.magnet)}
-                            className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-600/30 active:scale-95 transition-all"
+                            className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-600/30 active:scale-95 transition-all tv-btn-focus focus:outline-none"
                             title="Відкрити в торент-клієнті (Flud, LibreTorrent)"
                           >
                             <ExternalLink className="w-3.5 h-3.5" />
@@ -716,6 +737,7 @@ export const MediaModal: React.FC<MediaModalProps> = ({
                           </button>
 
                           <button
+                            type="button"
                             onClick={() => handlePlayTorrent(tItem)}
                             tabIndex={0}
                             className="px-4 py-2 rounded-xl bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white font-bold text-xs sm:text-sm flex items-center gap-1.5 shadow-lg shadow-red-600/30 active:scale-95 transition-all tv-btn-focus focus:outline-none"

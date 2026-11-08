@@ -195,6 +195,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onDataSyn
 
   return (
     <div
+      data-modal-scope="true"
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 animate-fadeIn select-none"
       onClick={onClose}
     >
@@ -588,7 +589,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onDataSyn
                     />
                     <button
                       onClick={handleImportJsonSubmit}
-                      className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs"
+                      tabIndex={0}
+                      className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs tv-btn-focus focus:outline-none"
                     >
                       Відновити дані зараз
                     </button>

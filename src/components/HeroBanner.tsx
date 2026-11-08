@@ -176,7 +176,10 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
             </p>
 
             {/* Action Buttons: 100% fits in view on mobile & desktop */}
-            <div className="flex items-center gap-2 sm:gap-3 pt-1 w-full min-w-0">
+            <div
+              data-nav-row="hero-actions"
+              className="flex items-center gap-2 sm:gap-3 pt-1 w-full min-w-0"
+            >
               <button
                 onClick={() => onPlay(activeMedia)}
                 tabIndex={0}

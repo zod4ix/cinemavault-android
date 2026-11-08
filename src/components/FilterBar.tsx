@@ -60,7 +60,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
   return (
     <div className="bg-[#0b101b]/95 border border-white/10 rounded-2xl p-3 sm:p-4 space-y-3 shadow-xl w-full max-w-full overflow-hidden">
       {/* Top Row: Genre Pills Carousel */}
-      <div className="flex items-center gap-1.5 w-full min-w-0">
+      <div data-nav-row="filter-genres" className="flex items-center gap-1.5 w-full min-w-0">
         <div className="hidden sm:flex items-center gap-1.5 text-xs font-bold text-slate-400 pr-1 shrink-0">
           <SlidersHorizontal className="w-3.5 h-3.5 text-red-500" />
           <span>{t('genresLabel')}</span>
@@ -134,7 +134,10 @@ export const FilterBar: React.FC<FilterBarProps> = ({
       </div>
 
       {/* Second Row: Year Carousel & Sort Selectors */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-white/5 w-full min-w-0">
+      <div
+        data-nav-row="filter-years-sort"
+        className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-white/5 w-full min-w-0"
+      >
         {/* Year Pills Carousel */}
         <div
           ref={yearRowRef}
@@ -213,6 +216,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
       {onQuickSearch && (
         <div
           ref={tagsRowRef}
+          data-nav-row="filter-quick-tags"
           className="flex items-center gap-1.5 overflow-x-auto scrollbar-none snap-x snap-mandatory scroll-smooth pt-1 w-full min-w-0"
         >
           <span className="text-[11px] text-amber-400/90 font-semibold flex items-center gap-1 shrink-0 mr-1">

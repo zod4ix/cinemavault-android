@@ -1,6 +1,6 @@
 import { httpGetJson } from './tmdb';
 
-export const APP_VERSION = '3.5.1';
+export const APP_VERSION = '3.6.0';
 export const GITHUB_REPO = 'zod4ix/cinemavault-android';
 export const DEFAULT_APK_URL = `https://github.com/${GITHUB_REPO}/raw/main/CinemaVault-PRO-v${APP_VERSION}.apk`;
 export const GITHUB_RELEASE_PAGE = `https://github.com/${GITHUB_REPO}/releases/latest`;
@@ -73,11 +73,10 @@ export const updaterService = {
     let apkDownloadUrl = DEFAULT_APK_URL;
     let releasePageUrl = GITHUB_RELEASE_PAGE;
     let releaseNotes =
-      '• 🎯 100% АДАПТИВНІСТЬ ТА БЛОКУВАННЯ ГОРИЗОНТАЛЬНОГО ЗМІЩЕННЯ: жодного сповзання екрану вбік на смартфонах, планшетах і TV\n' +
-      '• 🎠 ІНТЕРАКТИВНІ КАРУСЕЛІ З SNAP-ФІКСАЦІЄЮ: усі картки та кнопки відображаються цільними у полі зору без обрізаних половинок\n' +
-      '• 🏟️ СПОРТ LIVE SCANNER HUB: безкоштовний 5-потоковий сканер (Потік A 1080p / Потік B 540p / Direct HLS / Хайлайти / Повні записи) для НБА, ЛЧ, Топ-футболу, НФЛ, Ф1, Боксу/UFC, Тенісу та НХЛ\n' +
-      '• 🇺🇦 14+ мультимовних каналів (4 українські на чолі) + P2P Торрент-плеєр (Torrentio + TPB + YTS + EZTV)\n' +
-      '• 🛡️ Непрозора нижня навігація, Self-Healing Engine, GitHub Auto-Updater та Хмарний Профіль (CV-XXXXXX)';
+      '• 🖱️ ПОВНА ПІДТРИМКА МИШОК, AIR MOUSE ТА РЕЖИМУ МИШІ НА ПУЛЬТАХ: нативний перехоплювач курсора та кліків у Android WebView (MotionEvent TOOL_TYPE_FINGER bridge + стабілізатор тремтіння руки 26dp) — кожна кнопка, картка та меню клікаються з першого разу!\n' +
+      '• 🎮 ОНОВЛЕНА 2D-НАВІГАЦІЯ ПУЛЬТОМ (D-PAD) У ВІДЕОПЛЕЄРІ ТА ДОДАТКУ: миттєве переміщення між кнопками «Назад», «Мова / Озвучення», «Якість (4K / 1080p / 720p / 480p)», «Торренти», «Серії» та серверами без залипання фокуса у фреймах чи списках\n' +
+      '• 🖱️ ВБУДОВАНИЙ ВІРТУАЛЬНИЙ КУРСОР ПУЛЬТА У ПЛЕЄРІ: керування вказівником стрілками пульта для кліків по внутрішніх елементах плеєра\n' +
+      '• 🏟️ СПОРТ LIVE SCANNER HUB + 14+ мультимовних каналів (4 українські на чолі) + P2P Торрент-плеєр';
     let publishedAt = new Date().toISOString().slice(0, 10);
 
     try {
@@ -121,6 +120,9 @@ export const updaterService = {
         if (isNewerVersion(latestVersion, pkgVer)) {
           latestVersion = pkgVer;
           apkDownloadUrl = `https://github.com/${GITHUB_REPO}/raw/main/CinemaVault-PRO-v${pkgVer}.apk`;
+          if (typeof pkg.releaseNotes === 'string' && pkg.releaseNotes.trim().length > 10) {
+            releaseNotes = pkg.releaseNotes.trim();
+          }
         }
       }
     } catch {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Copy, Check, QrCode, Heart, ShieldCheck, Sparkles, AlertTriangle, Smartphone } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { DONATION_WALLETS, CryptoWallet } from '../types/donation';
@@ -14,6 +14,25 @@ export const DonateModal: React.FC<DonateModalProps> = ({ isOpen, onClose }) => 
   const [selectedWallet, setSelectedWallet] = useState<CryptoWallet>(DONATION_WALLETS[0]);
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
   const [copiedMemo, setCopiedMemo] = useState<boolean>(false);
+  const closeBtnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const tId = setTimeout(() => {
+      closeBtnRef.current?.focus({ preventScroll: true });
+    }, 80);
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => {
+      clearTimeout(tId);
+      window.removeEventListener('keydown', handleKey);
+    };
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -55,8 +74,11 @@ export const DonateModal: React.FC<DonateModalProps> = ({ isOpen, onClose }) => 
             </div>
           </div>
           <button 
+            ref={closeBtnRef}
+            type="button"
+            tabIndex={0}
             onClick={onClose}
-            className="p-2 sm:p-2.5 rounded-xl bg-white/5 hover:bg-white/15 text-slate-400 hover:text-white transition-colors"
+            className="p-2 sm:p-2.5 rounded-xl bg-white/5 hover:bg-red-600 text-slate-400 hover:text-white transition-colors tv-btn-focus focus:outline-none"
           >
             <X className="w-5 h-5" />
           </button>
@@ -82,12 +104,14 @@ export const DonateModal: React.FC<DonateModalProps> = ({ isOpen, onClose }) => 
                 return (
                   <button
                     key={`${wallet.symbol}-${wallet.network || ''}`}
+                    type="button"
+                    tabIndex={0}
                     onClick={() => {
                       setSelectedWallet(wallet);
                       setCopiedAddress(null);
                       setCopiedMemo(false);
                     }}
-                    className={`flex flex-col items-start p-2.5 rounded-xl border text-left transition-all ${
+                    className={`flex flex-col items-start p-2.5 rounded-xl border text-left transition-all tv-btn-focus focus:outline-none ${
                       isSelected
                         ? 'bg-amber-500/15 border-amber-500 shadow-md shadow-amber-500/15 scale-[1.02]'
                         : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20'
@@ -215,8 +239,10 @@ export const DonateModal: React.FC<DonateModalProps> = ({ isOpen, onClose }) => 
 
             {/* Primary Action Button */}
             <button
+              type="button"
+              tabIndex={0}
               onClick={() => handleCopyAddress(selectedWallet.address)}
-              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm sm:text-base flex items-center justify-center gap-2 shadow-xl shadow-amber-500/20 transition-all active:scale-[0.98]"
+              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-sm sm:text-base flex items-center justify-center gap-2 shadow-xl shadow-amber-500/20 transition-all active:scale-[0.98] tv-btn-focus focus:outline-none"
             >
               {copiedAddress === selectedWallet.address ? (
                 <>

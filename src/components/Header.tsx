@@ -206,13 +206,24 @@ export const Header: React.FC<HeaderProps> = ({
             {quickSuggestions.slice(0, 6).map((item) => (
               <div
                 key={item.id}
+                tabIndex={0}
+                role="button"
                 onClick={() => {
                   setIsSearchFocused(false);
                   mobileInputRef.current?.blur();
                   desktopInputRef.current?.blur();
                   onSelectMedia(item);
                 }}
-                className="p-2.5 hover:bg-white/10 active:bg-white/15 cursor-pointer flex items-center gap-3 transition-colors"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setIsSearchFocused(false);
+                    mobileInputRef.current?.blur();
+                    desktopInputRef.current?.blur();
+                    onSelectMedia(item);
+                  }
+                }}
+                className="p-2.5 hover:bg-white/10 active:bg-white/15 cursor-pointer flex items-center gap-3 transition-colors tv-btn-focus focus:outline-none"
               >
                 <img
                   src={item.posterPath}
@@ -266,7 +277,10 @@ export const Header: React.FC<HeaderProps> = ({
     >
       <div className="w-full max-w-[1700px] mx-auto px-2.5 sm:px-6 lg:px-8">
         {/* Top Row: Logo + Search (Desktop) + Action Controls (100% Viewport-Fit, Never Overflows) */}
-        <div className="flex items-center justify-between h-14 sm:h-16 gap-1.5 sm:gap-3 w-full min-w-0">
+        <div
+          data-nav-row="header-top"
+          className="flex items-center justify-between h-14 sm:h-16 gap-1.5 sm:gap-3 w-full min-w-0"
+        >
           {/* Brand Logo */}
           <div
             tabIndex={0}
@@ -291,7 +305,7 @@ export const Header: React.FC<HeaderProps> = ({
                 Cinema<span className="text-red-500">Vault</span>
               </span>
               <span className="text-[8.5px] sm:text-[10px] text-amber-400 font-bold tracking-wider block mt-0.5 whitespace-nowrap">
-                PRO v3.5.1 • 4K & LIVE
+                PRO v3.6.0 • 4K & LIVE
               </span>
             </div>
           </div>
@@ -326,8 +340,9 @@ export const Header: React.FC<HeaderProps> = ({
               {draft && (
                 <button
                   type="button"
+                  tabIndex={0}
                   onClick={clearSearch}
-                  className="p-1 rounded-full text-slate-400 hover:text-white shrink-0"
+                  className="p-1 rounded-full text-slate-400 hover:text-white shrink-0 tv-btn-focus focus:outline-none"
                   aria-label="Очистити пошук"
                 >
                   <X className="w-4 h-4" />
@@ -335,7 +350,8 @@ export const Header: React.FC<HeaderProps> = ({
               )}
               <button
                 type="submit"
-                className="px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition-colors shrink-0"
+                tabIndex={0}
+                className="px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition-colors shrink-0 tv-btn-focus focus:outline-none"
               >
                 {t('searchBtn')}
               </button>
@@ -508,15 +524,17 @@ export const Header: React.FC<HeaderProps> = ({
             {draft && (
               <button
                 type="button"
+                tabIndex={0}
                 onClick={clearSearch}
-                className="p-1 rounded-full text-slate-400 hover:text-white shrink-0"
+                className="p-1 rounded-full text-slate-400 hover:text-white shrink-0 tv-btn-focus focus:outline-none"
               >
                 <X className="w-4 h-4" />
               </button>
             )}
             <button
               type="submit"
-              className="px-2.5 py-1 rounded-lg bg-red-600 active:bg-red-500 text-white text-xs font-bold shrink-0"
+              tabIndex={0}
+              className="px-2.5 py-1 rounded-lg bg-red-600 active:bg-red-500 text-white text-xs font-bold shrink-0 tv-btn-focus focus:outline-none"
             >
               {t('searchBtn')}
             </button>
@@ -525,7 +543,10 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Category Pills Interactive Carousel with Left/Right Arrows & Snap */}
-        <div className="flex items-center gap-1 sm:gap-1.5 py-1.5 sm:py-2 border-t border-white/5 w-full min-w-0">
+        <div
+          data-nav-row="header-categories"
+          className="flex items-center gap-1 sm:gap-1.5 py-1.5 sm:py-2 border-t border-white/5 w-full min-w-0"
+        >
           <button
             type="button"
             onClick={() => scrollCategories('left')}

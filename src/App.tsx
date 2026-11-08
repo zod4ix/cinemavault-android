@@ -134,6 +134,12 @@ const MainAppContent: React.FC = () => {
   useEffect(() => {
     window.__cinemaHandleBack = () => {
       if (activePlayback) {
+        if (
+          typeof (window as any).__cinemaHandlePlayerBack === 'function' &&
+          (window as any).__cinemaHandlePlayerBack()
+        ) {
+          return true;
+        }
         setActivePlayback(null);
         return true;
       }
@@ -433,26 +439,29 @@ const MainAppContent: React.FC = () => {
                 {t('updateAvailableToast')} Нова версія <strong>v{updateInfo.latestVersion}</strong> вже на GitHub!
               </span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2" data-nav-row="update-toast">
               <button
+                tabIndex={0}
                 onClick={() => openExternalDownload(updateInfo.apkDownloadUrl)}
-                className="px-3 py-1 rounded-lg bg-white text-slate-950 font-black text-xs flex items-center gap-1 shadow hover:bg-amber-100 transition-colors"
+                className="px-3 py-1 rounded-lg bg-white text-slate-950 font-black text-xs flex items-center gap-1 shadow hover:bg-amber-100 transition-colors tv-btn-focus focus:outline-none"
               >
                 <Download className="w-3.5 h-3.5" />
                 <span>{t('updateBtn')}</span>
               </button>
               <button
+                tabIndex={0}
                 onClick={() => setIsUpdateOpen(true)}
-                className="px-2.5 py-1 rounded-lg bg-black/30 hover:bg-black/50 text-white font-bold text-xs"
+                className="px-2.5 py-1 rounded-lg bg-black/30 hover:bg-black/50 text-white font-bold text-xs tv-btn-focus focus:outline-none"
               >
                 Деталі
               </button>
               <button
+                tabIndex={0}
                 onClick={() => {
                   updaterService.dismissVersion(updateInfo.latestVersion);
                   setShowUpdateBanner(false);
                 }}
-                className="p-1 rounded-lg hover:bg-black/30 text-white/80 hover:text-white"
+                className="p-1 rounded-lg hover:bg-black/30 text-white/80 hover:text-white tv-btn-focus focus:outline-none"
                 aria-label="Закрити повідомлення"
               >
                 <X className="w-4 h-4" />
@@ -884,9 +893,9 @@ const MainAppContent: React.FC = () => {
       <footer className="border-t border-white/10 bg-[#05070a] py-6 text-center text-xs text-slate-500">
         <div className="max-w-[1700px] mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="flex flex-wrap items-center justify-center gap-1.5 font-medium text-slate-400">
-            <span>CinemaVault PRO v3.5.1</span> •{' '}
+            <span>CinemaVault PRO v3.6.0</span> •{' '}
             <span className="text-amber-400/90 font-bold">
-              Smart TV, Mobile & Live Sports Edition
+              Smart TV, Air Mouse, Remote D-Pad & Live Sports Edition
             </span>{' '}
             • <span>{t('footerLine')}</span> • <span>🍿 4K HDR & P2P</span>
           </p>

@@ -30,12 +30,15 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
   return (
     <nav
+      data-nav-row="bottom-nav"
       className="fixed bottom-0 left-0 right-0 w-full max-w-full z-40 md:hidden bg-[#07090e] border-t border-white/15 px-1.5 py-1 grid grid-cols-5 items-center select-none shadow-[0_-10px_28px_rgba(0,0,0,0.85)]"
       style={{ backgroundColor: '#07090e' }}
     >
       <button
+        type="button"
+        tabIndex={0}
         onClick={() => onSelectCategory('trending')}
-        className={`flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl transition-colors min-w-0 ${
+        className={`flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl transition-colors min-w-0 tv-btn-focus focus:outline-none ${
           selectedCategory === 'trending' &&
           !isFavoritesActive &&
           !isSearchActive &&
@@ -49,8 +52,10 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       </button>
 
       <button
+        type="button"
+        tabIndex={0}
         onClick={onOpenSearch}
-        className={`flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl transition-colors min-w-0 ${
+        className={`flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl transition-colors min-w-0 tv-btn-focus focus:outline-none ${
           isSearchActive
             ? 'text-red-500 font-bold bg-red-500/15'
             : 'text-slate-400 active:text-white'
@@ -61,8 +66,10 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       </button>
 
       <button
+        type="button"
+        tabIndex={0}
         onClick={onOpenSports}
-        className={`relative flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl transition-colors min-w-0 ${
+        className={`relative flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl transition-colors min-w-0 tv-btn-focus focus:outline-none ${
           isSportsActive
             ? 'text-emerald-400 font-extrabold bg-emerald-500/20'
             : 'text-emerald-400 active:text-white'
@@ -77,8 +84,10 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       </button>
 
       <button
+        type="button"
+        tabIndex={0}
         onClick={() => onSelectCategory('movies')}
-        className={`flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl transition-colors min-w-0 ${
+        className={`flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl transition-colors min-w-0 tv-btn-focus focus:outline-none ${
           selectedCategory === 'movies' &&
           !isFavoritesActive &&
           !isSearchActive &&
@@ -92,8 +101,10 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       </button>
 
       <button
+        type="button"
+        tabIndex={0}
         onClick={onOpenFavorites}
-        className={`relative flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl transition-colors min-w-0 ${
+        className={`relative flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl transition-colors min-w-0 tv-btn-focus focus:outline-none ${
           isFavoritesActive
             ? 'text-red-500 font-bold bg-red-500/15'
             : 'text-slate-400 active:text-white'

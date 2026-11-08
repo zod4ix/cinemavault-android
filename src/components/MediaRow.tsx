@@ -47,7 +47,7 @@ export const MediaRow: React.FC<MediaRowProps> = ({
     const deltaX = e.clientX - startPosRef.current.x;
     const deltaY = e.clientY - startPosRef.current.y;
 
-    if (!hasDraggedRef.current && Math.abs(deltaX) > 8 && Math.abs(deltaX) > Math.abs(deltaY)) {
+    if (!hasDraggedRef.current && Math.abs(deltaX) > 28 && Math.abs(deltaX) > Math.abs(deltaY)) {
       hasDraggedRef.current = true;
       setIsDragging(true);
     }
@@ -142,6 +142,7 @@ export const MediaRow: React.FC<MediaRowProps> = ({
       {/* Row Scroll Container: Exact whole-card fractional widths + CSS Scroll Snap */}
       <div
         ref={rowRef}
+        data-nav-row="media-row"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUpOrLeave}
