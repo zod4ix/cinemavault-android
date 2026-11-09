@@ -64,6 +64,6 @@ npm run dev
 # 3. Збірка веб-частини та синхронізація з Android
 npm run cap:sync
 
-# 4. Компіляція готового APK (потрібен JDK 21)
-cmd /c "set JAVA_HOME=C:\Users\zod4ix\jdk-21.0.6+7&& set PATH=C:\Users\zod4ix\jdk-21.0.6+7\bin;%PATH%&& cd android && gradlew.bat assembleDebug"
+# 4. Компіляція підписаного Release APK (потрібен JDK 21)
+cmd /c "set JAVA_HOME=C:\Users\zod4ix\jdk-21.0.6+7&& set PATH=C:\Users\zod4ix\jdk-21.0.6+7\bin;%PATH%&& cd android && gradlew.bat assembleRelease"
 ```
