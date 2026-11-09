@@ -90,22 +90,40 @@ button, [role="button"], a, select {
    Smart TV, Air Mouse & Remote Control Navigation Styles
    ======================================================== */
 
-/* High-contrast focus outline for DPAD remote & keyboard navigation */
-:focus-visible {
+/* High-contrast focus outline for DPAD remote, Mouse Hover & keyboard navigation
+   Applies to both :focus and :focus-visible so programmatic focus via Android WebView
+   bridge ALWAYS lights up buttons and cards on Projectors and Smart TVs! */
+button:focus,
+button:focus-visible,
+[role="button"]:focus,
+[role="button"]:focus-visible,
+[tabindex="0"]:focus,
+[tabindex="0"]:focus-visible,
+a:focus,
+a:focus-visible,
+select:focus,
+select:focus-visible,
+[data-cinema-focused="true"] {
   outline: none !important;
-  box-shadow: 0 0 0 3px #ef4444, 0 0 20px rgba(239, 68, 68, 0.8) !important;
-  transition: transform 0.15s ease-out, box-shadow 0.15s ease-out !important;
+  box-shadow: 0 0 0 3px #ef4444, 0 0 22px rgba(239, 68, 68, 0.85) !important;
+  transition: transform 0.14s ease-out, box-shadow 0.14s ease-out !important;
 }
 
-/* TV Card / Item focus pop */
-.tv-card-focus:focus-visible {
-  transform: scale(1.05) translateY(-3px) !important;
+/* TV Card / Item focus & hover pop */
+.tv-card-focus:focus,
+.tv-card-focus:focus-visible,
+.tv-card-focus:hover,
+.tv-card-focus[data-cinema-focused="true"] {
+  transform: scale(1.04) translateY(-3px) !important;
   z-index: 30 !important;
 }
 
-/* TV Button focus pop */
-.tv-btn-focus:focus-visible {
-  transform: scale(1.06) !important;
+/* TV Button focus & hover pop */
+.tv-btn-focus:focus,
+.tv-btn-focus:focus-visible,
+.tv-btn-focus:hover,
+.tv-btn-focus[data-cinema-focused="true"] {
+  transform: scale(1.05) !important;
   z-index: 30 !important;
 }
 

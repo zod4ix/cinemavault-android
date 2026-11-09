@@ -1,6 +1,6 @@
 /**
- * Smart 2D Geometric Spatial Navigation & Universal Mouse / Air Mouse Engine
- * for Android TV D-Pad Remotes, Air Mice, USB/Bluetooth Mice, and Touchscreens.
+ * Smart 2D Geometric Spatial Navigation & Universal Mouse / Air Mouse / Projector Remote Engine
+ * for Android TV D-Pad Remotes, Projector Mouse Mode, Air Mice, USB/Bluetooth Mice, Keyboards & Touchscreens.
  * Uses preventScroll + container-isolated scrolling so the viewport NEVER shifts sideways!
  */
 
@@ -9,7 +9,7 @@ declare global {
     __cinemaHandleDpad?: (key: string) => boolean;
     __cinemaHandleDpadEnter?: () => boolean;
     __cinemaOnMouseHover?: (normX: number, normY: number) => void;
-    __cinemaEnsureClickAt?: (normX: number, normY: number) => void;
+    __cinemaEnsureClickAt?: (normX: number, normY: number) => string;
     __cinemaOnMouseWheel?: (normX: number, normY: number, vScroll: number, hScroll: number) => void;
     __cinemaCustomDpadHandler?: ((key: string) => boolean) | null;
     __cinemaCustomDpadEnterHandler?: (() => boolean) | null;
@@ -32,6 +32,18 @@ export function isElementVisible(el: HTMLElement): boolean {
   }
   const rect = el.getBoundingClientRect();
   return rect.width > 4 && rect.height > 4;
+}
+
+let currentHighlightedEl: HTMLElement | null = null;
+
+export function highlightFocusableElement(el: HTMLElement | null) {
+  if (currentHighlightedEl && currentHighlightedEl !== el) {
+    currentHighlightedEl.removeAttribute('data-cinema-focused');
+  }
+  currentHighlightedEl = el;
+  if (el) {
+    el.setAttribute('data-cinema-focused', 'true');
+  }
 }
 
 /**
@@ -157,7 +169,7 @@ export function initSpatialNavigation(): () => void {
   let lastNativeClickTime = 0;
   let lastClickedElement: HTMLElement | null = null;
 
-  // Capture-phase click listener to track native clicks and block accidental hardware double-bounces (<160ms)
+  // Capture-phase click listener to track native clicks and block accidental hardware double-bounces (<175ms)
   const handleGlobalClickCapture = (e: MouseEvent) => {
     const now = Date.now();
     const target = e.target as HTMLElement | null;
@@ -166,7 +178,7 @@ export function initSpatialNavigation(): () => void {
     if (
       interactive &&
       interactive === lastClickedElement &&
-      now - lastNativeClickTime < 160 &&
+      now - lastNativeClickTime < 175 &&
       interactive.tagName.toLowerCase() !== 'input'
     ) {
       e.stopPropagation();
@@ -176,6 +188,16 @@ export function initSpatialNavigation(): () => void {
 
     lastNativeClickTime = now;
     lastClickedElement = interactive || null;
+    if (interactive && interactive instanceof HTMLElement) {
+      highlightFocusableElement(interactive);
+    }
+  };
+
+  const handleGlobalFocusIn = (e: FocusEvent) => {
+    const target = e.target as HTMLElement | null;
+    if (target && target !== document.body && target.tagName !== 'IFRAME') {
+      highlightFocusableElement(target);
+    }
   };
 
   const navigateSpatial = (key: string): boolean => {
@@ -188,13 +210,16 @@ export function initSpatialNavigation(): () => void {
       return false;
     }
 
-    // Allow custom D-Pad handler (e.g., Virtual Cursor inside VideoPlayer) to intercept
+    // Wake up any auto-hiding player controls whenever D-Pad is pressed
+    window.dispatchEvent(new CustomEvent('cinema-dpad-activity', { detail: { key } }));
+
+    // Allow custom D-Pad handler (e.g., Virtual Cursor or Seek Bar inside VideoPlayer) to intercept
     if (window.__cinemaCustomDpadHandler && window.__cinemaCustomDpadHandler(key)) {
       return true;
     }
 
     const now = Date.now();
-    if (now - lastDpadTime < 32) {
+    if (now - lastDpadTime < 28) {
       return true;
     }
     lastDpadTime = now;
@@ -206,7 +231,28 @@ export function initSpatialNavigation(): () => void {
 
     if (candidates.length === 0) return false;
 
-    const active = document.activeElement as HTMLElement | null;
+    let active = document.activeElement as HTMLElement | null;
+    if (
+      (!active || active === document.body || active.tagName === 'IFRAME') &&
+      currentHighlightedEl &&
+      scopeRoot.contains(currentHighlightedEl) &&
+      isElementVisible(currentHighlightedEl)
+    ) {
+      active = currentHighlightedEl;
+    }
+
+    // Handle interactive timeline seekbar with Left/Right D-Pad arrows!
+    if (active && active.getAttribute('data-player-seekbar') === 'true') {
+      if (key === 'ArrowLeft' || key === 'ArrowRight') {
+        active.dispatchEvent(
+          new CustomEvent('cinema-seekbar-step', {
+            bubbles: true,
+            detail: { direction: key === 'ArrowRight' ? 1 : -1 },
+          })
+        );
+        return true;
+      }
+    }
 
     // Handle text inputs only when non-empty and caret is inside text bounds
     if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
@@ -231,6 +277,7 @@ export function initSpatialNavigation(): () => void {
       !isElementVisible(active)
     ) {
       const visibleFirst = candidates.find(isHorizontallyInContainerView) || candidates[0];
+      highlightFocusableElement(visibleFirst);
       visibleFirst.focus({ preventScroll: true });
       scrollElementIntoViewSafe(visibleFirst);
       return true;
@@ -279,6 +326,7 @@ export function initSpatialNavigation(): () => void {
       }
 
       if (bestSameRow) {
+        highlightFocusableElement(bestSameRow);
         bestSameRow.focus({ preventScroll: true });
         scrollElementIntoViewSafe(bestSameRow);
         return true;
@@ -309,6 +357,7 @@ export function initSpatialNavigation(): () => void {
       }
 
       if (bestFallback) {
+        highlightFocusableElement(bestFallback);
         bestFallback.focus({ preventScroll: true });
         scrollElementIntoViewSafe(bestFallback);
         return true;
@@ -408,12 +457,49 @@ export function initSpatialNavigation(): () => void {
     }
 
     if (bestVert) {
+      highlightFocusableElement(bestVert);
       bestVert.focus({ preventScroll: true });
       scrollElementIntoViewSafe(bestVert);
       return true;
     }
 
     return true;
+  };
+
+  const triggerElementAction = (el: HTMLElement) => {
+    highlightFocusableElement(el);
+
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+      (el as HTMLInputElement).readOnly = false;
+      el.focus();
+      el.click();
+      return;
+    }
+
+    if (el.tagName === 'SELECT') {
+      el.focus();
+      el.click();
+      return;
+    }
+
+    const rect = el.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+
+    el.focus({ preventScroll: true });
+    el.dispatchEvent(
+      new PointerEvent('pointerdown', { bubbles: true, cancelable: true, clientX: cx, clientY: cy })
+    );
+    el.dispatchEvent(
+      new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX: cx, clientY: cy })
+    );
+    el.dispatchEvent(
+      new PointerEvent('pointerup', { bubbles: true, cancelable: true, clientX: cx, clientY: cy })
+    );
+    el.dispatchEvent(
+      new MouseEvent('mouseup', { bubbles: true, cancelable: true, clientX: cx, clientY: cy })
+    );
+    el.click();
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -427,6 +513,18 @@ export function initSpatialNavigation(): () => void {
       if (handled) {
         e.preventDefault();
       }
+      return;
+    }
+
+    if (e.key === 'Enter') {
+      const active = document.activeElement as HTMLElement | null;
+      if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
+        return;
+      }
+      if (window.__cinemaCustomDpadEnterHandler && window.__cinemaCustomDpadEnterHandler()) {
+        e.preventDefault();
+        return;
+      }
     }
   };
 
@@ -436,12 +534,22 @@ export function initSpatialNavigation(): () => void {
   };
 
   window.__cinemaHandleDpadEnter = () => {
+    window.dispatchEvent(new CustomEvent('cinema-dpad-activity', { detail: { key: 'Enter' } }));
+
     if (window.__cinemaCustomDpadEnterHandler && window.__cinemaCustomDpadEnterHandler()) {
       return true;
     }
 
     const scopeRoot = getActiveScopeRoot();
-    const active = document.activeElement as HTMLElement | null;
+    let active = document.activeElement as HTMLElement | null;
+    if (
+      (!active || active === document.body || active.tagName === 'IFRAME') &&
+      currentHighlightedEl &&
+      scopeRoot.contains(currentHighlightedEl) &&
+      isElementVisible(currentHighlightedEl)
+    ) {
+      active = currentHighlightedEl;
+    }
 
     if (
       !active ||
@@ -453,24 +561,17 @@ export function initSpatialNavigation(): () => void {
         scopeRoot.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
       ).filter(isElementVisible);
       if (candidates.length > 0) {
-        candidates[0].focus({ preventScroll: true });
-        candidates[0].click();
+        triggerElementAction(candidates[0]);
         return true;
       }
       return false;
     }
 
-    if (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA') {
-      (active as HTMLInputElement).readOnly = false;
-      active.focus();
-      return true;
-    }
-
-    active.click();
+    triggerElementAction(active);
     return true;
   };
 
-  // Expose Mouse / Air Mouse Hover Handler
+  // Expose Mouse / Air Mouse / Projector Mouse Mode Hover Handler
   window.__cinemaOnMouseHover = (normX: number, normY: number) => {
     const clientX = Math.round(normX * window.innerWidth);
     const clientY = Math.round(normY * window.innerHeight);
@@ -488,43 +589,154 @@ export function initSpatialNavigation(): () => void {
     const elAtPoint = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
     if (!elAtPoint) return;
 
+    // If hovering over an embedded player iframe, notify the iframe to wake up its internal controls
+    if (elAtPoint.tagName === 'IFRAME') {
+      const iframe = elAtPoint as HTMLIFrameElement;
+      const rect = iframe.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        const subX = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+        const subY = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
+        try {
+          iframe.contentWindow?.postMessage(
+            { __cinemaCmd: 'hoverAt', normX: subX, normY: subY },
+            '*'
+          );
+        } catch {
+          // ignore
+        }
+      }
+      return;
+    }
+
     const focusable = elAtPoint.closest<HTMLElement>(FOCUSABLE_SELECTOR);
-    if (focusable && isElementVisible(focusable) && focusable !== active) {
-      if (focusable.tagName !== 'INPUT' && focusable.tagName !== 'TEXTAREA') {
+    if (focusable && isElementVisible(focusable)) {
+      highlightFocusableElement(focusable);
+      if (
+        focusable !== active &&
+        focusable.tagName !== 'INPUT' &&
+        focusable.tagName !== 'TEXTAREA'
+      ) {
         focusable.focus({ preventScroll: true });
       }
     }
   };
 
-  // Expose Guaranteed Click Fallback for Mouse / Air Mouse / Remote Mouse Mode
-  window.__cinemaEnsureClickAt = (normX: number, normY: number) => {
-    if (Date.now() - lastNativeClickTime < 135) {
-      return;
-    }
-
+  // Expose Guaranteed Click Handler for Mouse / Air Mouse / Projector Mouse Mode
+  window.__cinemaEnsureClickAt = (normX: number, normY: number): string => {
     const clientX = Math.round(normX * window.innerWidth);
     const clientY = Math.round(normY * window.innerHeight);
+
+    // Wake up player controls
+    window.dispatchEvent(
+      new MouseEvent('mousemove', { clientX, clientY, bubbles: true })
+    );
+
     const target = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
-    if (!target || target.tagName === 'IFRAME') return;
+    if (!target) return 'none';
+
+    // If clicking on an embedded player <iframe> (e.g., Rezka, Ashdi, Videasy, VidLink),
+    // forward the exact relative coordinates into our injected iframe DocumentStart script!
+    if (target.tagName === 'IFRAME') {
+      const iframe = target as HTMLIFrameElement;
+      const rect = iframe.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        const subX = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+        const subY = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
+        try {
+          iframe.contentWindow?.postMessage(
+            { __cinemaCmd: 'clickAt', normX: subX, normY: subY },
+            '*'
+          );
+        } catch {
+          // ignore
+        }
+      }
+      return 'iframe';
+    }
+
+    // If native click already fired within the last 175ms, skip duplicate click
+    if (Date.now() - lastNativeClickTime < 175) {
+      return 'already_clicked';
+    }
 
     const interactive =
       target.closest<HTMLElement>(FOCUSABLE_SELECTOR) || target;
+
+    // Handle seekbar click at exact horizontal position
+    if (interactive.getAttribute('data-player-seekbar') === 'true') {
+      const rect = interactive.getBoundingClientRect();
+      if (rect.width > 0) {
+        const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+        interactive.dispatchEvent(
+          new CustomEvent('cinema-seekbar-click-ratio', {
+            bubbles: true,
+            detail: { ratio },
+          })
+        );
+        lastNativeClickTime = Date.now();
+        lastClickedElement = interactive;
+        return 'clicked';
+      }
+    }
+
+    // Dispatch click with exact clientX/clientY coordinates (for progress bars, sliders & buttons)
+    highlightFocusableElement(interactive);
 
     if (interactive.tagName === 'INPUT' || interactive.tagName === 'TEXTAREA') {
       (interactive as HTMLInputElement).readOnly = false;
       interactive.focus();
       interactive.click();
-      return;
+      return 'clicked';
     }
 
     if (interactive.tagName === 'SELECT') {
       interactive.focus();
       interactive.click();
-      return;
+      return 'clicked';
     }
 
     interactive.focus({ preventScroll: true });
-    interactive.click();
+    target.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        bubbles: true,
+        cancelable: true,
+        clientX,
+        clientY,
+      })
+    );
+    target.dispatchEvent(
+      new MouseEvent('mousedown', {
+        bubbles: true,
+        cancelable: true,
+        clientX,
+        clientY,
+      })
+    );
+    target.dispatchEvent(
+      new PointerEvent('pointerup', {
+        bubbles: true,
+        cancelable: true,
+        clientX,
+        clientY,
+      })
+    );
+    target.dispatchEvent(
+      new MouseEvent('mouseup', {
+        bubbles: true,
+        cancelable: true,
+        clientX,
+        clientY,
+      })
+    );
+    target.dispatchEvent(
+      new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+        clientX,
+        clientY,
+      })
+    );
+    return 'clicked';
   };
 
   // Expose Mouse Wheel Handler for horizontal carousels & vertical containers
@@ -540,8 +752,9 @@ export function initSpatialNavigation(): () => void {
     if (!target) return;
 
     const horizParent = getHorizontalScrollParent(target);
-    if (horizParent && Math.abs(hScroll) > 0.05) {
-      horizParent.scrollBy({ left: hScroll * 120, behavior: 'smooth' });
+    if (horizParent && (Math.abs(hScroll) > 0.05 || Math.abs(vScroll) > 0.05)) {
+      const delta = Math.abs(hScroll) > Math.abs(vScroll) ? hScroll : -vScroll;
+      horizParent.scrollBy({ left: delta * 150, behavior: 'smooth' });
       return;
     }
 
@@ -570,7 +783,7 @@ export function initSpatialNavigation(): () => void {
   const handlePointerMove = (e: PointerEvent) => {
     if (e.pointerType !== 'mouse') return;
     const now = Date.now();
-    if (now - lastDomMove < 40) return;
+    if (now - lastDomMove < 35) return;
     lastDomMove = now;
 
     const active = document.activeElement as HTMLElement | null;
@@ -578,23 +791,26 @@ export function initSpatialNavigation(): () => void {
 
     const target = e.target as HTMLElement | null;
     const focusable = target?.closest<HTMLElement>(FOCUSABLE_SELECTOR);
-    if (
-      focusable &&
-      focusable !== active &&
-      focusable.tagName !== 'INPUT' &&
-      focusable.tagName !== 'TEXTAREA' &&
-      isElementVisible(focusable)
-    ) {
-      focusable.focus({ preventScroll: true });
+    if (focusable && isElementVisible(focusable)) {
+      highlightFocusableElement(focusable);
+      if (
+        focusable !== active &&
+        focusable.tagName !== 'INPUT' &&
+        focusable.tagName !== 'TEXTAREA'
+      ) {
+        focusable.focus({ preventScroll: true });
+      }
     }
   };
 
   window.addEventListener('click', handleGlobalClickCapture, true);
+  window.addEventListener('focusin', handleGlobalFocusIn, true);
   window.addEventListener('keydown', handleKeyDown);
   window.addEventListener('pointermove', handlePointerMove, { passive: true });
 
   return () => {
     window.removeEventListener('click', handleGlobalClickCapture, true);
+    window.removeEventListener('focusin', handleGlobalFocusIn, true);
     window.removeEventListener('keydown', handleKeyDown);
     window.removeEventListener('pointermove', handlePointerMove);
     delete window.__cinemaHandleDpad;

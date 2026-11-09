@@ -35,6 +35,8 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
+import androidx.webkit.WebViewCompat;
+import androidx.webkit.WebViewFeature;
 
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.BridgeWebChromeClient;
@@ -46,6 +48,7 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
@@ -55,19 +58,18 @@ public class MainActivity extends BridgeActivity {
     private BridgeWebChromeClient.CustomViewCallback customViewCallback = null;
     private boolean isPlayerLandscape = false;
 
-    // Universal Mouse, Air Mouse & TV Remote Pointer Tracking
-    private float lastPointerRawX = -1f;
-    private float lastPointerRawY = -1f;
+    // Universal Mouse, Air Mouse & Projector Remote Pointer Tracking (in Window coordinates!)
+    private float lastPointerWinX = -1f;
+    private float lastPointerWinY = -1f;
     private long lastHoverTimestamp = 0L;
     private long lastJsHoverNotifyTime = 0L;
     private boolean isMousePointerMode = false;
 
-    // Air Mouse click jitter stabilization state
-    private float mouseDownX = 0f;
-    private float mouseDownY = 0f;
-    private float mouseDownRawX = 0f;
-    private float mouseDownRawY = 0f;
+    // Air Mouse & Projector Mouse click jitter stabilization state
+    private float mouseDownWinX = 0f;
+    private float mouseDownWinY = 0f;
     private long mouseDownTime = 0L;
+    private int mouseDownButtonState = 0;
     private boolean mouseExceededSlop = false;
     private boolean isSynthesizingTouch = false;
 
@@ -162,6 +164,18 @@ public class MainActivity extends BridgeActivity {
             // Expose native bridge to React for landscape fullscreen, simulated taps & back navigation
             webView.addJavascriptInterface(new CinemaJsBridge(), "AndroidCinemaBridge");
 
+            // Inject Universal Subframe Player Bridge into ALL frames & cross-origin iframes (Rezka, Ashdi, Videasy, VidLink, etc.)!
+            try {
+                if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+                    WebViewCompat.addDocumentStartJavaScript(
+                        webView,
+                        getSubframePlayerBridgeJs(),
+                        Collections.singleton("*")
+                    );
+                }
+            } catch (Exception ignored) {
+            }
+
             // Subclass BridgeWebViewClient so iframe video players load inside the app instead of launching external Chrome
             webView.setWebViewClient(new BridgeWebViewClient(this.bridge) {
                 @Override
@@ -249,32 +263,221 @@ public class MainActivity extends BridgeActivity {
     }
 
     /**
-     * Converts raw screen coordinates into normalized [0..1] WebView coordinates
-     * and invokes JavaScript hover/click helpers.
+     * Universal JavaScript bridge injected into every frame and cross-origin iframe
+     * (Rezka / Loadbox, Ashdi, Voidboost, Videasy, VidLink, VidSrc, etc.).
+     * Enables remote & mouse seeking (прокрутка), play/pause, audio booster up to 300%,
+     * aspect ratio crop, internal voiceover/quality switching, and touch-to-click synthesis!
      */
-    private float[] getNormalizedWebViewCoords(float rawX, float rawY) {
+    private String getSubframePlayerBridgeJs() {
+        return "(function(){" +
+            "if(window.__cinemaSubframeBridgeInstalled)return;" +
+            "window.__cinemaSubframeBridgeInstalled=true;" +
+            "var isSubframe=(window!==window.top);" +
+            "var audioCtx=null,gainNode=null,hookedVideo=null;" +
+            "function getActiveVideo(){" +
+            "  var vids=document.querySelectorAll('video');" +
+            "  for(var i=0;i<vids.length;i++){if(vids[i].readyState>0||vids[i].src||vids[i].currentSrc)return vids[i];}" +
+            "  return vids[0]||null;" +
+            "}" +
+            "function scanVoices(){" +
+            "  var out=[];" +
+            "  try{" +
+            "    var nodes=document.querySelectorAll('.b-translators__item, [data-translator_id], .pljs-menu li, [class*=\"translator\"], [class*=\"voice\"]');" +
+            "    for(var i=0;i<nodes.length&&out.length<16;i++){" +
+            "      var el=nodes[i];" +
+            "      var txt=(el.textContent||'').trim();" +
+            "      if(txt&&txt.length>1&&txt.length<45){" +
+            "        var act=el.classList.contains('active')||el.classList.contains('selected')||el.getAttribute('aria-selected')==='true';" +
+            "        out.push({index:i,label:txt,active:act});" +
+            "      }" +
+            "    }" +
+            "  }catch(e){}" +
+            "  return out;" +
+            "}" +
+            "function scanQualities(){" +
+            "  var out=[];" +
+            "  try{" +
+            "    var nodes=document.querySelectorAll('[data-quality], .pljs-quality li, [class*=\"quality\"] li, [class*=\"quality\"] div');" +
+            "    for(var i=0;i<nodes.length&&out.length<8;i++){" +
+            "      var txt=(nodes[i].textContent||'').trim();" +
+            "      if(/^(4K|2160p?|1440p?|1080p?|720p?|480p?|360p?)$/i.test(txt)&&out.indexOf(txt)===-1)out.push(txt);" +
+            "    }" +
+            "  }catch(e){}" +
+            "  return out;" +
+            "}" +
+            "function reportState(){" +
+            "  if(!isSubframe)return;" +
+            "  var v=getActiveVideo();" +
+            "  if(!v)return;" +
+            "  var bufEnd=0;" +
+            "  try{if(v.buffered&&v.buffered.length>0)bufEnd=v.buffered.end(v.buffered.length-1);}catch(e){}" +
+            "  try{" +
+            "    window.top.postMessage({" +
+            "      __cinemaPlayerBridge:true," +
+            "      type:'videoState'," +
+            "      currentTime:v.currentTime||0," +
+            "      duration:v.duration||0," +
+            "      paused:Boolean(v.paused)," +
+            "      muted:Boolean(v.muted)," +
+            "      volume:typeof v.volume==='number'?v.volume:1," +
+            "      playbackRate:v.playbackRate||1," +
+            "      bufferedEnd:bufEnd," +
+            "      voices:scanVoices()," +
+            "      qualities:scanQualities()" +
+            "    },'*');" +
+            "  }catch(e){}" +
+            "}" +
+            "if(isSubframe){" +
+            "  setInterval(function(){" +
+            "    var v=getActiveVideo();" +
+            "    if(v&&!v.__cinemaHooked){" +
+            "      v.__cinemaHooked=true;" +
+            "      v.addEventListener('timeupdate',reportState);" +
+            "      v.addEventListener('loadedmetadata',reportState);" +
+            "      v.addEventListener('play',reportState);" +
+            "      v.addEventListener('pause',reportState);" +
+            "    }" +
+            "    if(v)reportState();" +
+            "  },650);" +
+            "}" +
+            "function fireFullTapOnElement(el,cx,cy){" +
+            "  if(!el)return;" +
+            "  try{" +
+            "    if(typeof Touch!=='undefined'&&typeof TouchEvent!=='undefined'){" +
+            "      var tObj=new Touch({identifier:Date.now()%10000,target:el,clientX:cx,clientY:cy,pageX:cx,pageY:cy,radiusX:2,radiusY:2,force:1});" +
+            "      el.dispatchEvent(new TouchEvent('touchstart',{bubbles:true,cancelable:true,touches:[tObj],targetTouches:[tObj],changedTouches:[tObj]}));" +
+            "      el.dispatchEvent(new TouchEvent('touchend',{bubbles:true,cancelable:true,touches:[],targetTouches:[],changedTouches:[tObj]}));" +
+            "    }" +
+            "  }catch(e){}" +
+            "  try{" +
+            "    el.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,cancelable:true,clientX:cx,clientY:cy,pointerType:'touch',isPrimary:true}));" +
+            "    el.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,cancelable:true,clientX:cx,clientY:cy,button:0,buttons:1}));" +
+            "    el.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,cancelable:true,clientX:cx,clientY:cy,pointerType:'touch',isPrimary:true}));" +
+            "    el.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,cancelable:true,clientX:cx,clientY:cy,button:0,buttons:0}));" +
+            "    el.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,clientX:cx,clientY:cy,button:0}));" +
+            "    if(typeof el.click==='function')el.click();" +
+            "  }catch(e){}" +
+            "}" +
+            "window.addEventListener('message',function(ev){" +
+            "  var d=ev.data;" +
+            "  if(!d||typeof d!=='object'||!d.__cinemaCmd)return;" +
+            "  var cmd=d.__cinemaCmd;" +
+            "  var subFrames=document.querySelectorAll('iframe');" +
+            "  if(cmd!=='clickAt'&&cmd!=='hoverAt'){" +
+            "    for(var f=0;f<subFrames.length;f++){try{subFrames[f].contentWindow.postMessage(d,'*');}catch(e){}}" +
+            "  }" +
+            "  if(cmd==='hoverAt'){" +
+            "    var hx=Math.round((d.normX||0.5)*window.innerWidth);" +
+            "    var hy=Math.round((d.normY||0.5)*window.innerHeight);" +
+            "    var hEl=document.elementFromPoint(hx,hy);" +
+            "    if(hEl&&hEl.tagName==='IFRAME'){" +
+            "      var hr=hEl.getBoundingClientRect();" +
+            "      if(hr.width>0&&hr.height>0){" +
+            "        try{hEl.contentWindow.postMessage({__cinemaCmd:'hoverAt',normX:(hx-hr.left)/hr.width,normY:(hy-hr.top)/hr.height},'*');}catch(e){}" +
+            "      }" +
+            "      return;" +
+            "    }" +
+            "    if(hEl){" +
+            "      hEl.dispatchEvent(new MouseEvent('mousemove',{bubbles:true,clientX:hx,clientY:hy}));" +
+            "      hEl.dispatchEvent(new MouseEvent('mouseover',{bubbles:true,clientX:hx,clientY:hy}));" +
+            "    }" +
+            "    return;" +
+            "  }" +
+            "  if(cmd==='clickAt'){" +
+            "    var cx=Math.round((d.normX||0.5)*window.innerWidth);" +
+            "    var cy=Math.round((d.normY||0.5)*window.innerHeight);" +
+            "    var cEl=document.elementFromPoint(cx,cy);" +
+            "    if(!cEl)return;" +
+            "    if(cEl.tagName==='IFRAME'){" +
+            "      var cr=cEl.getBoundingClientRect();" +
+            "      if(cr.width>0&&cr.height>0){" +
+            "        try{cEl.contentWindow.postMessage({__cinemaCmd:'clickAt',normX:(cx-cr.left)/cr.width,normY:(cy-cr.top)/cr.height},'*');}catch(e){}" +
+            "      }" +
+            "      return;" +
+            "    }" +
+            "    fireFullTapOnElement(cEl,cx,cy);" +
+            "    return;" +
+            "  }" +
+            "  var v=getActiveVideo();" +
+            "  if(cmd==='togglePlay'&&v){if(v.paused)v.play().catch(function(){});else v.pause();reportState();}" +
+            "  else if(cmd==='play'&&v){v.play().catch(function(){});reportState();}" +
+            "  else if(cmd==='pause'&&v){v.pause();reportState();}" +
+            "  else if(cmd==='seekBy'&&v){var dur=v.duration||99999;v.currentTime=Math.max(0,Math.min(dur,(v.currentTime||0)+(Number(d.delta)||0)));reportState();}" +
+            "  else if(cmd==='seekToPercent'&&v){if(v.duration>0)v.currentTime=Math.max(0,Math.min(v.duration,(Number(d.percent)||0)*v.duration));else if(d.time)v.currentTime=Number(d.time);reportState();}" +
+            "  else if(cmd==='toggleMute'&&v){v.muted=typeof d.muted==='boolean'?d.muted:!v.muted;reportState();}" +
+            "  else if(cmd==='setSpeed'&&v){v.playbackRate=Number(d.rate)||1.0;reportState();}" +
+            "  else if(cmd==='setAspect'&&v){" +
+            "    var m=d.mode||'contain';" +
+            "    v.style.objectFit=(m==='cover')?'cover':(m==='fill')?'fill':'contain';" +
+            "    v.style.transform=(m==='zoom115')?'scale(1.15)':'none';" +
+            "  }" +
+            "  else if(cmd==='setAudioBoost'&&v){" +
+            "    try{" +
+            "      var g=Number(d.gain)||1.0;" +
+            "      if(!audioCtx||hookedVideo!==v){" +
+            "        var AC=window.AudioContext||window.webkitAudioContext;" +
+            "        if(AC){" +
+            "          audioCtx=new AC();" +
+            "          var src=audioCtx.createMediaElementSource(v);" +
+            "          gainNode=audioCtx.createGain();" +
+            "          src.connect(gainNode);" +
+            "          gainNode.connect(audioCtx.destination);" +
+            "          hookedVideo=v;" +
+            "        }" +
+            "      }" +
+            "      if(gainNode&&audioCtx){if(audioCtx.state==='suspended')audioCtx.resume();gainNode.gain.value=g;}" +
+            "    }catch(e){}" +
+            "  }" +
+            "  else if(cmd==='selectInternalVoice'){" +
+            "    var vNodes=document.querySelectorAll('.b-translators__item, [data-translator_id], .pljs-menu li, [class*=\"translator\"], [class*=\"voice\"]');" +
+            "    if(typeof d.index==='number'&&vNodes[d.index])fireFullTapOnElement(vNodes[d.index],10,10);" +
+            "  }" +
+            "  else if(cmd==='selectInternalQuality'){" +
+            "    var qTarget=String(d.quality||'').toLowerCase();" +
+            "    var qNodes=document.querySelectorAll('li, div, button, span');" +
+            "    for(var qi=0;qi<qNodes.length;qi++){" +
+            "      var qt=(qNodes[qi].textContent||'').trim().toLowerCase();" +
+            "      if(qt===qTarget||(qTarget==='4k'&&(qt==='2160p'||qt==='4k'||qt==='2160'))){" +
+            "        fireFullTapOnElement(qNodes[qi],10,10);break;" +
+            "      }" +
+            "    }" +
+            "  }" +
+            "  else if(cmd==='openInternalMenu'){" +
+            "    var gear=document.querySelector('[class*=\"setting\"], [class*=\"gear\"], [class*=\"cog\"], .pljs-settings, .vjs-subs-caps-button, .jw-icon-settings');" +
+            "    if(gear)fireFullTapOnElement(gear,10,10);" +
+            "    else if(v)fireFullTapOnElement(v,window.innerWidth*0.5,window.innerHeight*0.5);" +
+            "  }" +
+            "});" +
+            "})();";
+    }
+
+    /**
+     * Converts Window-local coordinates (event.getX(), event.getY()) into WebView-local
+     * and normalized [0..1] coordinates. Immune to Projector Keystone Correction & Zoom!
+     */
+    private float[] getWebViewCoordsFromWindow(float winX, float winY) {
         if (this.bridge == null || this.bridge.getWebView() == null) return null;
         WebView webView = this.bridge.getWebView();
         int w = webView.getWidth();
         int h = webView.getHeight();
         if (w <= 0 || h <= 0) return null;
 
-        int[] loc = new int[2];
-        webView.getLocationOnScreen(loc);
-        float localX = rawX - loc[0];
-        float localY = rawY - loc[1];
+        int[] winLoc = new int[2];
+        webView.getLocationInWindow(winLoc);
+        float localX = winX - winLoc[0];
+        float localY = winY - winLoc[1];
 
         float normX = Math.max(0f, Math.min(1f, localX / (float) w));
         float normY = Math.max(0f, Math.min(1f, localY / (float) h));
         return new float[]{normX, normY, localX, localY};
     }
 
-    private void notifyJsMouseHover(float rawX, float rawY) {
+    private void notifyJsMouseHover(float winX, float winY) {
         long now = SystemClock.uptimeMillis();
-        if (now - lastJsHoverNotifyTime < 32) return;
+        if (now - lastJsHoverNotifyTime < 28) return;
         lastJsHoverNotifyTime = now;
 
-        float[] coords = getNormalizedWebViewCoords(rawX, rawY);
+        float[] coords = getWebViewCoordsFromWindow(winX, winY);
         if (coords == null) return;
 
         String js = String.format(
@@ -286,60 +489,89 @@ public class MainActivity extends BridgeActivity {
         this.bridge.getWebView().evaluateJavascript(js, null);
     }
 
-    private void triggerJsClickFallback(float rawX, float rawY) {
+    /**
+     * Evaluates window.__cinemaEnsureClickAt(normX, normY).
+     * - If a native click already fired on a React button, JS returns 'already_clicked'.
+     * - If the click was dropped by WebView (e.g. Projector Mouse Mode buttonState=0), JS clicks the button!
+     * - If the click landed on an <iframe> (e.g. Rezka player) and forceIframeTouch is true,
+     *   also dispatches a two-step asynchronous finger tap (ACTION_DOWN -> 55ms -> ACTION_UP) to WebView.
+     */
+    private void triggerSmartClickAtWindowCoords(float winX, float winY, boolean forceIframeTouch) {
         if (this.bridge == null || this.bridge.getWebView() == null) return;
-        float[] coords = getNormalizedWebViewCoords(rawX, rawY);
+        float[] coords = getWebViewCoordsFromWindow(winX, winY);
         if (coords == null) return;
 
-        WebView webView = this.bridge.getWebView();
+        final WebView webView = this.bridge.getWebView();
         final float normX = coords[0];
         final float normY = coords[1];
+        final float localX = coords[2];
+        final float localY = coords[3];
 
         webView.postDelayed(() -> {
             String js = String.format(
                 Locale.US,
-                "if(window.__cinemaEnsureClickAt){window.__cinemaEnsureClickAt(%.5f,%.5f);}",
+                "(function(){ if(window.__cinemaEnsureClickAt){ return window.__cinemaEnsureClickAt(%.5f,%.5f); } return 'none'; })()",
                 normX,
                 normY
             );
-            webView.evaluateJavascript(js, null);
-        }, 45);
+            webView.evaluateJavascript(js, result -> {
+                if (forceIframeTouch && result != null && result.contains("iframe")) {
+                    dispatchAsyncFingerTapToWebView(localX, localY);
+                }
+            });
+        }, 30);
     }
 
     /**
-     * Synthesizes a clean hardware finger-touch (SOURCE_TOUCHSCREEN + TOOL_TYPE_FINGER)
-     * tap at the given screen coordinates so WebView and embedded cross-origin iframes
-     * always register the click.
+     * Dispatches a true two-step asynchronous finger touch (ACTION_DOWN at t=0,
+     * ACTION_UP at t=55ms via postDelayed) directly to WebView in WebView-local coordinates
+     * so cross-origin iframes (like Rezka / PlayerJS) always register the tap!
      */
-    private void synthesizeFingerTapAtRaw(float rawX, float rawY) {
+    private void dispatchAsyncFingerTapToWebView(float localX, float localY) {
+        if (this.bridge == null || this.bridge.getWebView() == null) return;
+        final WebView webView = this.bridge.getWebView();
         if (isSynthesizingTouch) return;
+
+        final long downTime = SystemClock.uptimeMillis();
         isSynthesizingTouch = true;
         try {
-            long downTime = SystemClock.uptimeMillis();
             MotionEvent downEv = buildFingerMotionEvent(
                 downTime,
                 downTime,
                 MotionEvent.ACTION_DOWN,
-                rawX,
-                rawY
+                localX,
+                localY
             );
-            super.dispatchTouchEvent(downEv);
+            webView.dispatchTouchEvent(downEv);
             downEv.recycle();
-
-            MotionEvent upEv = buildFingerMotionEvent(
-                downTime,
-                downTime + 25,
-                MotionEvent.ACTION_UP,
-                rawX,
-                rawY
-            );
-            super.dispatchTouchEvent(upEv);
-            upEv.recycle();
-
-            triggerJsClickFallback(rawX, rawY);
         } finally {
             isSynthesizingTouch = false;
         }
+
+        webView.postDelayed(() -> {
+            isSynthesizingTouch = true;
+            try {
+                long upTime = SystemClock.uptimeMillis();
+                MotionEvent upEv = buildFingerMotionEvent(
+                    downTime,
+                    upTime,
+                    MotionEvent.ACTION_UP,
+                    localX,
+                    localY
+                );
+                webView.dispatchTouchEvent(upEv);
+                upEv.recycle();
+            } finally {
+                isSynthesizingTouch = false;
+            }
+        }, 55);
+    }
+
+    private void synthesizeAsyncWebViewTapAtWindowCoords(float winX, float winY) {
+        float[] coords = getWebViewCoordsFromWindow(winX, winY);
+        if (coords == null) return;
+        dispatchAsyncFingerTapToWebView(coords[2], coords[3]);
+        triggerSmartClickAtWindowCoords(winX, winY, false);
     }
 
     private MotionEvent buildFingerMotionEvent(
@@ -388,11 +620,11 @@ public class MainActivity extends BridgeActivity {
                 action == MotionEvent.ACTION_HOVER_ENTER ||
                 action == MotionEvent.ACTION_HOVER_EXIT
             ) {
-                lastPointerRawX = event.getRawX();
-                lastPointerRawY = event.getRawY();
+                lastPointerWinX = event.getX();
+                lastPointerWinY = event.getY();
                 lastHoverTimestamp = SystemClock.uptimeMillis();
                 isMousePointerMode = true;
-                notifyJsMouseHover(lastPointerRawX, lastPointerRawY);
+                notifyJsMouseHover(lastPointerWinX, lastPointerWinY);
             } else if (action == MotionEvent.ACTION_BUTTON_PRESS) {
                 int btn = event.getActionButton();
                 if (btn == MotionEvent.BUTTON_SECONDARY || btn == MotionEvent.BUTTON_BACK) {
@@ -400,19 +632,31 @@ public class MainActivity extends BridgeActivity {
                     return true;
                 }
                 if (btn == MotionEvent.BUTTON_PRIMARY) {
-                    lastPointerRawX = event.getRawX();
-                    lastPointerRawY = event.getRawY();
+                    lastPointerWinX = event.getX();
+                    lastPointerWinY = event.getY();
+                    mouseDownWinX = event.getX();
+                    mouseDownWinY = event.getY();
                     lastHoverTimestamp = SystemClock.uptimeMillis();
                     isMousePointerMode = true;
+                    notifyJsMouseHover(lastPointerWinX, lastPointerWinY);
+                }
+            } else if (action == MotionEvent.ACTION_BUTTON_RELEASE) {
+                int btn = event.getActionButton();
+                if (btn == MotionEvent.BUTTON_PRIMARY) {
+                    lastPointerWinX = event.getX();
+                    lastPointerWinY = event.getY();
+                    lastHoverTimestamp = SystemClock.uptimeMillis();
+                    isMousePointerMode = true;
+                    triggerSmartClickAtWindowCoords(event.getX(), event.getY(), true);
                 }
             } else if (action == MotionEvent.ACTION_SCROLL) {
-                lastPointerRawX = event.getRawX();
-                lastPointerRawY = event.getRawY();
+                lastPointerWinX = event.getX();
+                lastPointerWinY = event.getY();
                 isMousePointerMode = true;
                 float vScroll = event.getAxisValue(MotionEvent.AXIS_VSCROLL);
                 float hScroll = event.getAxisValue(MotionEvent.AXIS_HSCROLL);
                 if ((vScroll != 0f || hScroll != 0f) && this.bridge != null && this.bridge.getWebView() != null) {
-                    float[] coords = getNormalizedWebViewCoords(lastPointerRawX, lastPointerRawY);
+                    float[] coords = getWebViewCoordsFromWindow(lastPointerWinX, lastPointerWinY);
                     if (coords != null) {
                         String js = String.format(
                             Locale.US,
@@ -442,6 +686,7 @@ public class MainActivity extends BridgeActivity {
             (source & InputDevice.SOURCE_MOUSE) == InputDevice.SOURCE_MOUSE ||
             (source & InputDevice.SOURCE_TOUCHPAD) == InputDevice.SOURCE_TOUCHPAD ||
             (source & InputDevice.SOURCE_STYLUS) == InputDevice.SOURCE_STYLUS ||
+            (source & InputDevice.SOURCE_CLASS_POINTER) != 0 && toolType == MotionEvent.TOOL_TYPE_MOUSE ||
             toolType == MotionEvent.TOOL_TYPE_MOUSE ||
             toolType == MotionEvent.TOOL_TYPE_STYLUS;
 
@@ -457,86 +702,49 @@ public class MainActivity extends BridgeActivity {
             return true;
         }
 
-        // Convert mouse / Air Mouse events into stabilized finger touches so Chromium WebView
-        // never drops TOOL_TYPE_MOUSE taps with buttonState=0 or Air Mouse hand jitter!
-        if (isMouseOrPointer) {
-            lastPointerRawX = event.getRawX();
-            lastPointerRawY = event.getRawY();
-            lastHoverTimestamp = SystemClock.uptimeMillis();
-            isMousePointerMode = true;
+        float density = getResources().getDisplayMetrics().density;
+        float jitterSlopPx = 22f * (density > 0 ? density : 2f);
 
-            float density = getResources().getDisplayMetrics().density;
-            float jitterSlopPx = 26f * (density > 0 ? density : 2f);
-
-            float targetX = event.getX();
-            float targetY = event.getY();
-
-            if (action == MotionEvent.ACTION_DOWN) {
-                mouseDownX = event.getX();
-                mouseDownY = event.getY();
-                mouseDownRawX = event.getRawX();
-                mouseDownRawY = event.getRawY();
-                mouseDownTime = event.getEventTime();
-                mouseExceededSlop = false;
-                notifyJsMouseHover(mouseDownRawX, mouseDownRawY);
-            } else if (action == MotionEvent.ACTION_MOVE) {
-                float dist = (float) Math.hypot(event.getX() - mouseDownX, event.getY() - mouseDownY);
-                if (!mouseExceededSlop && dist < jitterSlopPx) {
-                    targetX = mouseDownX;
-                    targetY = mouseDownY;
-                } else {
-                    mouseExceededSlop = true;
-                }
-            } else if (action == MotionEvent.ACTION_UP) {
-                if (!mouseExceededSlop) {
-                    targetX = mouseDownX;
-                    targetY = mouseDownY;
-                }
-            }
-
-            isSynthesizingTouch = true;
-            boolean handled;
-            try {
-                MotionEvent fingerEv = buildFingerMotionEvent(
-                    mouseDownTime > 0 ? mouseDownTime : event.getDownTime(),
-                    event.getEventTime(),
-                    action,
-                    targetX,
-                    targetY
-                );
-                handled = super.dispatchTouchEvent(fingerEv);
-                fingerEv.recycle();
-
-                if (action == MotionEvent.ACTION_UP && !mouseExceededSlop) {
-                    triggerJsClickFallback(mouseDownRawX, mouseDownRawY);
-                }
-            } finally {
-                isSynthesizingTouch = false;
-            }
-            return handled;
-        }
-
-        // Standard touchscreen tap: also record position in case an Air Mouse injects SOURCE_TOUCHSCREEN
         if (action == MotionEvent.ACTION_DOWN) {
-            mouseDownX = event.getX();
-            mouseDownY = event.getY();
-            mouseDownRawX = event.getRawX();
-            mouseDownRawY = event.getRawY();
+            mouseDownWinX = event.getX();
+            mouseDownWinY = event.getY();
             mouseDownTime = event.getEventTime();
+            mouseDownButtonState = event.getButtonState();
             mouseExceededSlop = false;
+
+            if (isMouseOrPointer) {
+                lastPointerWinX = event.getX();
+                lastPointerWinY = event.getY();
+                lastHoverTimestamp = SystemClock.uptimeMillis();
+                isMousePointerMode = true;
+            }
+            notifyJsMouseHover(mouseDownWinX, mouseDownWinY);
         } else if (action == MotionEvent.ACTION_MOVE) {
-            float density = getResources().getDisplayMetrics().density;
-            float slop = 18f * (density > 0 ? density : 2f);
-            if (Math.hypot(event.getX() - mouseDownX, event.getY() - mouseDownY) > slop) {
+            float dist = (float) Math.hypot(event.getX() - mouseDownWinX, event.getY() - mouseDownWinY);
+            if (!mouseExceededSlop && dist < jitterSlopPx) {
+                if (isMouseOrPointer) {
+                    // Stabilize Air Mouse / Projector Mouse hand tremor in-place without changing source or toolType!
+                    event.setLocation(mouseDownWinX, mouseDownWinY);
+                }
+            } else {
                 mouseExceededSlop = true;
             }
-        } else if (action == MotionEvent.ACTION_UP && !mouseExceededSlop) {
-            if (event.getEventTime() - mouseDownTime < 550) {
-                triggerJsClickFallback(mouseDownRawX, mouseDownRawY);
+        } else if (action == MotionEvent.ACTION_UP) {
+            if (!mouseExceededSlop && isMouseOrPointer) {
+                event.setLocation(mouseDownWinX, mouseDownWinY);
             }
         }
 
-        return super.dispatchTouchEvent(event);
+        // Always pass the genuine native event to super.dispatchTouchEvent so WebView's native mouse/touch pipeline stays intact!
+        boolean handled = super.dispatchTouchEvent(event);
+
+        // On ACTION_UP of a tap/click, guarantee the click in JS and inside cross-origin iframes!
+        if (action == MotionEvent.ACTION_UP && !mouseExceededSlop) {
+            boolean needsIframeFingerFallback = isMouseOrPointer && mouseDownButtonState == 0;
+            triggerSmartClickAtWindowCoords(mouseDownWinX, mouseDownWinY, needsIframeFingerFallback);
+        }
+
+        return handled;
     }
 
     @Override
@@ -544,6 +752,7 @@ public class MainActivity extends BridgeActivity {
         if (event == null) return false;
         int keyCode = event.getKeyCode();
         int action = event.getAction();
+        long now = SystemClock.uptimeMillis();
 
         // 1. Handle D-Pad Directional Keys directly via JS bridge so cross-origin iframes
         // in VideoPlayer / SportsHub can NEVER trap or swallow remote control navigation!
@@ -553,7 +762,11 @@ public class MainActivity extends BridgeActivity {
             keyCode == KeyEvent.KEYCODE_DPAD_LEFT ||
             keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
         ) {
-            isMousePointerMode = false;
+            // Only exit mouse pointer mode if no mouse hover move happened in the last 1200ms
+            // (Projector remotes in Mouse Mode often emit D-Pad keys while moving the hover cursor!)
+            if (now - lastHoverTimestamp > 1200) {
+                isMousePointerMode = false;
+            }
             if (action == KeyEvent.ACTION_DOWN && this.bridge != null && this.bridge.getWebView() != null) {
                 String keyName = "ArrowDown";
                 if (keyCode == KeyEvent.KEYCODE_DPAD_UP) keyName = "ArrowUp";
@@ -570,26 +783,26 @@ public class MainActivity extends BridgeActivity {
             return true;
         }
 
-        // 2. Handle OK / Enter / Center button for BOTH Remote Mouse Mode and D-Pad Mode
+        // 2. Handle OK / Enter / Center button for BOTH Projector Mouse Mode and D-Pad Mode!
         if (
             keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
             keyCode == KeyEvent.KEYCODE_ENTER ||
             keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER ||
-            keyCode == KeyEvent.KEYCODE_BUTTON_A
+            keyCode == KeyEvent.KEYCODE_BUTTON_A ||
+            keyCode == KeyEvent.KEYCODE_BUTTON_SELECT
         ) {
-            long now = SystemClock.uptimeMillis();
             boolean activeHoverCursor =
                 isMousePointerMode &&
-                lastPointerRawX >= 0 &&
-                lastPointerRawY >= 0 &&
-                (now - lastHoverTimestamp) < 8000;
+                lastPointerWinX >= 0 &&
+                lastPointerWinY >= 0 &&
+                (now - lastHoverTimestamp) < 30000;
 
             if (activeHoverCursor) {
                 if (action == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
-                    synthesizeFingerTapAtRaw(lastPointerRawX, lastPointerRawY);
+                    synthesizeAsyncWebViewTapAtWindowCoords(lastPointerWinX, lastPointerWinY);
                 }
                 return true;
-            } else if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_BUTTON_A) {
+            } else {
                 if (action == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
                     if (this.bridge != null && this.bridge.getWebView() != null) {
                         this.bridge.getWebView().evaluateJavascript(
@@ -958,11 +1171,9 @@ public class MainActivity extends BridgeActivity {
             runOnUiThread(() -> {
                 if (bridge == null || bridge.getWebView() == null) return;
                 WebView webView = bridge.getWebView();
-                int[] loc = new int[2];
-                webView.getLocationOnScreen(loc);
-                float rawX = loc[0] + Math.max(0f, Math.min(1f, normX)) * webView.getWidth();
-                float rawY = loc[1] + Math.max(0f, Math.min(1f, normY)) * webView.getHeight();
-                synthesizeFingerTapAtRaw(rawX, rawY);
+                float localX = Math.max(0f, Math.min(1f, normX)) * webView.getWidth();
+                float localY = Math.max(0f, Math.min(1f, normY)) * webView.getHeight();
+                dispatchAsyncFingerTapToWebView(localX, localY);
             });
         }
 
@@ -987,7 +1198,7 @@ public class MainActivity extends BridgeActivity {
                 } catch (Exception noBrowserException) {
                     // Projector has no browser installed: fall back to direct in-app APK download!
                     downloadAndInstallApkInternal(
-                        "https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.6.0.apk"
+                        "https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.6.1.apk"
                     );
                 }
             });

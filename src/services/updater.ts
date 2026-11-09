@@ -1,6 +1,6 @@
 import { httpGetJson } from './tmdb';
 
-export const APP_VERSION = '3.6.0';
+export const APP_VERSION = '3.6.1';
 export const GITHUB_REPO = 'zod4ix/cinemavault-android';
 export const DEFAULT_APK_URL = `https://github.com/${GITHUB_REPO}/raw/main/CinemaVault-PRO-v${APP_VERSION}.apk`;
 export const GITHUB_RELEASE_PAGE = `https://github.com/${GITHUB_REPO}/releases/latest`;
@@ -110,10 +110,9 @@ export const updaterService = {
     let apkDownloadUrl = DEFAULT_APK_URL;
     let releasePageUrl = GITHUB_RELEASE_PAGE;
     let releaseNotes =
-      '• 🖱️ ПОВНА ПІДТРИМКА МИШОК, AIR MOUSE ТА РЕЖИМУ МИШІ НА ПУЛЬТАХ: нативний перехоплювач курсора та кліків у Android WebView (MotionEvent TOOL_TYPE_FINGER bridge + стабілізатор тремтіння руки 26dp) — кожна кнопка, картка та меню клікаються з першого разу!\n' +
-      '• 🎮 ОНОВЛЕНА 2D-НАВІГАЦІЯ ПУЛЬТОМ (D-PAD) У ВІДЕОПЛЕЄРІ ТА ДОДАТКУ: миттєве переміщення між кнопками «Назад», «Мова / Озвучення», «Якість (4K / 1080p / 720p / 480p)», «Торренти», «Серії» та серверами без залипання фокуса у фреймах чи списках\n' +
-      '• 🖱️ ВБУДОВАНИЙ ВІРТУАЛЬНИЙ КУРСОР ПУЛЬТА У ПЛЕЄРІ: керування вказівником стрілками пульта для кліків по внутрішніх елементах плеєра\n' +
-      '• 🏟️ СПОРТ LIVE SCANNER HUB + 14+ мультимовних каналів (4 українські на чолі) + P2P Торрент-плеєр';
+      '• 📽️ ІДЕАЛЬНА РОБОТА МИШКИ, ПУЛЬТА ТА КЛАВІАТУРИ НА ПРОЄКТОРАХ, SMART TV ТА ВСІХ ДЕВАЙСАХ (v3.6.1): виправлено баг «мишка бігає верхнім шаром і не натискає кнопки» (Window-local координати без зміщення Keystone + збереження нативного SOURCE_MOUSE у WebView + авто-підсвічування при наведенні)\n' +
+      '• 🎛️ УНІВЕРСАЛЬНИЙ КОМБАЙН КЕРУВАННЯ ВСЕРЕДИНІ ПЛЕЄРА (Rezka, Ashdi, Videasy, VidLink, HLS, Торренти): додано нижню панель з інтерактивною шкалою прокрутки (SeekBar), куди пульт миттєво перестрибує стрілкою «Вниз», та прямий міст (WebViewCompat Subframe Bridge) до внутрішніх меню озвучення, якості (4K/1080p/720p/480p) й налаштувань iframe-плеєрів!\n' +
+      '• 🔊 PRO-НАЛАШТУВАННЯ МЕДІА-КОМБАЙНА ДЛЯ ПРОЄКТОРІВ: Підсилювач звуку до 300% (Audio Booster), формат екрана без чорних смуг (16:9 / Crop / Stretch / Кінозум 115%), пресети яскравості та контрасту для проєкторів і швидкість 0.5x–2.0x';
     let publishedAt = new Date().toISOString().slice(0, 10);
 
     try {

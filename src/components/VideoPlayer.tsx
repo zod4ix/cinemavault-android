@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import Hls from 'hls.js';
 import {
   Play,
@@ -25,6 +25,10 @@ import {
   X,
   Layers,
   MousePointer,
+  Sliders,
+  Gauge,
+  Sun,
+  Monitor,
 } from 'lucide-react';
 import { MediaItem, AudioTrack, StreamQuality, StreamServer, TorrentItem } from '../types/movie';
 import { buildServers, ensureIds, resolveUaServer, probeServer, ServerHealth } from '../services/servers';
@@ -43,6 +47,12 @@ declare global {
     __cinemaHandlePlayerBack?: () => boolean;
     webtor?: any;
   }
+}
+
+interface IframeVoiceItem {
+  index: number;
+  label: string;
+  active?: boolean;
 }
 
 interface VideoPlayerProps {
@@ -66,7 +76,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   title,
   subtitle,
   qualities,
-  audioTracks,
   embedUrl,
   servers: initialServers,
   initialMode = 'embed',
@@ -78,12 +87,16 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 }) => {
   const { t } = useLanguage();
   const videoRef = useRef<HTMLVideoElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const backBtnRef = useRef<HTMLButtonElement>(null);
   const audioBtnRef = useRef<HTMLButtonElement>(null);
   const qualityBtnRef = useRef<HTMLButtonElement>(null);
+  const settingsBtnRef = useRef<HTMLButtonElement>(null);
   const torrentsBtnRef = useRef<HTMLButtonElement>(null);
   const episodesBtnRef = useRef<HTMLButtonElement>(null);
+  const seekBarRef = useRef<HTMLDivElement>(null);
+  const bottomPlayBtnRef = useRef<HTMLButtonElement>(null);
   const serversRowRef = useRef<HTMLDivElement>(null);
   const modalBoxRef = useRef<HTMLDivElement>(null);
   const hlsRef = useRef<Hls | null>(null);
@@ -95,16 +108,31 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [serverHealthMap, setServerHealthMap] = useState<Record<string, ServerHealth>>({});
   const [autoFailoverMsg, setAutoFailoverMsg] = useState<string | null>(null);
 
-  // Active Menu: 'none' | 'audio' | 'quality' | 'torrents' | 'episodes'
-  const [activeMenu, setActiveMenu] = useState<'none' | 'audio' | 'quality' | 'torrents' | 'episodes'>('none');
-  const prevMenuRef = useRef<'none' | 'audio' | 'quality' | 'torrents' | 'episodes'>('none');
+  // Active Menu: 'none' | 'audio' | 'quality' | 'settings' | 'torrents' | 'episodes'
+  const [activeMenu, setActiveMenu] = useState<
+    'none' | 'audio' | 'quality' | 'settings' | 'torrents' | 'episodes'
+  >('none');
+  const prevMenuRef = useRef<'none' | 'audio' | 'quality' | 'settings' | 'torrents' | 'episodes'>(
+    'none'
+  );
   const [audioLangFilter, setAudioLangFilter] = useState<string>('all');
   const [torrentLangFilter, setTorrentLangFilter] = useState<string>('all');
 
-  // Explicit user-selectable quality resolution
+  // Pro Media Center Settings State (Audio Boost, Aspect Ratio, Playback Speed, Projector Picture Preset)
   const [preferredQuality, setPreferredQuality] = useState<'4K' | '1080p' | '720p' | '480p'>(
     media.quality?.includes('4K') ? '4K' : '1080p'
   );
+  const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0);
+  const [aspectMode, setAspectMode] = useState<'contain' | 'cover' | 'fill' | 'zoom115'>('contain');
+  const [audioBoostLevel, setAudioBoostLevel] = useState<number>(1.0);
+  const [picturePreset, setPicturePreset] = useState<
+    'normal' | 'projector_bright' | 'cinema_hdr' | 'warm'
+  >('normal');
+  const [cleanCinemaBarsHidden, setCleanCinemaBarsHidden] = useState<boolean>(false);
+
+  // Detected internal voices & qualities from cross-origin iframe (Rezka / Ashdi / PlayerJS)
+  const [iframeVoices, setIframeVoices] = useState<IframeVoiceItem[]>([]);
+  const [iframeQualities, setIframeQualities] = useState<string[]>([]);
 
   // Virtual Remote Mouse Cursor Mode (for clicking inside embedded iframes using only TV remote D-Pad)
   const [isVirtualCursorActive, setIsVirtualCursorActive] = useState<boolean>(false);
@@ -112,6 +140,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     x: 0.5,
     y: 0.55,
   });
+  const virtualCursorPosRef = useRef<{ x: number; y: number }>({ x: 0.5, y: 0.55 });
 
   // Live P2P Torrents
   const [torrentStreams, setTorrentStreams] = useState<TorrentItem[]>([]);
@@ -121,10 +150,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [serversVersion, setServersVersion] = useState<number>(0);
   useEffect(() => {
     let active = true;
-    Promise.all([
-      ensureIds(media),
-      resolveUaServer(media, activeSeason),
-    ]).then(() => {
+    Promise.all([ensureIds(media), resolveUaServer(media, activeSeason)]).then(() => {
       if (active) setServersVersion((v) => v + 1);
     });
     return () => {
@@ -185,7 +211,15 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     });
 
     return Array.from(map.values());
-  }, [media, activeSeason, activeEpisode, serversVersion, initialServers, torrentStreams, initialMagnet]);
+  }, [
+    media,
+    activeSeason,
+    activeEpisode,
+    serversVersion,
+    initialServers,
+    torrentStreams,
+    initialMagnet,
+  ]);
 
   const getInitialServerId = () => {
     if (initialMode === 'torrent' || initialMagnet) return 'initial-torrent';
@@ -195,7 +229,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       if (tr) return tr.id;
     }
     if (embedUrl) {
-      const matched = availableServers.find((s) => s.url && embedUrl.includes(s.url.split('?')[0]));
+      const matched = availableServers.find(
+        (s) => s.url && embedUrl.includes(s.url.split('?')[0])
+      );
       if (matched) return matched.id;
     }
     return availableServers[0]?.id || 'vidlink';
@@ -237,20 +273,17 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     media.streamUrl ||
     '';
 
-  const [selectedQuality, setSelectedQuality] = useState<StreamQuality>(
+  const [selectedQuality] = useState<StreamQuality>(
     nonEmbedQualities[0] || { label: '1080p', url: defaultNativeUrl }
-  );
-  const [selectedAudio, setSelectedAudio] = useState<AudioTrack>(
-    audioTracks[0] || { id: 'default', name: 'Auto (Original / Dub)', language: 'uk' }
   );
 
   const [isPlaying, setIsPlaying] = useState<boolean>(true);
   const [currentTime, setCurrentTime] = useState<number>(0);
-  const [duration, setDuration] = useState<number>(0);
+  const [duration, setDuration] = useState<number>(7200);
   const [volume] = useState<number>(1);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
-  const [showControls, setShowControls] = useState<boolean>(true);
+  const [, setShowControls] = useState<boolean>(true);
   const [bufferedEnd, setBufferedEnd] = useState<number>(0);
   const [iframeLoading, setIframeLoading] = useState<boolean>(true);
   const [osdMessage, setOsdMessage] = useState<string | null>(null);
@@ -258,13 +291,82 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const osdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const showOsd = (msg: string) => {
+  const showOsd = useCallback((msg: string) => {
     if (osdTimerRef.current) clearTimeout(osdTimerRef.current);
     setOsdMessage(msg);
-    osdTimerRef.current = setTimeout(() => setOsdMessage(null), 1600);
+    osdTimerRef.current = setTimeout(() => setOsdMessage(null), 1750);
+  }, []);
+
+  const formatTime = (sec: number): string => {
+    if (!sec || !isFinite(sec) || sec < 0) return '00:00';
+    const total = Math.floor(sec);
+    const hrs = Math.floor(total / 3600);
+    const mins = Math.floor((total % 3600) / 60);
+    const secs = total % 60;
+    if (hrs > 0) {
+      return `${hrs}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
-  // TV remote autofocus on mount: focus the Language/Audio selector button so user can immediately switch language/quality or go back
+  // Send command to cross-origin player iframe (Rezka, Ashdi, Videasy, VidLink, etc.)
+  const sendIframeCommand = useCallback((cmd: string, payload: Record<string, any> = {}) => {
+    try {
+      const msg = { __cinemaCmd: cmd, ...payload };
+      if (iframeRef.current?.contentWindow) {
+        iframeRef.current.contentWindow.postMessage(msg, '*');
+      }
+      // Also broadcast to any webtor / nested iframes in document
+      const allIframes = document.querySelectorAll<HTMLIFrameElement>('iframe');
+      allIframes.forEach((f) => {
+        try {
+          f.contentWindow?.postMessage(msg, '*');
+        } catch {
+          // ignore
+        }
+      });
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Listen for live telemetry from our Universal Subframe Player Bridge inside cross-origin iframes!
+  useEffect(() => {
+    const handleMessage = (e: MessageEvent) => {
+      const data = e.data;
+      if (!data || typeof data !== 'object' || !data.__cinemaPlayerBridge) return;
+
+      if (data.type === 'videoState') {
+        if (typeof data.currentTime === 'number' && data.currentTime >= 0) {
+          setCurrentTime(data.currentTime);
+        }
+        if (typeof data.duration === 'number' && data.duration > 0 && isFinite(data.duration)) {
+          setDuration(data.duration);
+        }
+        if (typeof data.paused === 'boolean') {
+          setIsPlaying(!data.paused);
+        }
+        if (typeof data.muted === 'boolean') {
+          setIsMuted(data.muted);
+        }
+        if (typeof data.bufferedEnd === 'number' && data.bufferedEnd >= 0) {
+          setBufferedEnd(data.bufferedEnd);
+        }
+        if (Array.isArray(data.voices) && data.voices.length > 0) {
+          setIframeVoices(data.voices);
+        }
+        if (Array.isArray(data.qualities) && data.qualities.length > 0) {
+          setIframeQualities(data.qualities);
+        }
+        setIframeLoading(false);
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
+  // TV remote autofocus on mount: focus Language/Audio button so user can immediately navigate top bar or press Down to jump into the player!
   useEffect(() => {
     const tId = setTimeout(() => {
       (audioBtnRef.current || backBtnRef.current)?.focus({ preventScroll: true });
@@ -290,6 +392,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       const tId = setTimeout(() => {
         if (last === 'audio') audioBtnRef.current?.focus({ preventScroll: true });
         else if (last === 'quality') qualityBtnRef.current?.focus({ preventScroll: true });
+        else if (last === 'settings') settingsBtnRef.current?.focus({ preventScroll: true });
         else if (last === 'torrents') torrentsBtnRef.current?.focus({ preventScroll: true });
         else if (last === 'episodes') episodesBtnRef.current?.focus({ preventScroll: true });
       }, 40);
@@ -297,7 +400,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
   }, [activeMenu]);
 
-  // Virtual Remote Mouse Cursor D-Pad Interceptor
+  // Virtual Remote Mouse Cursor D-Pad Interceptor (with live hover highlighting & reliable click)
   useEffect(() => {
     if (!isVirtualCursorActive) {
       window.__cinemaCustomDpadHandler = null;
@@ -305,31 +408,37 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       return;
     }
 
-    const stepX = 0.035;
-    const stepY = 0.045;
+    const stepX = 0.032;
+    const stepY = 0.042;
 
     window.__cinemaCustomDpadHandler = (key: string) => {
-      setVirtualCursorPos((prev) => {
-        let nx = prev.x;
-        let ny = prev.y;
-        if (key === 'ArrowLeft') nx = Math.max(0.03, prev.x - stepX);
-        else if (key === 'ArrowRight') nx = Math.min(0.97, prev.x + stepX);
-        else if (key === 'ArrowUp') ny = Math.max(0.04, prev.y - stepY);
-        else if (key === 'ArrowDown') ny = Math.min(0.96, prev.y + stepY);
-        return { x: nx, y: ny };
-      });
+      const prev = virtualCursorPosRef.current;
+      let nx = prev.x;
+      let ny = prev.y;
+      if (key === 'ArrowLeft') nx = Math.max(0.02, prev.x - stepX);
+      else if (key === 'ArrowRight') nx = Math.min(0.98, prev.x + stepX);
+      else if (key === 'ArrowUp') ny = Math.max(0.03, prev.y - stepY);
+      else if (key === 'ArrowDown') ny = Math.min(0.97, prev.y + stepY);
+
+      const nextPos = { x: nx, y: ny };
+      virtualCursorPosRef.current = nextPos;
+      setVirtualCursorPos(nextPos);
+
+      // Highlight any button or wake up iframe controls under the virtual cursor!
+      if (window.__cinemaOnMouseHover) {
+        window.__cinemaOnMouseHover(nx, ny);
+      }
       return true;
     };
 
     window.__cinemaCustomDpadEnterHandler = () => {
-      setVirtualCursorPos((pos) => {
-        if (window.AndroidCinemaBridge?.simulateScreenTap) {
-          window.AndroidCinemaBridge.simulateScreenTap(pos.x, pos.y);
-        } else if (window.__cinemaEnsureClickAt) {
-          window.__cinemaEnsureClickAt(pos.x, pos.y);
-        }
-        return pos;
-      });
+      const pos = virtualCursorPosRef.current;
+      if (window.__cinemaEnsureClickAt) {
+        window.__cinemaEnsureClickAt(pos.x, pos.y);
+      }
+      if (window.AndroidCinemaBridge?.simulateScreenTap) {
+        window.AndroidCinemaBridge.simulateScreenTap(pos.x, pos.y);
+      }
       showOsd('🖱️ Клік виконано');
       return true;
     };
@@ -338,7 +447,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       window.__cinemaCustomDpadHandler = null;
       window.__cinemaCustomDpadEnterHandler = null;
     };
-  }, [isVirtualCursorActive]);
+  }, [isVirtualCursorActive, showOsd]);
 
   // Probe current active server health on mount or when switching
   useEffect(() => {
@@ -361,6 +470,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   useEffect(() => {
     setIframeLoading(true);
+    setIframeVoices([]);
+    setIframeQualities([]);
     if (activeServer) {
       rememberWorkingServer(activeServer.id);
     }
@@ -512,47 +623,163 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     return () => clearInterval(timer);
   }, [currentTime, duration, media, episodeId, activeSeason, activeEpisode, title]);
 
-  const togglePlay = () => {
-    if (activeServer?.mode !== 'native') return;
-    if (videoRef.current) {
+  // Universal Play/Pause across BOTH Native AND Embedded (Rezka / Ashdi / Videasy / VidLink) players!
+  const togglePlay = useCallback(() => {
+    if (activeServer?.mode === 'native' && videoRef.current) {
       if (isPlaying) {
         videoRef.current.pause();
         setIsPlaying(false);
+        showOsd('⏸ Пауза');
       } else {
         videoRef.current.play().catch(() => {});
         setIsPlaying(true);
+        showOsd('▶ Відтворення');
       }
+      return;
     }
-  };
 
-  const seek = (seconds: number) => {
-    if (activeServer?.mode !== 'native' || !videoRef.current) return;
-    videoRef.current.currentTime = Math.max(
-      0,
-      Math.min(duration, videoRef.current.currentTime + seconds)
-    );
-  };
+    // For embed / torrent mode: send togglePlay to the iframe bridge!
+    const nextPlaying = !isPlaying;
+    setIsPlaying(nextPlaying);
+    sendIframeCommand('togglePlay');
+    showOsd(nextPlaying ? '▶ Відтворення' : '⏸ Пауза');
+  }, [activeServer?.mode, isPlaying, sendIframeCommand, showOsd]);
 
-  const toggleMute = () => {
+  // Universal Seek (Прокрутка) across BOTH Native AND Embedded (Rezka / Ashdi / Videasy / VidLink) players!
+  const seek = useCallback(
+    (seconds: number) => {
+      const safeDur = duration > 0 ? duration : 7200;
+      const nextTime = Math.max(0, Math.min(safeDur, currentTime + seconds));
+      setCurrentTime(nextTime);
+
+      if (activeServer?.mode === 'native' && videoRef.current) {
+        videoRef.current.currentTime = nextTime;
+      } else {
+        sendIframeCommand('seekBy', { delta: seconds });
+      }
+
+      const sign = seconds > 0 ? '+' : '';
+      showOsd(
+        `${seconds > 0 ? '⏩' : '⏪'} ${sign}${seconds} сек • ${formatTime(nextTime)} / ${formatTime(safeDur)}`
+      );
+    },
+    [activeServer?.mode, currentTime, duration, sendIframeCommand, showOsd]
+  );
+
+  // Universal Seek to exact ratio [0..1] on Timeline Scrubber Bar
+  const seekToRatio = useCallback(
+    (ratio: number) => {
+      const clamped = Math.max(0, Math.min(1, ratio));
+      const safeDur = duration > 0 ? duration : 7200;
+      const targetSec = clamped * safeDur;
+      setCurrentTime(targetSec);
+
+      if (activeServer?.mode === 'native' && videoRef.current) {
+        videoRef.current.currentTime = targetSec;
+      } else {
+        sendIframeCommand('seekToPercent', { percent: clamped, time: targetSec });
+      }
+
+      showOsd(`⏱ Прокрутка: ${formatTime(targetSec)} / ${formatTime(safeDur)}`);
+    },
+    [activeServer?.mode, duration, sendIframeCommand, showOsd]
+  );
+
+  const toggleMute = useCallback(() => {
+    const nextMuted = !isMuted;
+    setIsMuted(nextMuted);
     if (videoRef.current) {
-      videoRef.current.muted = !isMuted;
-      setIsMuted(!isMuted);
+      videoRef.current.muted = nextMuted;
     }
+    sendIframeCommand('toggleMute', { muted: nextMuted });
+    showOsd(nextMuted ? '🔇 Без звуку' : '🔊 Звук увімкнено');
+  }, [isMuted, sendIframeCommand, showOsd]);
+
+  const applyPlaybackSpeed = (rate: number) => {
+    setPlaybackSpeed(rate);
+    if (videoRef.current) {
+      videoRef.current.playbackRate = rate;
+    }
+    sendIframeCommand('setSpeed', { rate });
+    showOsd(`⏩ Швидкість: ${rate}x`);
   };
 
-  const toggleFullscreen = () => {
-    toggleAndroidLandscape();
+  const applyAspectMode = (mode: 'contain' | 'cover' | 'fill' | 'zoom115') => {
+    setAspectMode(mode);
+    sendIframeCommand('setAspect', { mode });
+    const labels: Record<string, string> = {
+      contain: '📐 Формат: Стандарт (16:9)',
+      cover: '📐 Формат: Без чорних смуг (Crop)',
+      fill: '📐 Формат: На весь екран (Stretch)',
+      zoom115: '📐 Формат: Кінозум 115% (21:9)',
+    };
+    showOsd(labels[mode] || '📐 Формат змінено');
   };
 
-  const resetControlsTimeout = () => {
+  const applyAudioBoost = (gain: number) => {
+    setAudioBoostLevel(gain);
+    sendIframeCommand('setAudioBoost', { gain });
+    showOsd(`🔊 Підсилення звуку: ${Math.round(gain * 100)}%`);
+  };
+
+  const applyPicturePreset = (preset: 'normal' | 'projector_bright' | 'cinema_hdr' | 'warm') => {
+    setPicturePreset(preset);
+    sendIframeCommand('setPictureFilter', { preset });
+    const labels: Record<string, string> = {
+      normal: '🔆 Зображення: Стандарт',
+      projector_bright: '🔆 Зображення: Яскравий проєктор (+25%)',
+      cinema_hdr: '🔆 Зображення: Кінозал HDR Контраст',
+      warm: '🔆 Зображення: Теплий вечірній',
+    };
+    showOsd(labels[preset] || '🔆 Зображення змінено');
+  };
+
+  // Listen to custom seekbar events from spatialNav (D-Pad Left/Right & Click Ratio)
+  useEffect(() => {
+    const el = seekBarRef.current;
+    if (!el) return;
+
+    const onStep = (e: Event) => {
+      const dir = (e as CustomEvent).detail?.direction || 1;
+      seek(dir * 15);
+    };
+
+    const onRatioClick = (e: Event) => {
+      const ratio = (e as CustomEvent).detail?.ratio;
+      if (typeof ratio === 'number') {
+        seekToRatio(ratio);
+      }
+    };
+
+    el.addEventListener('cinema-seekbar-step', onStep);
+    el.addEventListener('cinema-seekbar-click-ratio', onRatioClick);
+    return () => {
+      el.removeEventListener('cinema-seekbar-step', onStep);
+      el.removeEventListener('cinema-seekbar-click-ratio', onRatioClick);
+    };
+  }, [seek, seekToRatio]);
+
+  const resetControlsTimeout = useCallback(() => {
     setShowControls(true);
+    if (cleanCinemaBarsHidden) {
+      setCleanCinemaBarsHidden(false);
+    }
     if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
     controlsTimeoutRef.current = setTimeout(() => {
       if (isPlaying && activeMenu === 'none') setShowControls(false);
-    }, 4500);
-  };
+    }, 5000);
+  }, [cleanCinemaBarsHidden, isPlaying, activeMenu]);
 
-  // Keyboard navigation & remote control hotkeys
+  // Wake up controls on any D-Pad activity
+  useEffect(() => {
+    const onDpadActivity = () => {
+      resetControlsTimeout();
+    };
+    window.addEventListener('cinema-dpad-activity', onDpadActivity);
+    return () => window.removeEventListener('cinema-dpad-activity', onDpadActivity);
+  }, [resetControlsTimeout]);
+
+  // Keyboard navigation & remote control back handler
   useEffect(() => {
     window.__cinemaHandlePlayerBack = () => {
       if (isVirtualCursorActive) {
@@ -564,12 +791,17 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         setActiveMenu('none');
         return true;
       }
+      if (cleanCinemaBarsHidden) {
+        setCleanCinemaBarsHidden(false);
+        setShowControls(true);
+        return true;
+      }
       return false;
     };
     return () => {
       delete window.__cinemaHandlePlayerBack;
     };
-  }, [isVirtualCursorActive, activeMenu]);
+  }, [isVirtualCursorActive, activeMenu, cleanCinemaBarsHidden, showOsd]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -587,6 +819,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           setActiveMenu('none');
           return;
         }
+        if (cleanCinemaBarsHidden) {
+          setCleanCinemaBarsHidden(false);
+          return;
+        }
         onClose();
         return;
       }
@@ -602,6 +838,11 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           e.preventDefault();
           setActiveMenu((prev) => (prev === 'quality' ? 'none' : 'quality'));
           break;
+        case 's':
+        case 'S':
+          e.preventDefault();
+          setActiveMenu((prev) => (prev === 'settings' ? 'none' : 'settings'));
+          break;
         case 't':
         case 'T':
           e.preventDefault();
@@ -616,24 +857,28 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           break;
         case 'k':
         case 'K':
-          if (activeServer?.mode === 'native') {
-            e.preventDefault();
-            togglePlay();
-            showOsd(isPlaying ? '⏸ Пауза' : '▶ Відтворення');
-          }
+          e.preventDefault();
+          togglePlay();
+          break;
+        case 'j':
+        case 'J':
+          e.preventDefault();
+          seek(-15);
+          break;
+        case 'l':
+        case 'L':
+          e.preventDefault();
+          seek(15);
           break;
         case 'm':
         case 'M':
-          if (activeServer?.mode === 'native') {
-            e.preventDefault();
-            toggleMute();
-            showOsd(isMuted ? '🔊 Звук увімкнено' : '🔇 Без звуку');
-          }
+          e.preventDefault();
+          toggleMute();
           break;
         case 'f':
         case 'F':
           e.preventDefault();
-          toggleFullscreen();
+          toggleAndroidLandscape();
           showOsd(isFullscreen ? '🗗 Звичайний екран' : '🗖 Повний екран');
           break;
       }
@@ -644,21 +889,20 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       const keyCode = e.detail?.keyCode;
       if (keyCode === 85) {
         togglePlay();
-        showOsd(isPlaying ? '⏸ Пауза' : '▶ Відтворення');
       } else if (keyCode === 126) {
         if (videoRef.current && videoRef.current.paused) videoRef.current.play();
+        sendIframeCommand('play');
         setIsPlaying(true);
         showOsd('▶ Відтворення');
       } else if (keyCode === 127) {
         if (videoRef.current && !videoRef.current.paused) videoRef.current.pause();
+        sendIframeCommand('pause');
         setIsPlaying(false);
         showOsd('⏸ Пауза');
       } else if (keyCode === 90) {
-        seek(10);
-        showOsd('⏩ +10 сек');
+        seek(15);
       } else if (keyCode === 89) {
-        seek(-10);
-        showOsd('⏪ -10 сек');
+        seek(-15);
       } else if (keyCode === 87 && isSeries) {
         setActiveEpisode((prev) => prev + 1);
         showOsd('⏭ Наступна серія');
@@ -671,8 +915,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         // KEYCODE_MEDIA_AUDIO_TRACK or KEYCODE_CAPTIONS -> Open Language/Audio Menu
         setActiveMenu((prev) => (prev === 'audio' ? 'none' : 'audio'));
       } else if (keyCode === 82 || keyCode === 176) {
-        // KEYCODE_MENU or KEYCODE_SETTINGS -> Open Quality Menu
-        setActiveMenu((prev) => (prev === 'quality' ? 'none' : 'quality'));
+        // KEYCODE_MENU or KEYCODE_SETTINGS -> Open Settings Menu
+        setActiveMenu((prev) => (prev === 'settings' ? 'none' : 'settings'));
       }
     };
 
@@ -691,7 +935,14 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     isSeries,
     activeMenu,
     isVirtualCursorActive,
+    cleanCinemaBarsHidden,
     onClose,
+    resetControlsTimeout,
+    togglePlay,
+    seek,
+    toggleMute,
+    sendIframeCommand,
+    showOsd,
   ]);
 
   const getCurrentAudioLabel = () => {
@@ -715,6 +966,30 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     return '📱 480p SD';
   };
 
+  const getPictureFilterStyle = (): React.CSSProperties => {
+    let filter = 'none';
+    if (picturePreset === 'projector_bright') {
+      filter = 'brightness(1.22) contrast(1.12) saturate(1.12)';
+    } else if (picturePreset === 'cinema_hdr') {
+      filter = 'brightness(1.06) contrast(1.22) saturate(1.25)';
+    } else if (picturePreset === 'warm') {
+      filter = 'brightness(1.08) contrast(1.06) sepia(0.14) saturate(1.1)';
+    }
+
+    let transform = 'none';
+    if (aspectMode === 'zoom115') {
+      transform = 'scale(1.16)';
+    } else if (aspectMode === 'cover') {
+      transform = 'scale(1.08)';
+    }
+
+    return { filter, transform };
+  };
+
+  const safeDuration = duration > 0 ? duration : 7200;
+  const progressPercent = Math.max(0, Math.min(100, (currentTime / safeDuration) * 100));
+  const bufferedPercent = Math.max(0, Math.min(100, (bufferedEnd / safeDuration) * 100));
+
   return (
     <div
       ref={containerRef}
@@ -725,325 +1000,346 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       {/* ========================================================
           DEDICATED TV REMOTE & MOUSE TOP CONTROL BAR
           ======================================================== */}
-      <div className="shrink-0 z-30 bg-[#07090e] border-b border-white/15 px-2.5 sm:px-5 py-2 space-y-2">
-        {/* Row 1: Unified Single-Row Navigation Strip (D-Pad Left/Right steps across every control!) */}
-        <div
-          data-nav-row="player-top"
-          className="flex items-center justify-between gap-2 w-full min-w-0"
-        >
-          {/* Left: Back Button + Compact Title */}
-          <div className="flex items-center gap-2 min-w-0 shrink">
-            <button
-              ref={backBtnRef}
-              type="button"
-              onClick={onClose}
-              tabIndex={0}
-              className="p-2 sm:p-2.5 rounded-xl bg-white/10 hover:bg-red-600 text-white transition-all active:scale-95 shrink-0 tv-btn-focus focus:outline-none border border-white/10"
-              aria-label={t('closePlayer')}
-              title="Закрити плеєр (ESC / Назад)"
-            >
-              <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
-            </button>
-            <div className="min-w-0 hidden xs:block sm:block max-w-[140px] sm:max-w-[240px] lg:max-w-[340px]">
-              <h2 className="text-white font-bold text-xs sm:text-sm truncate">{title}</h2>
-              <p className="text-[10px] text-amber-400 font-medium truncate">
-                {isSeries
-                  ? `${t('seasonWord')} ${activeSeason} • ${t('episodeWord')} ${activeEpisode}`
-                  : subtitle || `${media.year} • ${preferredQuality}`}
-              </p>
+      {!cleanCinemaBarsHidden && (
+        <div className="shrink-0 z-30 bg-[#07090e] border-b border-white/15 px-2.5 sm:px-5 py-1.5 sm:py-2 space-y-1.5">
+          {/* Row 1: Unified Single-Row Navigation Strip (D-Pad Left/Right steps across every control!) */}
+          <div
+            data-nav-row="player-top"
+            className="flex items-center justify-between gap-2 w-full min-w-0"
+          >
+            {/* Left: Back Button + Compact Title */}
+            <div className="flex items-center gap-2 min-w-0 shrink">
+              <button
+                ref={backBtnRef}
+                type="button"
+                onClick={onClose}
+                tabIndex={0}
+                className="p-2 sm:p-2.5 rounded-xl bg-white/10 hover:bg-red-600 text-white transition-all active:scale-95 shrink-0 tv-btn-focus focus:outline-none border border-white/10"
+                aria-label={t('closePlayer')}
+                title="Закрити плеєр (ESC / Назад)"
+              >
+                <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+              </button>
+              <div className="min-w-0 hidden xs:block sm:block max-w-[130px] sm:max-w-[220px] lg:max-w-[320px]">
+                <h2 className="text-white font-bold text-xs sm:text-sm truncate">{title}</h2>
+                <p className="text-[10px] text-amber-400 font-medium truncate">
+                  {isSeries
+                    ? `${t('seasonWord')} ${activeSeason} • ${t('episodeWord')} ${activeEpisode}`
+                    : subtitle || `${media.year} • ${preferredQuality}`}
+                </p>
+              </div>
+            </div>
+
+            {/* Right: Scrollable Primary Player Controls (Never clipped, 100% D-Pad & Mouse accessible!) */}
+            <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto scrollbar-none py-0.5 px-0.5 max-w-full">
+              {/* 1. LANGUAGE / AUDIO SELECTOR BUTTON */}
+              <button
+                ref={audioBtnRef}
+                type="button"
+                onClick={() => setActiveMenu((prev) => (prev === 'audio' ? 'none' : 'audio'))}
+                tabIndex={0}
+                className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 border whitespace-nowrap shrink-0 transition-all tv-btn-focus focus:outline-none ${
+                  activeMenu === 'audio'
+                    ? 'bg-amber-500 text-slate-950 border-amber-300 shadow-lg shadow-amber-500/30'
+                    : 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
+                }`}
+                title="Змінити мову та озвучення (A)"
+              >
+                <Radio className="w-3.5 h-3.5 shrink-0" />
+                <span>Мова: {getCurrentAudioLabel()}</span>
+              </button>
+
+              {/* 2. QUALITY SELECTOR BUTTON */}
+              <button
+                ref={qualityBtnRef}
+                type="button"
+                onClick={() => setActiveMenu((prev) => (prev === 'quality' ? 'none' : 'quality'))}
+                tabIndex={0}
+                className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 border whitespace-nowrap shrink-0 transition-all tv-btn-focus focus:outline-none ${
+                  activeMenu === 'quality'
+                    ? 'bg-emerald-500 text-slate-950 border-emerald-300 shadow-lg shadow-emerald-500/30'
+                    : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                }`}
+                title="Змінити якість відео (Q)"
+              >
+                <Settings className="w-3.5 h-3.5 shrink-0" />
+                <span>Якість: {getCurrentQualityLabel()}</span>
+              </button>
+
+              {/* 3. PRO MEDIA CENTER SETTINGS BUTTON */}
+              <button
+                ref={settingsBtnRef}
+                type="button"
+                onClick={() => setActiveMenu((prev) => (prev === 'settings' ? 'none' : 'settings'))}
+                tabIndex={0}
+                className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 border whitespace-nowrap shrink-0 transition-all tv-btn-focus focus:outline-none ${
+                  activeMenu === 'settings'
+                    ? 'bg-cyan-500 text-slate-950 border-cyan-300 shadow-lg shadow-cyan-500/30'
+                    : 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 hover:bg-cyan-500/30'
+                }`}
+                title="Налаштування плеєра, звуку та проєктора (S)"
+              >
+                <Sliders className="w-3.5 h-3.5 shrink-0" />
+                <span>Налаштування</span>
+              </button>
+
+              {/* 4. TORRENT STREAM BUTTON */}
+              <button
+                ref={torrentsBtnRef}
+                type="button"
+                onClick={() => setActiveMenu((prev) => (prev === 'torrents' ? 'none' : 'torrents'))}
+                tabIndex={0}
+                className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border whitespace-nowrap shrink-0 transition-all tv-btn-focus focus:outline-none ${
+                  activeMenu === 'torrents' || activeServer?.mode === 'torrent'
+                    ? 'bg-purple-600 text-white border-purple-400 shadow-lg shadow-purple-600/30'
+                    : 'bg-purple-500/15 text-purple-300 border-purple-500/35 hover:bg-purple-500/25'
+                }`}
+                title="Торренти онлайн P2P (T)"
+              >
+                <HardDrive className="w-3.5 h-3.5 shrink-0" />
+                <span>⚡ Торренти</span>
+                {torrentStreams.length > 0 && (
+                  <span className="px-1.5 py-0.2 text-[10px] rounded-full bg-purple-500/30 text-purple-200">
+                    {torrentStreams.length}
+                  </span>
+                )}
+              </button>
+
+              {/* 5. Series Season & Episode Selector Buttons */}
+              {isSeries && (
+                <div className="flex items-center gap-1 bg-white/5 p-0.5 rounded-xl border border-white/10 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveEpisode((prev) => Math.max(1, prev - 1));
+                      showOsd(`⏮ Серія ${Math.max(1, activeEpisode - 1)}`);
+                    }}
+                    disabled={activeEpisode <= 1}
+                    tabIndex={0}
+                    className="p-1.5 rounded-lg hover:bg-white/15 disabled:opacity-30 text-white tv-btn-focus focus:outline-none"
+                    title={t('prevEpisode')}
+                  >
+                    <SkipBack className="w-3.5 h-3.5" />
+                  </button>
+
+                  <button
+                    ref={episodesBtnRef}
+                    type="button"
+                    onClick={() =>
+                      setActiveMenu((prev) => (prev === 'episodes' ? 'none' : 'episodes'))
+                    }
+                    tabIndex={0}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-extrabold flex items-center gap-1 transition-all tv-btn-focus focus:outline-none ${
+                      activeMenu === 'episodes'
+                        ? 'bg-red-600 text-white'
+                        : 'bg-white/10 text-amber-300 hover:bg-white/20'
+                    }`}
+                    title="Вибір сезону та серії (E)"
+                  >
+                    <Layers className="w-3.5 h-3.5 shrink-0" />
+                    <span>
+                      С{activeSeason}:Е{activeEpisode}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveEpisode((prev) => prev + 1);
+                      showOsd(`⏭ Серія ${activeEpisode + 1}`);
+                    }}
+                    tabIndex={0}
+                    className="p-1.5 rounded-lg hover:bg-white/15 text-white tv-btn-focus focus:outline-none"
+                    title={t('nextEpisode')}
+                  >
+                    <SkipForward className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
+              {/* 6. Next Server Quick Failover Button */}
+              {availableServers.filter((s) => s.mode === 'embed').length > 1 && (
+                <button
+                  type="button"
+                  onClick={switchToNextServer}
+                  tabIndex={0}
+                  className="px-2.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold flex items-center gap-1 shadow-md shadow-red-600/30 active:scale-95 whitespace-nowrap shrink-0 transition-all tv-btn-focus focus:outline-none"
+                  title={t('nextServer')}
+                >
+                  <span>{t('nextServer')}</span>
+                  <ChevronRight className="w-3.5 h-3.5 shrink-0" />
+                </button>
+              )}
+
+              {/* 7. Virtual Remote Mouse Cursor Toggle */}
+              <button
+                type="button"
+                onClick={() => {
+                  const next = !isVirtualCursorActive;
+                  setIsVirtualCursorActive(next);
+                  showOsd(
+                    next
+                      ? '🖱️ Курсор пульта увімкнено (Стрілки = рух, ОК = клік, Назад = вихід)'
+                      : '🖱️ Курсор пульта вимкнено'
+                  );
+                }}
+                tabIndex={0}
+                className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 border whitespace-nowrap shrink-0 transition-all tv-btn-focus focus:outline-none ${
+                  isVirtualCursorActive
+                    ? 'bg-blue-600 text-white border-blue-400 shadow-lg shadow-blue-600/40'
+                    : 'bg-white/10 text-slate-200 border-white/15 hover:bg-white/20'
+                }`}
+                title="Віртуальна мишка для пульта (клік всередині плеєра)"
+              >
+                <MousePointer className="w-3.5 h-3.5 shrink-0" />
+                <span className="hidden md:inline">Курсор</span>
+              </button>
+
+              {/* 8. Fullscreen / Landscape Lock Button */}
+              <button
+                type="button"
+                onClick={toggleAndroidLandscape}
+                tabIndex={0}
+                className={`p-1.5 sm:p-2 rounded-xl text-xs font-bold flex items-center gap-1 border shrink-0 transition-all tv-btn-focus focus:outline-none ${
+                  isLandscapeLocked
+                    ? 'bg-amber-500 text-slate-950 border-amber-400'
+                    : 'bg-white/10 text-slate-200 border-white/15 hover:bg-white/20'
+                }`}
+                title={isLandscapeLocked ? t('rotateNormal') : t('rotateLandscape')}
+              >
+                <Smartphone
+                  className={`w-4 h-4 ${isLandscapeLocked ? 'rotate-90' : ''} transition-transform`}
+                />
+              </button>
             </div>
           </div>
 
-          {/* Right: Scrollable Primary Player Controls (Never clipped, 100% D-Pad & Mouse accessible!) */}
-          <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto scrollbar-none py-0.5 px-0.5 max-w-full">
-            {/* 1. LANGUAGE / AUDIO SELECTOR BUTTON */}
-            <button
-              ref={audioBtnRef}
-              type="button"
-              onClick={() => setActiveMenu((prev) => (prev === 'audio' ? 'none' : 'audio'))}
-              tabIndex={0}
-              className={`px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 border whitespace-nowrap shrink-0 transition-all tv-btn-focus focus:outline-none ${
-                activeMenu === 'audio'
-                  ? 'bg-amber-500 text-slate-950 border-amber-300 shadow-lg shadow-amber-500/30'
-                  : 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30'
-              }`}
-              title="Змінити мову та озвучення (A)"
-            >
-              <Radio className="w-3.5 h-3.5 shrink-0" />
-              <span>Мова: {getCurrentAudioLabel()}</span>
-            </button>
-
-            {/* 2. QUALITY SELECTOR BUTTON */}
-            <button
-              ref={qualityBtnRef}
-              type="button"
-              onClick={() => setActiveMenu((prev) => (prev === 'quality' ? 'none' : 'quality'))}
-              tabIndex={0}
-              className={`px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 border whitespace-nowrap shrink-0 transition-all tv-btn-focus focus:outline-none ${
-                activeMenu === 'quality'
-                  ? 'bg-emerald-500 text-slate-950 border-emerald-300 shadow-lg shadow-emerald-500/30'
-                  : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
-              }`}
-              title="Змінити якість відео (Q)"
-            >
-              <Settings className="w-3.5 h-3.5 shrink-0" />
-              <span>Якість: {getCurrentQualityLabel()}</span>
-            </button>
-
-            {/* 3. TORRENT STREAM BUTTON */}
-            <button
-              ref={torrentsBtnRef}
-              type="button"
-              onClick={() => setActiveMenu((prev) => (prev === 'torrents' ? 'none' : 'torrents'))}
-              tabIndex={0}
-              className={`px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 border whitespace-nowrap shrink-0 transition-all tv-btn-focus focus:outline-none ${
-                activeMenu === 'torrents' || activeServer?.mode === 'torrent'
-                  ? 'bg-purple-600 text-white border-purple-400 shadow-lg shadow-purple-600/30'
-                  : 'bg-purple-500/15 text-purple-300 border-purple-500/35 hover:bg-purple-500/25'
-              }`}
-              title="Торренти онлайн P2P (T)"
-            >
-              <HardDrive className="w-3.5 h-3.5 shrink-0" />
-              <span>⚡ Торренти</span>
-              {torrentStreams.length > 0 && (
-                <span className="px-1.5 py-0.2 text-[10px] rounded-full bg-purple-500/30 text-purple-200">
-                  {torrentStreams.length}
-                </span>
-              )}
-            </button>
-
-            {/* 4. Series Season & Episode Selector Buttons (100% Remote & Mouse friendly, no native <select> trap!) */}
-            {isSeries && (
-              <div className="flex items-center gap-1 bg-white/5 p-0.5 rounded-xl border border-white/10 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveEpisode((prev) => Math.max(1, prev - 1));
-                    showOsd(`⏮ Серія ${Math.max(1, activeEpisode - 1)}`);
-                  }}
-                  disabled={activeEpisode <= 1}
-                  tabIndex={0}
-                  className="p-1.5 rounded-lg hover:bg-white/15 disabled:opacity-30 text-white tv-btn-focus focus:outline-none"
-                  title={t('prevEpisode')}
-                >
-                  <SkipBack className="w-3.5 h-3.5" />
-                </button>
-
-                <button
-                  ref={episodesBtnRef}
-                  type="button"
-                  onClick={() => setActiveMenu((prev) => (prev === 'episodes' ? 'none' : 'episodes'))}
-                  tabIndex={0}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-extrabold flex items-center gap-1 transition-all tv-btn-focus focus:outline-none ${
-                    activeMenu === 'episodes'
-                      ? 'bg-red-600 text-white'
-                      : 'bg-white/10 text-amber-300 hover:bg-white/20'
-                  }`}
-                  title="Вибір сезону та серії (E)"
-                >
-                  <Layers className="w-3.5 h-3.5 shrink-0" />
-                  <span>
-                    С{activeSeason}:Е{activeEpisode}
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveEpisode((prev) => prev + 1);
-                    showOsd(`⏭ Серія ${activeEpisode + 1}`);
-                  }}
-                  tabIndex={0}
-                  className="p-1.5 rounded-lg hover:bg-white/15 text-white tv-btn-focus focus:outline-none"
-                  title={t('nextEpisode')}
-                >
-                  <SkipForward className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
-
-            {/* 5. Next Server Quick Failover Button */}
-            {availableServers.filter((s) => s.mode === 'embed').length > 1 && (
-              <button
-                type="button"
-                onClick={switchToNextServer}
-                tabIndex={0}
-                className="px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold flex items-center gap-1 shadow-md shadow-red-600/30 active:scale-95 whitespace-nowrap shrink-0 transition-all tv-btn-focus focus:outline-none"
-                title={t('nextServer')}
-              >
-                <span>{t('nextServer')}</span>
-                <ChevronRight className="w-3.5 h-3.5 shrink-0" />
-              </button>
-            )}
-
-            {/* 6. Virtual Remote Mouse Cursor Toggle (for clicking inside embedded iframe players with D-Pad) */}
-            <button
-              type="button"
-              onClick={() => {
-                const next = !isVirtualCursorActive;
-                setIsVirtualCursorActive(next);
-                showOsd(
-                  next
-                    ? '🖱️ Курсор пульта увімкнено (Стрілки = рух, ОК = клік, Назад = вихід)'
-                    : '🖱️ Курсор пульта вимкнено'
-                );
-              }}
-              tabIndex={0}
-              className={`px-2.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold flex items-center gap-1 border whitespace-nowrap shrink-0 transition-all tv-btn-focus focus:outline-none ${
-                isVirtualCursorActive
-                  ? 'bg-blue-600 text-white border-blue-400 shadow-lg shadow-blue-600/40'
-                  : 'bg-white/10 text-slate-200 border-white/15 hover:bg-white/20'
-              }`}
-              title="Віртуальна мишка для пульта (клік всередині плеєра)"
-            >
-              <MousePointer className="w-3.5 h-3.5 shrink-0" />
-              <span className="hidden md:inline">Курсор</span>
-            </button>
-
-            {/* 7. Fullscreen / Landscape Lock Button */}
-            <button
-              type="button"
-              onClick={toggleAndroidLandscape}
-              tabIndex={0}
-              className={`p-2 rounded-xl text-xs font-bold flex items-center gap-1 border shrink-0 transition-all tv-btn-focus focus:outline-none ${
-                isLandscapeLocked
-                  ? 'bg-amber-500 text-slate-950 border-amber-400'
-                  : 'bg-white/10 text-slate-200 border-white/15 hover:bg-white/20'
-              }`}
-              title={isLandscapeLocked ? t('rotateNormal') : t('rotateLandscape')}
-            >
-              <Smartphone
-                className={`w-4 h-4 ${isLandscapeLocked ? 'rotate-90' : ''} transition-transform`}
-              />
-            </button>
-          </div>
-        </div>
-
-        {/* Row 2: Multi-Server Switcher Carousel with Left/Right Scroll Buttons */}
-        <div
-          data-nav-row="player-servers"
-          className="flex items-center gap-1.5 w-full min-w-0"
-        >
-          <span className="text-[10px] font-bold text-slate-400 uppercase hidden sm:flex items-center gap-1 shrink-0 mr-0.5">
-            <Server className="w-3 h-3 text-red-500" /> {t('serverLabel')}
-          </span>
-
-          <button
-            type="button"
-            onClick={() => scrollServersRow('left')}
-            tabIndex={0}
-            className="p-1 rounded-lg bg-white/5 hover:bg-red-600 text-slate-300 hover:text-white shrink-0 transition-colors tv-btn-focus focus:outline-none border border-white/10"
-            aria-label="Попередні сервери"
-          >
-            <ChevronLeft className="w-3.5 h-3.5" />
-          </button>
-
+          {/* Row 2: Multi-Server Switcher Carousel with Left/Right Scroll Buttons */}
           <div
-            ref={serversRowRef}
-            onWheel={(e) => {
-              if (serversRowRef.current && Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-                serversRowRef.current.scrollLeft += e.deltaY;
-              }
-            }}
-            className="flex-1 min-w-0 flex items-center gap-1.5 overflow-x-auto scrollbar-none scroll-smooth py-0.5 px-0.5"
+            data-nav-row="player-servers"
+            className="flex items-center gap-1.5 w-full min-w-0"
           >
-            {availableServers
-              .filter((srv, idx) => {
-                if (srv.mode !== 'torrent') return true;
-                if (activeServer?.id === srv.id) return true;
-                const firstTorrentIdx = availableServers.findIndex((s) => s.mode === 'torrent');
-                return idx - firstTorrentIdx < 4;
-              })
-              .map((srv) => {
-                const active = activeServer?.id === srv.id;
-                const health = serverHealthMap[srv.id];
-                const isUa = srv.id.includes('ashdi') || srv.langs?.includes('UA');
-                const isTorrent = srv.mode === 'torrent';
+            <span className="text-[10px] font-bold text-slate-400 uppercase hidden sm:flex items-center gap-1 shrink-0 mr-0.5">
+              <Server className="w-3 h-3 text-red-500" /> {t('serverLabel')}
+            </span>
 
-                return (
-                  <button
-                    key={srv.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedServerId(srv.id);
-                      if (srv.mode === 'torrent' && srv.magnet) {
-                        setCurrentMagnet(srv.magnet);
-                      }
-                      showOsd(`📡 ${srv.name}`);
-                    }}
-                    tabIndex={0}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap flex items-center gap-1.5 border transition-all shrink-0 tv-btn-focus focus:outline-none ${
-                      active
-                        ? isTorrent
-                          ? 'bg-purple-600 text-white border-purple-400 shadow-md shadow-purple-600/30'
-                          : 'bg-red-600 text-white border-red-500 shadow-md shadow-red-600/30'
-                        : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/15 hover:text-white'
-                    }`}
-                  >
-                    {isTorrent ? (
-                      <span>⚡</span>
-                    ) : isUa ? (
-                      <span>🇺🇦</span>
-                    ) : health === 'ok' ? (
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                    ) : null}
+            <button
+              type="button"
+              onClick={() => scrollServersRow('left')}
+              tabIndex={0}
+              className="p-1 rounded-lg bg-white/5 hover:bg-red-600 text-slate-300 hover:text-white shrink-0 transition-colors tv-btn-focus focus:outline-none border border-white/10"
+              aria-label="Попередні сервери"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
 
-                    <span>{srv.name}</span>
-                    <span
-                      className={`text-[9px] px-1 py-0.2 rounded ${
-                        active ? 'bg-black/30 text-amber-300' : 'bg-white/10 text-slate-400'
+            <div
+              ref={serversRowRef}
+              onWheel={(e) => {
+                if (serversRowRef.current && Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+                  serversRowRef.current.scrollLeft += e.deltaY;
+                }
+              }}
+              className="flex-1 min-w-0 flex items-center gap-1.5 overflow-x-auto scrollbar-none scroll-smooth py-0.5 px-0.5"
+            >
+              {availableServers
+                .filter((srv, idx) => {
+                  if (srv.mode !== 'torrent') return true;
+                  if (activeServer?.id === srv.id) return true;
+                  const firstTorrentIdx = availableServers.findIndex((s) => s.mode === 'torrent');
+                  return idx - firstTorrentIdx < 4;
+                })
+                .map((srv) => {
+                  const active = activeServer?.id === srv.id;
+                  const health = serverHealthMap[srv.id];
+                  const isUa = srv.id.includes('ashdi') || srv.langs?.includes('UA');
+                  const isTorrent = srv.mode === 'torrent';
+
+                  return (
+                    <button
+                      key={srv.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedServerId(srv.id);
+                        if (srv.mode === 'torrent' && srv.magnet) {
+                          setCurrentMagnet(srv.magnet);
+                        }
+                        showOsd(`📡 ${srv.name}`);
+                      }}
+                      tabIndex={0}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold whitespace-nowrap flex items-center gap-1.5 border transition-all shrink-0 tv-btn-focus focus:outline-none ${
+                        active
+                          ? isTorrent
+                            ? 'bg-purple-600 text-white border-purple-400 shadow-md shadow-purple-600/30'
+                            : 'bg-red-600 text-white border-red-500 shadow-md shadow-red-600/30'
+                          : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/15 hover:text-white'
                       }`}
                     >
-                      {srv.badge}
-                    </span>
-                  </button>
-                );
-              })}
+                      {isTorrent ? (
+                        <span>⚡</span>
+                      ) : isUa ? (
+                        <span>🇺🇦</span>
+                      ) : health === 'ok' ? (
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                      ) : null}
 
-            {activeServer?.mode === 'native' && (
-              <button
-                type="button"
-                onClick={() => setShowCustomUrlInput(!showCustomUrlInput)}
-                tabIndex={0}
-                className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30 whitespace-nowrap flex items-center gap-1 shrink-0 tv-btn-focus focus:outline-none"
-              >
-                <Link2 className="w-3 h-3" /> {t('customStream')}
-              </button>
-            )}
-          </div>
+                      <span>{srv.name}</span>
+                      <span
+                        className={`text-[9px] px-1 py-0.2 rounded ${
+                          active ? 'bg-black/30 text-amber-300' : 'bg-white/10 text-slate-400'
+                        }`}
+                      >
+                        {srv.badge}
+                      </span>
+                    </button>
+                  );
+                })}
 
-          <button
-            type="button"
-            onClick={() => scrollServersRow('right')}
-            tabIndex={0}
-            className="p-1 rounded-lg bg-white/5 hover:bg-red-600 text-slate-300 hover:text-white shrink-0 transition-colors tv-btn-focus focus:outline-none border border-white/10"
-            aria-label="Наступні сервери"
-          >
-            <ChevronRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
+              {activeServer?.mode === 'native' && (
+                <button
+                  type="button"
+                  onClick={() => setShowCustomUrlInput(!showCustomUrlInput)}
+                  tabIndex={0}
+                  className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30 whitespace-nowrap flex items-center gap-1 shrink-0 tv-btn-focus focus:outline-none"
+                >
+                  <Link2 className="w-3 h-3" /> {t('customStream')}
+                </button>
+              )}
+            </div>
 
-        {/* Custom Stream URL Bar */}
-        {showCustomUrlInput && activeServer?.mode === 'native' && (
-          <div className="flex items-center gap-2 pt-1">
-            <input
-              type="url"
-              value={customStreamUrl}
-              onChange={(e) => setCustomStreamUrl(e.target.value)}
-              placeholder={t('customStreamPlaceholder')}
-              className="flex-1 bg-black/60 border border-white/20 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-red-500"
-            />
             <button
               type="button"
-              onClick={() => setShowCustomUrlInput(false)}
+              onClick={() => scrollServersRow('right')}
               tabIndex={0}
-              className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-bold tv-btn-focus focus:outline-none"
+              className="p-1 rounded-lg bg-white/5 hover:bg-red-600 text-slate-300 hover:text-white shrink-0 transition-colors tv-btn-focus focus:outline-none border border-white/10"
+              aria-label="Наступні сервери"
             >
-              OK
+              <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
-        )}
-      </div>
+
+          {/* Custom Stream URL Bar */}
+          {showCustomUrlInput && activeServer?.mode === 'native' && (
+            <div className="flex items-center gap-2 pt-1">
+              <input
+                type="url"
+                value={customStreamUrl}
+                onChange={(e) => setCustomStreamUrl(e.target.value)}
+                placeholder={t('customStreamPlaceholder')}
+                className="flex-1 bg-black/60 border border-white/20 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-red-500"
+              />
+              <button
+                type="button"
+                onClick={() => setShowCustomUrlInput(false)}
+                tabIndex={0}
+                className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-bold tv-btn-focus focus:outline-none"
+              >
+                OK
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Auto Failover Notification Toast */}
       {autoFailoverMsg && (
@@ -1074,13 +1370,19 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 {activeMenu === 'audio' && (
                   <>
                     <Radio className="w-5 h-5 text-amber-400 shrink-0" />
-                    <span>Вибір мови та озвучення</span>
+                    <span>Вибір мови та студії озвучення</span>
                   </>
                 )}
                 {activeMenu === 'quality' && (
                   <>
                     <Settings className="w-5 h-5 text-emerald-400 shrink-0" />
                     <span>Вибір якості відео та потоку</span>
+                  </>
+                )}
+                {activeMenu === 'settings' && (
+                  <>
+                    <Sliders className="w-5 h-5 text-cyan-400 shrink-0" />
+                    <span>Налаштування медіа-комбайна та проєктора</span>
                   </>
                 )}
                 {activeMenu === 'torrents' && (
@@ -1107,9 +1409,43 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               </button>
             </div>
 
-            {/* 1. AUDIO / LANGUAGE CHANNELS MENU */}
+            {/* 1. AUDIO / LANGUAGE CHANNELS + INTERNAL REZKA VOICES MENU */}
             {activeMenu === 'audio' && (
               <div className="space-y-3 overflow-y-auto custom-scrollbar pr-1">
+                {/* Internal Voiceover Studios detected inside current player (e.g. Rezka / Ashdi) */}
+                {iframeVoices.length > 0 && (
+                  <div className="space-y-2 pb-2 border-b border-white/10">
+                    <p className="text-xs font-extrabold text-amber-400 uppercase">
+                      🎙️ Доріжки озвучення всередині поточного плеєра ({activeServer?.name}):
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {iframeVoices.map((v) => (
+                        <button
+                          key={`${v.index}-${v.label}`}
+                          type="button"
+                          onClick={() => {
+                            sendIframeCommand('selectInternalVoice', {
+                              index: v.index,
+                              label: v.label,
+                            });
+                            setActiveMenu('none');
+                            showOsd(`🎙️ Озвучка: ${v.label}`);
+                          }}
+                          tabIndex={0}
+                          className={`p-2.5 rounded-xl border text-left text-xs font-bold flex items-center justify-between transition-all tv-btn-focus focus:outline-none ${
+                            v.active
+                              ? 'bg-amber-500 text-slate-950 border-amber-300'
+                              : 'bg-white/5 text-slate-200 border-white/10 hover:bg-white/15'
+                          }`}
+                        >
+                          <span className="truncate">{v.label}</span>
+                          {v.active && <Check className="w-4 h-4 shrink-0 ml-1" />}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div
                   data-nav-row="audio-lang-filters"
                   className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-1"
@@ -1138,9 +1474,20 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                   ))}
                 </div>
 
-                <p className="text-xs text-slate-400">
-                  Оберіть бажаний мовний канал пультами або мишкою (спочатку українські канали, далі — усі світові мови):
-                </p>
+                {/* Quick button to open internal player voice dropdown */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    sendIframeCommand('openInternalMenu', { target: 'voice' });
+                    setActiveMenu('none');
+                    showOsd('🎙️ Меню озвучки всередині плеєра відкрито');
+                  }}
+                  tabIndex={0}
+                  className="w-full p-2.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-xs font-extrabold flex items-center justify-between transition-all tv-btn-focus focus:outline-none"
+                >
+                  <span>🎛️ Відкрити внутрішній список студій озвучки в плеєрі (Rezka / Ashdi)</span>
+                  <ChevronRight className="w-4 h-4 shrink-0" />
+                </button>
 
                 <div className="space-y-2">
                   {availableServers
@@ -1149,7 +1496,11 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                       if (audioLangFilter === 'all') return true;
                       const idLow = srv.id.toLowerCase();
                       if (audioLangFilter === 'ua')
-                        return idLow.startsWith('ua-') || idLow.includes('ashdi') || srv.langs?.includes('UA');
+                        return (
+                          idLow.startsWith('ua-') ||
+                          idLow.includes('ashdi') ||
+                          srv.langs?.includes('UA')
+                        );
                       if (audioLangFilter === 'en')
                         return (
                           idLow.includes('vidlink') ||
@@ -1161,7 +1512,11 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                         return idLow.startsWith('pl-') || srv.langs?.includes('PL');
                       if (audioLangFilter === 'es')
                         return idLow.startsWith('es-') || srv.langs?.includes('ES');
-                      return srv.langs?.includes('MULTI') || srv.langs?.includes('RU') || idLow.includes('loadbox');
+                      return (
+                        srv.langs?.includes('MULTI') ||
+                        srv.langs?.includes('RU') ||
+                        idLow.includes('loadbox')
+                      );
                     })
                     .map((srv) => {
                       const isCur = activeServer?.id === srv.id;
@@ -1240,7 +1595,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               <div className="space-y-4 overflow-y-auto custom-scrollbar pr-1">
                 <div className="space-y-2">
                   <p className="text-xs font-bold text-emerald-400 uppercase tracking-wider">
-                    1. Роздільна здатність відео (для поточного каналу):
+                    1. Роздільна здатність відео (перемикає і в самому плеєрі, і потік):
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {[
@@ -1273,6 +1628,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                           data-menu-initial-focus={isSelectedRes ? 'true' : undefined}
                           onClick={() => {
                             setPreferredQuality(res.q);
+                            sendIframeCommand('selectInternalQuality', { quality: res.q });
                             if (hlsRef.current && hlsRef.current.levels.length > 0) {
                               const targetH =
                                 res.q === '4K'
@@ -1313,6 +1669,32 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     })}
                   </div>
                 </div>
+
+                {/* Internal quality levels detected inside current player */}
+                {iframeQualities.length > 0 && (
+                  <div className="space-y-1.5 pt-2 border-t border-white/10">
+                    <p className="text-xs font-bold text-emerald-300 uppercase">
+                      Внутрішні рівні якості поточного плеєра:
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {iframeQualities.map((qStr) => (
+                        <button
+                          key={qStr}
+                          type="button"
+                          onClick={() => {
+                            sendIframeCommand('selectInternalQuality', { quality: qStr });
+                            setActiveMenu('none');
+                            showOsd(`📺 Якість плеєра: ${qStr}`);
+                          }}
+                          tabIndex={0}
+                          className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-emerald-600 text-white text-xs font-bold border border-white/15 tv-btn-focus focus:outline-none"
+                        >
+                          {qStr}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Direct Server + Quality Selection */}
                 <div className="space-y-2 pt-2 border-t border-white/10">
@@ -1360,7 +1742,165 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               </div>
             )}
 
-            {/* 3. TORRENTS MENU */}
+            {/* 3. PRO MEDIA CENTER & PROJECTOR SETTINGS MENU */}
+            {activeMenu === 'settings' && (
+              <div className="space-y-4 overflow-y-auto custom-scrollbar pr-1">
+                {/* A. Audio Booster for Projectors */}
+                <div className="space-y-2">
+                  <p className="text-xs font-extrabold text-cyan-400 uppercase flex items-center gap-1.5">
+                    <Volume2 className="w-4 h-4" />
+                    <span>1. Підсилювач гучності (Audio Booster для проєктора):</span>
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {[
+                      { g: 1.0, label: '100% Стандарт' },
+                      { g: 1.5, label: '150% Чіткий діалог' },
+                      { g: 2.0, label: '200% Проєктор Boost' },
+                      { g: 3.0, label: '300% Максимум' },
+                    ].map((b) => (
+                      <button
+                        key={b.g}
+                        type="button"
+                        data-menu-initial-focus={audioBoostLevel === b.g ? 'true' : undefined}
+                        onClick={() => applyAudioBoost(b.g)}
+                        tabIndex={0}
+                        className={`p-2.5 rounded-xl border text-xs font-extrabold text-center transition-all tv-btn-focus focus:outline-none ${
+                          audioBoostLevel === b.g
+                            ? 'bg-cyan-500 text-slate-950 border-cyan-300 shadow-lg'
+                            : 'bg-white/5 text-slate-200 border-white/10 hover:bg-white/15'
+                        }`}
+                      >
+                        {b.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* B. Aspect Ratio / Screen Zoom for Projectors */}
+                <div className="space-y-2 pt-2 border-t border-white/10">
+                  <p className="text-xs font-extrabold text-amber-400 uppercase flex items-center gap-1.5">
+                    <Monitor className="w-4 h-4" />
+                    <span>2. Формат екрана та обрізка чорних смуг:</span>
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { m: 'contain' as const, label: '📐 16:9 Стандарт (Оригінал)' },
+                      { m: 'cover' as const, label: '🔍 Без чорних смуг (Crop)' },
+                      { m: 'fill' as const, label: '↔️ На весь екран (Stretch)' },
+                      { m: 'zoom115' as const, label: '🎬 Кінозум 115% (21:9)' },
+                    ].map((asp) => (
+                      <button
+                        key={asp.m}
+                        type="button"
+                        onClick={() => applyAspectMode(asp.m)}
+                        tabIndex={0}
+                        className={`p-2.5 rounded-xl border text-xs font-bold text-left flex items-center justify-between transition-all tv-btn-focus focus:outline-none ${
+                          aspectMode === asp.m
+                            ? 'bg-amber-500 text-slate-950 border-amber-300 shadow'
+                            : 'bg-white/5 text-slate-200 border-white/10 hover:bg-white/15'
+                        }`}
+                      >
+                        <span>{asp.label}</span>
+                        {aspectMode === asp.m && <Check className="w-4 h-4 shrink-0" />}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* C. Picture Brightness / HDR Enhancer for Projectors */}
+                <div className="space-y-2 pt-2 border-t border-white/10">
+                  <p className="text-xs font-extrabold text-emerald-400 uppercase flex items-center gap-1.5">
+                    <Sun className="w-4 h-4" />
+                    <span>3. Покращення картинки для проєктора (HDR / Яскравість):</span>
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { p: 'normal' as const, label: '🎬 Стандартна картинка' },
+                      { p: 'projector_bright' as const, label: '☀️ Яскравий проєктор (+25%)' },
+                      { p: 'cinema_hdr' as const, label: '💎 Кінозал HDR Контраст' },
+                      { p: 'warm' as const, label: '🌙 Теплий вечірній фільтр' },
+                    ].map((pr) => (
+                      <button
+                        key={pr.p}
+                        type="button"
+                        onClick={() => applyPicturePreset(pr.p)}
+                        tabIndex={0}
+                        className={`p-2.5 rounded-xl border text-xs font-bold text-left flex items-center justify-between transition-all tv-btn-focus focus:outline-none ${
+                          picturePreset === pr.p
+                            ? 'bg-emerald-600 text-white border-emerald-400 shadow'
+                            : 'bg-white/5 text-slate-200 border-white/10 hover:bg-white/15'
+                        }`}
+                      >
+                        <span>{pr.label}</span>
+                        {picturePreset === pr.p && <Check className="w-4 h-4 shrink-0" />}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* D. Playback Speed */}
+                <div className="space-y-2 pt-2 border-t border-white/10">
+                  <p className="text-xs font-extrabold text-purple-400 uppercase flex items-center gap-1.5">
+                    <Gauge className="w-4 h-4" />
+                    <span>4. Швидкість відтворення:</span>
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {[0.5, 0.75, 1.0, 1.25, 1.5, 2.0].map((spd) => (
+                      <button
+                        key={spd}
+                        type="button"
+                        onClick={() => applyPlaybackSpeed(spd)}
+                        tabIndex={0}
+                        className={`px-3.5 py-2 rounded-xl border text-xs font-extrabold transition-all tv-btn-focus focus:outline-none ${
+                          playbackSpeed === spd
+                            ? 'bg-purple-600 text-white border-purple-400 shadow'
+                            : 'bg-white/5 text-slate-200 border-white/10 hover:bg-white/15'
+                        }`}
+                      >
+                        {spd}x
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* E. Direct Internal Iframe Actions (Rezka / Ashdi) */}
+                <div className="space-y-2 pt-2 border-t border-white/10">
+                  <p className="text-xs font-extrabold text-slate-300 uppercase">
+                    5. Внутрішні елементи плеєра ({activeServer?.name}):
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        sendIframeCommand('openInternalMenu', { target: 'settings' });
+                        setActiveMenu('none');
+                        showOsd('⚙️ Внутрішні налаштування плеєра відкрито');
+                      }}
+                      tabIndex={0}
+                      className="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-xs font-bold text-white flex items-center justify-between tv-btn-focus focus:outline-none"
+                    >
+                      <span>⚙️ Відкрити шестерню в плеєрі</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsVirtualCursorActive(true);
+                        setActiveMenu('none');
+                        showOsd('🖱️ Курсор пульта увімкнено');
+                      }}
+                      tabIndex={0}
+                      className="p-2.5 rounded-xl bg-blue-600/30 hover:bg-blue-600/50 border border-blue-400/40 text-xs font-bold text-blue-200 flex items-center justify-between tv-btn-focus focus:outline-none"
+                    >
+                      <span>🖱️ Увімкнути курсор пульта</span>
+                      <MousePointer className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 4. TORRENTS MENU */}
             {activeMenu === 'torrents' && (
               <div className="space-y-3 overflow-y-auto custom-scrollbar pr-1">
                 <div
@@ -1455,7 +1995,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               </div>
             )}
 
-            {/* 4. SEASONS & EPISODES SELECTOR MODAL (100% D-Pad & Mouse friendly!) */}
+            {/* 5. SEASONS & EPISODES SELECTOR MODAL */}
             {activeMenu === 'episodes' && (
               <div className="space-y-4 overflow-y-auto custom-scrollbar pr-1">
                 <div className="space-y-1.5">
@@ -1530,7 +2070,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       {/* ========================================================
           MAIN VIDEO VIEWPORT
           ======================================================== */}
-      <div className="relative flex-1 w-full bg-black flex items-center justify-center overflow-hidden">
+      <div
+        style={getPictureFilterStyle()}
+        className="relative flex-1 w-full bg-black flex items-center justify-center overflow-hidden transition-transform duration-200"
+      >
         {/* Virtual Remote Mouse Cursor Overlay (when enabled for D-Pad remote) */}
         {isVirtualCursorActive && (
           <>
@@ -1552,8 +2095,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               className="fixed z-50 pointer-events-none -translate-x-1/2 -translate-y-1/2 transition-all duration-75"
             >
               <div className="relative flex items-center justify-center">
-                <div className="w-7 h-7 rounded-full border-2 border-red-500 bg-red-500/25 shadow-[0_0_16px_rgba(239,68,68,0.95)] flex items-center justify-center">
-                  <div className="w-2 h-2 rounded-full bg-white" />
+                <div className="w-8 h-8 rounded-full border-2 border-red-500 bg-red-500/30 shadow-[0_0_20px_rgba(239,68,68,1)] flex items-center justify-center">
+                  <div className="w-2.5 h-2.5 rounded-full bg-white" />
                 </div>
               </div>
             </div>
@@ -1598,7 +2141,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             />
           </div>
         ) : activeServer && activeServer.mode !== 'native' ? (
-          /* 2. EMBED / IFRAME STREAMING VIEWPORT */
+          /* 2. EMBED / IFRAME STREAMING VIEWPORT (Rezka, Ashdi, Videasy, VidLink, etc.) */
           <>
             {iframeLoading && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#05070c] z-10">
@@ -1624,6 +2167,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               </div>
             )}
             <iframe
+              ref={iframeRef}
               key={effectiveEmbedUrl}
               src={effectiveEmbedUrl}
               title={title}
@@ -1636,166 +2180,263 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           </>
         ) : (
           /* 3. NATIVE HTML5 / HLS VIDEO MODE */
-          <>
-            <video
-              ref={videoRef}
-              className="w-full h-full object-contain cursor-pointer"
-              onClick={togglePlay}
-              onTimeUpdate={() => {
-                if (videoRef.current) {
-                  setCurrentTime(videoRef.current.currentTime);
-                  if (videoRef.current.buffered.length > 0) {
-                    setBufferedEnd(
-                      videoRef.current.buffered.end(videoRef.current.buffered.length - 1)
-                    );
-                  }
+          <video
+            ref={videoRef}
+            className={`w-full h-full cursor-pointer ${
+              aspectMode === 'cover'
+                ? 'object-cover'
+                : aspectMode === 'fill'
+                  ? 'object-fill'
+                  : 'object-contain'
+            }`}
+            onClick={togglePlay}
+            onTimeUpdate={() => {
+              if (videoRef.current) {
+                setCurrentTime(videoRef.current.currentTime);
+                if (videoRef.current.buffered.length > 0) {
+                  setBufferedEnd(
+                    videoRef.current.buffered.end(videoRef.current.buffered.length - 1)
+                  );
                 }
-              }}
-              onLoadedMetadata={() => {
-                if (videoRef.current) setDuration(videoRef.current.duration);
-              }}
-              onEnded={() => setIsPlaying(false)}
-              playsInline
-            />
-
-            {/* Native Overlay Controls */}
-            <div
-              className={`absolute inset-0 flex flex-col justify-between pointer-events-none transition-opacity duration-300 bg-gradient-to-t from-black/90 via-transparent to-black/40 ${
-                showControls ? 'opacity-100' : 'opacity-0'
-              }`}
-            >
-              <div className="flex justify-end p-3 gap-2 pointer-events-auto">
-                <button
-                  type="button"
-                  tabIndex={0}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (audioTracks.length > 1) {
-                      const curIdx = audioTracks.findIndex((a) => a.id === selectedAudio.id);
-                      const next = audioTracks[(curIdx + 1) % audioTracks.length];
-                      if (next) setSelectedAudio(next);
-                    }
-                    setActiveMenu(activeMenu === 'audio' ? 'none' : 'audio');
-                  }}
-                  className="px-2.5 py-1.5 rounded-xl bg-black/80 text-xs font-semibold text-amber-400 border border-white/15 flex items-center gap-1.5 tv-btn-focus focus:outline-none"
-                >
-                  <Radio className="w-3.5 h-3.5" />
-                  <span className="truncate max-w-[110px]">{selectedAudio.name}</span>
-                </button>
-                <button
-                  type="button"
-                  tabIndex={0}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (nonEmbedQualities.length > 1) {
-                      const curIdx = nonEmbedQualities.findIndex(
-                        (q) => q.url === selectedQuality.url
-                      );
-                      const next = nonEmbedQualities[(curIdx + 1) % nonEmbedQualities.length];
-                      if (next) setSelectedQuality(next);
-                    }
-                    setActiveMenu(activeMenu === 'quality' ? 'none' : 'quality');
-                  }}
-                  className="px-2.5 py-1.5 rounded-xl bg-black/80 text-xs font-bold text-emerald-400 border border-white/15 flex items-center gap-1.5 tv-btn-focus focus:outline-none"
-                >
-                  <Settings className="w-3.5 h-3.5" />
-                  <span>{preferredQuality}</span>
-                </button>
-              </div>
-
-              {/* Center Play/Seek Touch & Remote Controls */}
-              <div
-                data-nav-row="native-center-controls"
-                className="flex items-center justify-center gap-6 sm:gap-10 pointer-events-auto"
-              >
-                <button
-                  type="button"
-                  onClick={() => seek(-10)}
-                  tabIndex={0}
-                  className="p-3.5 rounded-full bg-white/15 hover:bg-white/25 text-white active:scale-90 transition-transform tv-btn-focus focus:outline-none"
-                  aria-label="Перемотати назад 10 сек"
-                >
-                  <RotateCcw className="w-5 h-5 sm:w-6 sm:h-6" />
-                </button>
-                <button
-                  type="button"
-                  onClick={togglePlay}
-                  tabIndex={0}
-                  className="p-5 sm:p-6 rounded-full bg-red-600 hover:bg-red-500 text-white shadow-xl shadow-red-600/40 active:scale-95 transition-all tv-btn-focus focus:outline-none"
-                  aria-label={isPlaying ? 'Пауза' : 'Відтворення'}
-                >
-                  {isPlaying ? (
-                    <Pause className="w-7 h-7 sm:w-8 sm:h-8 fill-white" />
-                  ) : (
-                    <Play className="w-7 h-7 sm:w-8 sm:h-8 fill-white ml-0.5" />
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => seek(10)}
-                  tabIndex={0}
-                  className="p-3.5 rounded-full bg-white/15 hover:bg-white/25 text-white active:scale-90 transition-transform tv-btn-focus focus:outline-none"
-                  aria-label="Перемотати вперед 10 сек"
-                >
-                  <RotateCw className="w-5 h-5 sm:w-6 sm:h-6" />
-                </button>
-              </div>
-
-              {/* Bottom Progress Bar & Volume */}
-              <div className="p-3 sm:p-5 space-y-2 pointer-events-auto">
-                <div
-                  className="relative w-full h-2.5 bg-white/20 rounded-full cursor-pointer overflow-hidden"
-                  onClick={(e) => {
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    const pos = (e.clientX - rect.left) / rect.width;
-                    seek(pos * duration - currentTime);
-                  }}
-                >
-                  <div
-                    className="absolute top-0 left-0 bottom-0 bg-white/30"
-                    style={{ width: `${duration > 0 ? (bufferedEnd / duration) * 100 : 0}%` }}
-                  />
-                  <div
-                    className="absolute top-0 left-0 bottom-0 bg-red-600"
-                    style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between text-xs text-slate-300">
-                  <span>
-                    {Math.floor(currentTime / 60)}:
-                    {String(Math.floor(currentTime % 60)).padStart(2, '0')} /{' '}
-                    {Math.floor(duration / 60)}:
-                    {String(Math.floor(duration % 60)).padStart(2, '0')}
-                  </span>
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={toggleMute}
-                      tabIndex={0}
-                      className="p-1.5 rounded-lg hover:text-white tv-btn-focus focus:outline-none"
-                    >
-                      {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={toggleFullscreen}
-                      tabIndex={0}
-                      className="p-1.5 rounded-lg hover:text-white tv-btn-focus focus:outline-none"
-                    >
-                      {isFullscreen ? (
-                        <Minimize className="w-4 h-4" />
-                      ) : (
-                        <Maximize className="w-4 h-4" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </>
+              }
+            }}
+            onLoadedMetadata={() => {
+              if (videoRef.current && videoRef.current.duration > 0) {
+                setDuration(videoRef.current.duration);
+              }
+            }}
+            onEnded={() => setIsPlaying(false)}
+            playsInline
+          />
         )}
       </div>
+
+      {/* ========================================================
+          UNIFIED BOTTOM PLAYER CONTROL DOCK (FOR ALL SERVERS: REZKA, ASHDI, VIDEASY, NATIVE & TORRENTS)
+          100% accessible by TV/Projector Remote (D-Pad Down jumps right here!), Mouse & Touch!
+          ======================================================== */}
+      {!cleanCinemaBarsHidden && (
+        <div
+          className="shrink-0 z-30 bg-[#07090e] border-t border-white/15 px-3 sm:px-5 py-2 space-y-2"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Row 1: Interactive Timeline Scrubber / Seek Bar (Прокрутка) */}
+          <div data-nav-row="player-bottom-seek" className="flex items-center gap-2.5 w-full">
+            <span className="text-[11px] font-mono font-bold text-amber-400 shrink-0 min-w-[46px]">
+              {formatTime(currentTime)}
+            </span>
+
+            <div
+              ref={seekBarRef}
+              tabIndex={0}
+              role="button"
+              data-player-seekbar="true"
+              aria-label="Шкала прокрутки відео (Стрілки Вліво/Вправо на пульті або клік мишкою)"
+              title="Прокрутка: натискайте Вліво / Вправо на пульті (-15с / +15с) або клікніть мишкою в потрібне місце"
+              onClick={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                if (rect.width > 0) {
+                  const ratio = (e.clientX - rect.left) / rect.width;
+                  seekToRatio(ratio);
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowLeft') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  seek(-15);
+                } else if (e.key === 'ArrowRight') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  seek(15);
+                } else if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  togglePlay();
+                }
+              }}
+              className="group relative flex-1 h-4 bg-white/15 hover:bg-white/25 rounded-full cursor-pointer flex items-center px-0.5 tv-btn-focus focus:outline-none border border-white/10"
+            >
+              {/* Buffered track */}
+              <div
+                className="absolute top-0 left-0 bottom-0 bg-white/25 rounded-full pointer-events-none"
+                style={{ width: `${bufferedPercent}%` }}
+              />
+              {/* Active playback progress track */}
+              <div
+                className="
+                  absolute top-0 left-0 bottom-0 bg-gradient-to-r from-red-600 to-amber-500 rounded-full pointer-events-none transition-all duration-150
+                "
+                style={{ width: `${progressPercent}%` }}
+              />
+              {/* Scrubber thumb */}
+              <div
+                className="relative w-3.5 h-3.5 rounded-full bg-white shadow-[0_0_10px_rgba(239,68,68,1)] border-2 border-red-600 pointer-events-none -translate-x-1/2"
+                style={{ left: `${progressPercent}%` }}
+              />
+            </div>
+
+            <span className="text-[11px] font-mono text-slate-300 shrink-0 min-w-[46px] text-right">
+              {formatTime(safeDuration)}
+            </span>
+          </div>
+
+          {/* Row 2: Unified Remote & Mouse Bottom Action Controls */}
+          <div
+            data-nav-row="player-bottom-controls"
+            className="flex items-center justify-between gap-1.5 overflow-x-auto scrollbar-none py-0.5 px-0.5"
+          >
+            {/* Left Transport Controls: Play/Pause, -15s, +15s, -1m, +1m, Volume */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                ref={bottomPlayBtnRef}
+                type="button"
+                onClick={togglePlay}
+                tabIndex={0}
+                className="px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-md shadow-red-600/30 active:scale-95 transition-all tv-btn-focus focus:outline-none"
+                title="Пуск / Пауза (OK / K)"
+              >
+                {isPlaying ? (
+                  <>
+                    <Pause className="w-3.5 h-3.5 fill-white" />
+                    <span>Пауза</span>
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-3.5 h-3.5 fill-white" />
+                    <span>Пуск</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => seek(-15)}
+                tabIndex={0}
+                className="px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold flex items-center gap-1 border border-white/10 transition-all tv-btn-focus focus:outline-none"
+                title="Перемотати назад 15 сек"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
+                <span>-15с</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => seek(15)}
+                tabIndex={0}
+                className="px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold flex items-center gap-1 border border-white/10 transition-all tv-btn-focus focus:outline-none"
+                title="Перемотати вперед 15 сек"
+              >
+                <RotateCw className="w-3.5 h-3.5 text-amber-400" />
+                <span>+15с</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => seek(-60)}
+                tabIndex={0}
+                className="hidden sm:flex px-2 py-1.5 rounded-xl bg-white/5 hover:bg-white/15 text-slate-300 text-xs font-bold items-center gap-1 border border-white/10 transition-all tv-btn-focus focus:outline-none"
+                title="Назад 1 хвилину"
+              >
+                <span>-1 хв</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => seek(60)}
+                tabIndex={0}
+                className="hidden sm:flex px-2 py-1.5 rounded-xl bg-white/5 hover:bg-white/15 text-slate-300 text-xs font-bold items-center gap-1 border border-white/10 transition-all tv-btn-focus focus:outline-none"
+                title="Вперед 1 хвилину"
+              >
+                <span>+1 хв</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={toggleMute}
+                tabIndex={0}
+                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/10 transition-all tv-btn-focus focus:outline-none"
+                title="Звук Увімк/Вимк (M)"
+              >
+                {isMuted ? (
+                  <VolumeX className="w-4 h-4 text-red-400" />
+                ) : (
+                  <Volume2 className="w-4 h-4 text-emerald-400" />
+                )}
+              </button>
+            </div>
+
+            {/* Right Quick Media Center Controls: Voiceover, Quality, Settings, Aspect, Clean Screen */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setActiveMenu((prev) => (prev === 'audio' ? 'none' : 'audio'))}
+                tabIndex={0}
+                className="px-2.5 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-extrabold flex items-center gap-1 whitespace-nowrap transition-all tv-btn-focus focus:outline-none"
+              >
+                <Radio className="w-3.5 h-3.5" />
+                <span>Мова / Озвучка</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveMenu((prev) => (prev === 'quality' ? 'none' : 'quality'))}
+                tabIndex={0}
+                className="px-2.5 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-xs font-extrabold flex items-center gap-1 whitespace-nowrap transition-all tv-btn-focus focus:outline-none"
+              >
+                <Settings className="w-3.5 h-3.5" />
+                <span>{preferredQuality}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveMenu((prev) => (prev === 'settings' ? 'none' : 'settings'))}
+                tabIndex={0}
+                className="px-2.5 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-xs font-extrabold flex items-center gap-1 whitespace-nowrap transition-all tv-btn-focus focus:outline-none"
+              >
+                <Sliders className="w-3.5 h-3.5" />
+                <span>Налаштування</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const order: Array<'contain' | 'cover' | 'fill' | 'zoom115'> = [
+                    'contain',
+                    'cover',
+                    'fill',
+                    'zoom115',
+                  ];
+                  const next = order[(order.indexOf(aspectMode) + 1) % order.length];
+                  applyAspectMode(next);
+                }}
+                tabIndex={0}
+                className="hidden md:flex px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-slate-200 border border-white/15 text-xs font-bold items-center gap-1 whitespace-nowrap transition-all tv-btn-focus focus:outline-none"
+                title="Змінити формат екрана (16:9 / Без смуг / 21:9)"
+              >
+                <Monitor className="w-3.5 h-3.5" />
+                <span>Масштаб</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setCleanCinemaBarsHidden(true);
+                  showOsd('🗖 Повний екран (натисніть будь-яку кнопку пульта для панелі)');
+                }}
+                tabIndex={0}
+                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/15 transition-all tv-btn-focus focus:outline-none"
+                title="Сховати панелі на весь екран"
+              >
+                {isFullscreen ? (
+                  <Minimize className="w-4 h-4" />
+                ) : (
+                  <Maximize className="w-4 h-4" />
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
