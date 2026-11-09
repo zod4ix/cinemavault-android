@@ -248,7 +248,11 @@ public class MainActivity extends BridgeActivity {
                 }
                 if (bridge != null && bridge.getWebView() != null) {
                     bridge.getWebView().evaluateJavascript(
-                        "(function(){ if(window.__cinemaHandleBack && window.__cinemaHandleBack()) { return 'handled'; } return 'exit'; })()",
+                        "(function(){ " +
+                        "  if (typeof window.__cinemaHandlePlayerBack === 'function' && window.__cinemaHandlePlayerBack()) return 'handled'; " +
+                        "  if (typeof window.__cinemaHandleBack === 'function' && window.__cinemaHandleBack()) return 'handled'; " +
+                        "  return 'exit'; " +
+                        "})()",
                         value -> {
                             if (value == null || value.contains("exit")) {
                                 moveTaskToBack(true);
@@ -448,6 +452,11 @@ public class MainActivity extends BridgeActivity {
             "    else if(v)fireFullTapOnElement(v,window.innerWidth*0.5,window.innerHeight*0.5);" +
             "  }" +
             "});" +
+            "window.addEventListener('keydown',function(e){" +
+            "  if(e.key==='Escape'||e.key==='Backspace'||e.keyCode===4||e.keyCode===27){" +
+            "    try{window.top.postMessage({type:'cinema-bridge-back'},'*');}catch(ex){}" +
+            "  }" +
+            "},true);" +
             "})();";
     }
 
@@ -816,6 +825,32 @@ public class MainActivity extends BridgeActivity {
             }
         }
 
+        // 2.5 Hardware Back & Escape Keys (ensures remotes/projectors can ALWAYS exit fullscreen or player!)
+        if (keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_ESCAPE) {
+            if (action == KeyEvent.ACTION_UP) {
+                if (customFullscreenView != null) {
+                    exitCustomFullscreenView();
+                    return true;
+                }
+                if (this.bridge != null && this.bridge.getWebView() != null) {
+                    this.bridge.getWebView().evaluateJavascript(
+                        "(function(){ " +
+                        "  if (typeof window.__cinemaHandlePlayerBack === 'function' && window.__cinemaHandlePlayerBack()) return 'handled'; " +
+                        "  if (typeof window.__cinemaHandleBack === 'function' && window.__cinemaHandleBack()) return 'handled'; " +
+                        "  return 'unhandled'; " +
+                        "})()",
+                        value -> {
+                            if (value == null || value.contains("unhandled")) {
+                                runOnUiThread(() -> moveTaskToBack(true));
+                            }
+                        }
+                    );
+                    return true;
+                }
+            }
+            return true; // Consume ACTION_DOWN to avoid iframe/system swallowing
+        }
+
         // 3. Hardware Media & TV Remote Shortcut Keys
         if (action == KeyEvent.ACTION_DOWN) {
             switch (keyCode) {
@@ -1115,19 +1150,8 @@ public class MainActivity extends BridgeActivity {
 
             Intent installIntent = new Intent(Intent.ACTION_VIEW);
             installIntent.setDataAndType(apkUri, "application/vnd.android.package-archive");
-            installIntent.putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true);
             installIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             installIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-
-            // Explicitly grant URI permission to all package installer activities on TV / Projector ROMs
-            List<ResolveInfo> resInfoList = getPackageManager().queryIntentActivities(
-                installIntent,
-                PackageManager.MATCH_DEFAULT_ONLY
-            );
-            for (ResolveInfo resolveInfo : resInfoList) {
-                String packageName = resolveInfo.activityInfo.packageName;
-                grantUriPermission(packageName, apkUri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            }
 
             try {
                 startActivity(installIntent);
@@ -1136,7 +1160,6 @@ public class MainActivity extends BridgeActivity {
             } catch (Exception firstErr) {
                 Intent fallbackInstall = new Intent(Intent.ACTION_INSTALL_PACKAGE);
                 fallbackInstall.setData(apkUri);
-                fallbackInstall.putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true);
                 fallbackInstall.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 fallbackInstall.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 startActivity(fallbackInstall);

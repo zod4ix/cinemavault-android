@@ -781,27 +781,67 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   // Keyboard navigation & remote control back handler
   useEffect(() => {
-    window.__cinemaHandlePlayerBack = () => {
+    const handlePlayerBack = () => {
+      // 1. Turn off virtual cursor if active
       if (isVirtualCursorActive) {
         setIsVirtualCursorActive(false);
         showOsd('🖱️ Курсор пульта вимкнено');
         return true;
       }
+      // 2. Close any open settings/audio/quality menu
       if (activeMenu !== 'none') {
         setActiveMenu('none');
         return true;
       }
+      // 3. If bars were hidden in full screen ("Повний екран"), unhide bars!
       if (cleanCinemaBarsHidden) {
         setCleanCinemaBarsHidden(false);
         setShowControls(true);
+        showOsd('Панель керування відновлено');
         return true;
       }
-      return false;
+      // 4. If in Fullscreen or Landscape mode or HTML5 fullscreen, exit fullscreen!
+      if (isFullscreen || isLandscapeLocked || document.fullscreenElement) {
+        setIsFullscreen(false);
+        setIsLandscapeLocked(false);
+        if (document.fullscreenElement) {
+          document.exitFullscreen().catch(() => {});
+        }
+        if (window.AndroidCinemaBridge?.setPlayerFullscreen) {
+          window.AndroidCinemaBridge.setPlayerFullscreen(false);
+        }
+        showOsd('🗗 Вихід з повного екрану');
+        return true;
+      }
+      // 5. In standard player view: exit player back to movie page!
+      onClose();
+      return true;
     };
+
+    window.__cinemaHandlePlayerBack = handlePlayerBack;
+    (window as any).__cinemaHandleBack = handlePlayerBack;
+
+    const onSubframeMessage = (ev: MessageEvent) => {
+      if (ev.data && (ev.data.type === 'cinema-bridge-back' || ev.data.__cinemaCmd === 'exitFullscreen')) {
+        handlePlayerBack();
+      }
+    };
+    window.addEventListener('message', onSubframeMessage);
+
     return () => {
       delete window.__cinemaHandlePlayerBack;
+      delete (window as any).__cinemaHandleBack;
+      window.removeEventListener('message', onSubframeMessage);
     };
-  }, [isVirtualCursorActive, activeMenu, cleanCinemaBarsHidden, showOsd]);
+  }, [
+    isVirtualCursorActive,
+    activeMenu,
+    cleanCinemaBarsHidden,
+    isFullscreen,
+    isLandscapeLocked,
+    showOsd,
+    onClose,
+  ]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -821,6 +861,19 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         }
         if (cleanCinemaBarsHidden) {
           setCleanCinemaBarsHidden(false);
+          setShowControls(true);
+          return;
+        }
+        if (isFullscreen || isLandscapeLocked || document.fullscreenElement) {
+          setIsFullscreen(false);
+          setIsLandscapeLocked(false);
+          if (document.fullscreenElement) {
+            document.exitFullscreen().catch(() => {});
+          }
+          if (window.AndroidCinemaBridge?.setPlayerFullscreen) {
+            window.AndroidCinemaBridge.setPlayerFullscreen(false);
+          }
+          showOsd('🗗 Вихід з повного екрану');
           return;
         }
         onClose();
@@ -2107,6 +2160,26 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         {osdMessage && (
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-none bg-black/95 border border-white/25 text-white px-6 py-3.5 rounded-2xl text-sm sm:text-xl font-black shadow-2xl animate-fadeIn flex items-center gap-3">
             <span>{osdMessage}</span>
+          </div>
+        )}
+
+        {/* Floating Quick-Exit / Show Controls Button when bars are hidden */}
+        {cleanCinemaBarsHidden && (
+          <div className="absolute top-4 left-4 z-40 animate-fadeIn pointer-events-auto">
+            <button
+              type="button"
+              onClick={() => {
+                setCleanCinemaBarsHidden(false);
+                setShowControls(true);
+              }}
+              tabIndex={0}
+              data-nav-item="player-exit-clean"
+              className="px-4 py-2 rounded-2xl bg-black/85 hover:bg-red-600 active:scale-95 text-white font-black text-xs sm:text-sm flex items-center gap-2 border border-white/25 backdrop-blur-md shadow-2xl transition-all tv-btn-focus focus:outline-none"
+              title="Повернути панелі / Вийти з повного екрану (Назад / ESC / Стрілка)"
+            >
+              <ChevronLeft className="w-4 h-4 text-amber-400" />
+              <span>Повернути панель (Назад)</span>
+            </button>
           </div>
         )}
 

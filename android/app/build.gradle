@@ -19,9 +19,9 @@ android {
     signingConfigs {
         release {
             storeFile file('cinemavault-release.keystore')
-            storePassword 'cinemavault2026'
-            keyAlias 'cinemavault'
-            keyPassword 'cinemavault2026'
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
             v1SigningEnabled true
             v2SigningEnabled true
         }

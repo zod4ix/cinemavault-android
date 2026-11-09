@@ -530,6 +530,7 @@ export function initSpatialNavigation(): () => void {
 
   // Expose D-Pad handlers for Android MainActivity bridge
   window.__cinemaHandleDpad = (key: string) => {
+    window.dispatchEvent(new CustomEvent('cinema-dpad-activity', { detail: { key } }));
     return navigateSpatial(key);
   };
 
