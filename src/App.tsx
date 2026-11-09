@@ -34,7 +34,13 @@ import { SplashScreen } from './components/SplashScreen';
 import { AuthModal } from './components/AuthModal';
 import { authSyncService, UserProfile } from './services/authSync';
 import { fetchNovelties } from './services/novelties';
-import { updaterService, UpdateInfo, openExternalDownload } from './services/updater';
+import {
+  updaterService,
+  UpdateInfo,
+  openExternalDownload,
+  subscribeApkDownloadProgress,
+  ApkDownloadProgress,
+} from './services/updater';
 import { selfHealService, SelfHealingBoundary } from './services/selfHeal';
 import { initSpatialNavigation } from './services/spatialNav';
 
@@ -71,6 +77,15 @@ const MainAppContent: React.FC = () => {
 
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [showUpdateBanner, setShowUpdateBanner] = useState<boolean>(false);
+  const [apkProgress, setApkProgress] = useState<ApkDownloadProgress>({
+    status: 'idle',
+    percent: 0,
+    message: '',
+  });
+
+  useEffect(() => {
+    return subscribeApkDownloadProgress(setApkProgress);
+  }, []);
 
   const [authProfile, setAuthProfile] = useState<UserProfile | null>(authSyncService.getProfile());
   const [novelties, setNovelties] = useState<MediaItem[]>([]);
@@ -436,17 +451,28 @@ const MainAppContent: React.FC = () => {
             <div className="flex items-center gap-2 font-extrabold">
               <Sparkles className="w-4 h-4 shrink-0 animate-spin" />
               <span>
-                {t('updateAvailableToast')} Нова версія <strong>v{updateInfo.latestVersion}</strong> вже на GitHub!
+                {apkProgress.status !== 'idle' ? (
+                  apkProgress.message
+                ) : (
+                  <>
+                    {t('updateAvailableToast')} Нова версія <strong>v{updateInfo.latestVersion}</strong> вже на GitHub!
+                  </>
+                )}
               </span>
             </div>
             <div className="flex items-center gap-2" data-nav-row="update-toast">
               <button
                 tabIndex={0}
+                disabled={apkProgress.status === 'downloading'}
                 onClick={() => openExternalDownload(updateInfo.apkDownloadUrl)}
-                className="px-3 py-1 rounded-lg bg-white text-slate-950 font-black text-xs flex items-center gap-1 shadow hover:bg-amber-100 transition-colors tv-btn-focus focus:outline-none"
+                className="px-3 py-1 rounded-lg bg-white text-slate-950 font-black text-xs flex items-center gap-1 shadow hover:bg-amber-100 disabled:opacity-75 transition-colors tv-btn-focus focus:outline-none"
               >
-                <Download className="w-3.5 h-3.5" />
-                <span>{t('updateBtn')}</span>
+                <Download className={`w-3.5 h-3.5 ${apkProgress.status === 'downloading' ? 'animate-bounce' : ''}`} />
+                <span>
+                  {apkProgress.status === 'downloading'
+                    ? `${apkProgress.percent}%`
+                    : t('updateBtn')}
+                </span>
               </button>
               <button
                 tabIndex={0}

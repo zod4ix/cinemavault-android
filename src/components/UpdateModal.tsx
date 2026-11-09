@@ -12,7 +12,13 @@ import {
   Check,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
-import { UpdateInfo, updaterService, openExternalDownload } from '../services/updater';
+import {
+  UpdateInfo,
+  updaterService,
+  openExternalDownload,
+  subscribeApkDownloadProgress,
+  ApkDownloadProgress,
+} from '../services/updater';
 import { selfHealService } from '../services/selfHeal';
 
 interface UpdateModalProps {
@@ -34,7 +40,16 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
   const [isHealing, setIsHealing] = useState(false);
   const [healDoneMsg, setHealDoneMsg] = useState<string | null>(null);
   const [copiedUrl, setCopiedUrl] = useState(false);
+  const [apkProgress, setApkProgress] = useState<ApkDownloadProgress>({
+    status: 'idle',
+    percent: 0,
+    message: '',
+  });
   const downloadBtnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    return subscribeApkDownloadProgress(setApkProgress);
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
@@ -174,11 +189,16 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
             <button
               ref={downloadBtnRef}
               onClick={() => openExternalDownload(apkUrl)}
+              disabled={apkProgress.status === 'downloading'}
               tabIndex={0}
-              className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xl shadow-red-600/30 active:scale-95 transition-all tv-btn-focus focus:outline-none"
+              className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 disabled:opacity-70 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xl shadow-red-600/30 active:scale-95 transition-all tv-btn-focus focus:outline-none"
             >
-              <Download className="w-4 h-4" />
-              <span>Завантажити .APK (v{latestVer})</span>
+              <Download className={`w-4 h-4 ${apkProgress.status === 'downloading' ? 'animate-bounce' : ''}`} />
+              <span>
+                {apkProgress.status === 'downloading'
+                  ? `Завантаження... ${apkProgress.percent}%`
+                  : `Встановити оновлення .APK (v${latestVer})`}
+              </span>
             </button>
 
             <button
@@ -190,6 +210,22 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
               <span>Сторінка релізу на GitHub</span>
             </button>
           </div>
+
+          {/* Native In-App APK Download Progress Bar */}
+          {apkProgress.status !== 'idle' && (
+            <div className="p-3.5 rounded-2xl bg-slate-900/90 border border-amber-500/40 space-y-2">
+              <div className="flex items-center justify-between text-xs font-bold text-amber-300">
+                <span>{apkProgress.message}</span>
+                {apkProgress.percent > 0 && <span>{apkProgress.percent}%</span>}
+              </div>
+              <div className="w-full h-2.5 bg-black/60 rounded-full overflow-hidden border border-white/10">
+                <div
+                  className="h-full bg-gradient-to-r from-amber-500 via-red-500 to-emerald-500 transition-all duration-200"
+                  style={{ width: `${Math.max(5, apkProgress.percent)}%` }}
+                />
+              </div>
+            </div>
+          )}
 
           {/* QR Code & Direct Link for Smart TV / Other Devices */}
           <div className="p-4 rounded-2xl bg-black/40 border border-white/10 flex flex-col sm:flex-row items-center gap-4">

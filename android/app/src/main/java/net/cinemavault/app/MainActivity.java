@@ -3,11 +3,16 @@ package net.cinemavault.app;
 import android.annotation.SuppressLint;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.graphics.Color;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Message;
 import android.os.SystemClock;
+import android.provider.Settings;
 import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
@@ -21,8 +26,10 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.widget.FrameLayout;
+import android.widget.Toast;
 
 import androidx.activity.OnBackPressedCallback;
+import androidx.core.content.FileProvider;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
@@ -33,6 +40,13 @@ import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.BridgeWebChromeClient;
 import com.getcapacitor.BridgeWebViewClient;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.List;
 import java.util.Locale;
 
 public class MainActivity extends BridgeActivity {
@@ -56,6 +70,11 @@ public class MainActivity extends BridgeActivity {
     private long mouseDownTime = 0L;
     private boolean mouseExceededSlop = false;
     private boolean isSynthesizingTouch = false;
+
+    // Native In-App APK Updater state (works on Projectors & Android TV without any browser installed)
+    private File pendingInstallApkFile = null;
+    private boolean waitingForInstallPermission = false;
+    private volatile boolean isDownloadingApk = false;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -658,6 +677,272 @@ public class MainActivity extends BridgeActivity {
         });
     }
 
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (waitingForInstallPermission && pendingInstallApkFile != null && pendingInstallApkFile.exists()) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || getPackageManager().canRequestPackageInstalls()) {
+                waitingForInstallPermission = false;
+                File fileToInstall = pendingInstallApkFile;
+                pendingInstallApkFile = null;
+                installDownloadedApk(fileToInstall);
+            }
+        }
+    }
+
+    private void notifyApkProgress(String status, int percent, String message) {
+        runOnUiThread(() -> {
+            if (this.bridge == null || this.bridge.getWebView() == null) return;
+            String safeMsg = (message != null ? message : "")
+                .replace("\\", "\\\\")
+                .replace("'", "\\'")
+                .replace("\n", " ");
+            String js = String.format(
+                Locale.US,
+                "if(window.__cinemaOnApkDownloadProgress){window.__cinemaOnApkDownloadProgress('%s',%d,'%s');}",
+                status,
+                percent,
+                safeMsg
+            );
+            this.bridge.getWebView().evaluateJavascript(js, null);
+        });
+    }
+
+    private void downloadAndInstallApkInternal(String rawUrl) {
+        if (rawUrl == null || rawUrl.trim().isEmpty()) return;
+        if (isDownloadingApk) {
+            runOnUiThread(() ->
+                Toast.makeText(MainActivity.this, "⏳ Оновлення вже завантажується...", Toast.LENGTH_SHORT).show()
+            );
+            return;
+        }
+        isDownloadingApk = true;
+        final String targetUrl = rawUrl.trim();
+
+        runOnUiThread(() ->
+            Toast.makeText(
+                MainActivity.this,
+                "⬇️ Завантаження оновлення CinemaVault PRO...",
+                Toast.LENGTH_SHORT
+            ).show()
+        );
+        notifyApkProgress("downloading", 1, "Підключення до сервера GitHub...");
+
+        new Thread(() -> {
+            HttpURLConnection conn = null;
+            InputStream in = null;
+            FileOutputStream out = null;
+            try {
+                String currentUrl = targetUrl;
+                for (int redirectCount = 0; redirectCount < 8; redirectCount++) {
+                    URL urlObj = new URL(currentUrl);
+                    conn = (HttpURLConnection) urlObj.openConnection();
+                    conn.setInstanceFollowRedirects(true);
+                    conn.setConnectTimeout(15000);
+                    conn.setReadTimeout(30000);
+                    conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Android; CinemaVault-PRO-Updater)");
+                    conn.setRequestProperty("Accept", "application/vnd.android.package-archive,application/octet-stream,*/*");
+                    conn.connect();
+
+                    int code = conn.getResponseCode();
+                    if (
+                        code == HttpURLConnection.HTTP_MOVED_PERM ||
+                        code == HttpURLConnection.HTTP_MOVED_TEMP ||
+                        code == HttpURLConnection.HTTP_SEE_OTHER ||
+                        code == 307 ||
+                        code == 308
+                    ) {
+                        String location = conn.getHeaderField("Location");
+                        conn.disconnect();
+                        if (location == null || location.isEmpty()) break;
+                        currentUrl = new URL(urlObj, location).toString();
+                        continue;
+                    }
+                    break;
+                }
+
+                if (conn == null || conn.getResponseCode() >= 400) {
+                    throw new Exception("HTTP " + (conn != null ? conn.getResponseCode() : -1));
+                }
+
+                long totalBytes = conn.getContentLengthLong();
+                File apkFile = new File(getCacheDir(), "CinemaVault-PRO-Update.apk");
+                if (apkFile.exists()) {
+                    apkFile.delete();
+                }
+
+                in = conn.getInputStream();
+                out = new FileOutputStream(apkFile);
+
+                byte[] buffer = new byte[16384];
+                long downloaded = 0L;
+                int read;
+                long lastNotify = 0L;
+
+                while ((read = in.read(buffer)) != -1) {
+                    out.write(buffer, 0, read);
+                    downloaded += read;
+                    long now = SystemClock.uptimeMillis();
+                    if (now - lastNotify >= 220) {
+                        lastNotify = now;
+                        int pct = totalBytes > 0
+                            ? (int) Math.min(99L, (downloaded * 100L) / totalBytes)
+                            : 50;
+                        double mbDone = downloaded / (1024.0 * 1024.0);
+                        double mbTotal = totalBytes > 0 ? totalBytes / (1024.0 * 1024.0) : 4.5;
+                        notifyApkProgress(
+                            "downloading",
+                            Math.max(2, pct),
+                            String.format(Locale.US, "Завантаження APK: %d%% (%.1f / %.1f МБ)", pct, mbDone, mbTotal)
+                        );
+                    }
+                }
+                out.flush();
+                out.close();
+                out = null;
+                in.close();
+                in = null;
+
+                if (!apkFile.exists() || apkFile.length() < 100_000) {
+                    throw new Exception("Пошкоджений файл APK");
+                }
+
+                // Also copy to public Downloads folder so Projector File Manager can always see it too
+                try {
+                    File pubDownloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                    if (pubDownloads != null) {
+                        if (!pubDownloads.exists()) pubDownloads.mkdirs();
+                        File pubCopy = new File(pubDownloads, "CinemaVault-PRO-Update.apk");
+                        try (
+                            FileInputStream fis = new FileInputStream(apkFile);
+                            FileOutputStream fos = new FileOutputStream(pubCopy)
+                        ) {
+                            byte[] copyBuf = new byte[16384];
+                            int r;
+                            while ((r = fis.read(copyBuf)) != -1) {
+                                fos.write(copyBuf, 0, r);
+                            }
+                        }
+                    }
+                } catch (Exception ignored) {
+                }
+
+                notifyApkProgress("installing", 100, "Завантаження завершено (100%). Запуск інсталятора Android...");
+                isDownloadingApk = false;
+                runOnUiThread(() -> installDownloadedApk(apkFile));
+            } catch (Exception e) {
+                isDownloadingApk = false;
+                notifyApkProgress(
+                    "error",
+                    0,
+                    "Помилка завантаження: " + (e.getMessage() != null ? e.getMessage() : "перевірте інтернет")
+                );
+                runOnUiThread(() ->
+                    Toast.makeText(
+                        MainActivity.this,
+                        "⚠️ Не вдалося завантажити APK: перевірте підключення до Інтернету",
+                        Toast.LENGTH_LONG
+                    ).show()
+                );
+            } finally {
+                try {
+                    if (out != null) out.close();
+                } catch (Exception ignored) {}
+                try {
+                    if (in != null) in.close();
+                } catch (Exception ignored) {}
+                if (conn != null) conn.disconnect();
+            }
+        }).start();
+    }
+
+    private void installDownloadedApk(File apkFile) {
+        if (apkFile == null || !apkFile.exists()) return;
+
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                if (!getPackageManager().canRequestPackageInstalls()) {
+                    pendingInstallApkFile = apkFile;
+                    waitingForInstallPermission = true;
+                    notifyApkProgress(
+                        "permission",
+                        100,
+                        "Увімкніть дозвіл «Встановлення невідомих додатків» для CinemaVault та натисніть Назад"
+                    );
+                    Toast.makeText(
+                        MainActivity.this,
+                        "Увімкніть дозвіл на встановлення оновлень для CinemaVault та натисніть «Назад»",
+                        Toast.LENGTH_LONG
+                    ).show();
+                    try {
+                        Intent permIntent = new Intent(
+                            Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                            Uri.parse("package:" + getPackageName())
+                        );
+                        permIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        startActivity(permIntent);
+                        return;
+                    } catch (Exception ignored) {
+                        try {
+                            Intent secIntent = new Intent(Settings.ACTION_SECURITY_SETTINGS);
+                            secIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                            startActivity(secIntent);
+                            return;
+                        } catch (Exception ignored2) {
+                        }
+                    }
+                }
+            }
+
+            Uri apkUri = FileProvider.getUriForFile(
+                MainActivity.this,
+                getPackageName() + ".fileprovider",
+                apkFile
+            );
+
+            Intent installIntent = new Intent(Intent.ACTION_VIEW);
+            installIntent.setDataAndType(apkUri, "application/vnd.android.package-archive");
+            installIntent.putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true);
+            installIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            installIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+
+            // Explicitly grant URI permission to all package installer activities on TV / Projector ROMs
+            List<ResolveInfo> resInfoList = getPackageManager().queryIntentActivities(
+                installIntent,
+                PackageManager.MATCH_DEFAULT_ONLY
+            );
+            for (ResolveInfo resolveInfo : resInfoList) {
+                String packageName = resolveInfo.activityInfo.packageName;
+                grantUriPermission(packageName, apkUri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            }
+
+            try {
+                startActivity(installIntent);
+                notifyApkProgress("ready", 100, "Вікно встановлення відкрито! Натисніть «Оновити / Встановити».");
+                return;
+            } catch (Exception firstErr) {
+                Intent fallbackInstall = new Intent(Intent.ACTION_INSTALL_PACKAGE);
+                fallbackInstall.setData(apkUri);
+                fallbackInstall.putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true);
+                fallbackInstall.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                fallbackInstall.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                startActivity(fallbackInstall);
+                notifyApkProgress("ready", 100, "Вікно встановлення відкрито! Натисніть «Оновити / Встановити».");
+            }
+        } catch (Exception e) {
+            notifyApkProgress(
+                "ready",
+                100,
+                "APK збережено у папку «Завантаження» (Downloads/CinemaVault-PRO-Update.apk). Відкрийте його через Провідник!"
+            );
+            Toast.makeText(
+                MainActivity.this,
+                "✅ Файл збережено у папку Downloads/CinemaVault-PRO-Update.apk!",
+                Toast.LENGTH_LONG
+            ).show();
+        }
+    }
+
     public class CinemaJsBridge {
         @JavascriptInterface
         public void setPlayerFullscreen(boolean fullscreen) {
@@ -682,14 +967,28 @@ public class MainActivity extends BridgeActivity {
         }
 
         @JavascriptInterface
+        public void downloadAndInstallApk(String url) {
+            downloadAndInstallApkInternal(url);
+        }
+
+        @JavascriptInterface
         public void openExternalUrl(String url) {
             if (url == null || url.trim().isEmpty()) return;
+            final String cleanUrl = url.trim();
+            if (cleanUrl.toLowerCase(Locale.US).contains(".apk")) {
+                downloadAndInstallApkInternal(cleanUrl);
+                return;
+            }
             runOnUiThread(() -> {
                 try {
-                    Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url.trim()));
+                    Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(cleanUrl));
                     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                     startActivity(intent);
-                } catch (Exception ignored) {
+                } catch (Exception noBrowserException) {
+                    // Projector has no browser installed: fall back to direct in-app APK download!
+                    downloadAndInstallApkInternal(
+                        "https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.6.0.apk"
+                    );
                 }
             });
         }

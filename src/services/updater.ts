@@ -34,9 +34,46 @@ export function isNewerVersion(current: string, remote: string): boolean {
   return false;
 }
 
+export interface ApkDownloadProgress {
+  status: 'idle' | 'downloading' | 'installing' | 'permission' | 'ready' | 'error';
+  percent: number;
+  message: string;
+}
+
+type ProgressListener = (state: ApkDownloadProgress) => void;
+const progressListeners = new Set<ProgressListener>();
+let currentDownloadState: ApkDownloadProgress = {
+  status: 'idle',
+  percent: 0,
+  message: '',
+};
+
+if (typeof window !== 'undefined') {
+  (window as any).__cinemaOnApkDownloadProgress = (
+    status: ApkDownloadProgress['status'],
+    percent: number,
+    message: string
+  ) => {
+    currentDownloadState = { status, percent, message };
+    progressListeners.forEach((cb) => cb(currentDownloadState));
+  };
+}
+
+export function subscribeApkDownloadProgress(cb: ProgressListener): () => void {
+  progressListeners.add(cb);
+  cb(currentDownloadState);
+  return () => {
+    progressListeners.delete(cb);
+  };
+}
+
 export function openExternalDownload(url: string) {
   try {
     const win = window as any;
+    if (url.toLowerCase().includes('.apk') && win.AndroidCinemaBridge?.downloadAndInstallApk) {
+      win.AndroidCinemaBridge.downloadAndInstallApk(url);
+      return;
+    }
     if (win.AndroidCinemaBridge?.openExternalUrl) {
       win.AndroidCinemaBridge.openExternalUrl(url);
       return;
