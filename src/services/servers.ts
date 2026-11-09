@@ -95,8 +95,22 @@ export async function ensureIds(media: MediaItem): Promise<ResolvedIds> {
 
 const uaCache = new Map<string, StreamServer | null>();
 
+const translitUk = (text: string) => {
+  const map: Record<string, string> = {
+    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'h', 'ґ': 'g', 'д': 'd', 'е': 'e', 'є': 'ye',
+    'ж': 'zh', 'з': 'z', 'и': 'y', 'і': 'i', 'ї': 'yi', 'й': 'y', 'к': 'k', 'л': 'l',
+    'м': 'm', 'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
+    'ф': 'f', 'х': 'kh', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'shch', 'ь': '', 'ю': 'yu', 'я': 'ya'
+  };
+  return text
+    .toLowerCase()
+    .split('')
+    .map((c) => map[c] ?? c)
+    .join('');
+};
+
 const slugify = (s: string) =>
-  s
+  translitUk(s || '')
     .toLowerCase()
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -134,68 +148,91 @@ export async function resolveUaServer(
   media: MediaItem,
   season: number = 1
 ): Promise<StreamServer | null> {
-  const title = media.originalTitle || media.title;
-  const slug = slugify(title);
-  if (!slug || !/[a-z]/.test(slug)) return null;
+  const primaryTitle = media.title || media.originalTitle || '';
+  const origTitle = media.originalTitle || '';
+  const slug = slugify(primaryTitle);
+  const origSlug = slugify(origTitle);
   const series = isSeriesLike(media) || media.mediaType === 'cartoon';
-  const cacheKey = `${slug}-${media.year}-${season}`;
+  const cacheKey = `${media.id}-${slug || origSlug}-${media.year}-${season}`;
   if (uaCache.has(cacheKey)) return uaCache.get(cacheKey)!;
 
   let result: StreamServer | null = null;
-  try {
-    const search = await httpText(
-      `https://uakino.eu/index.php?do=search&subaction=search&story=${encodeURIComponent(title)}`
-    );
-    if (search.status === 200 && search.text) {
-      const urls = Array.from(
-        new Set(
-          [...search.text.matchAll(/https:\/\/uakino\.eu\/[a-z]+\/\d+-([a-z0-9-]+)\.html/g)].map(
-            (m) => `${m[0]}|${m[1]}`
-          )
-        )
+  const searchQueries = Array.from(new Set([primaryTitle, origTitle].filter(Boolean)));
+
+  for (const query of searchQueries) {
+    if (result) break;
+    try {
+      const search = await httpText(
+        `https://uakino.eu/index.php?do=search&subaction=search&story=${encodeURIComponent(query)}`
       );
-      const candidates = urls
-        .map((u) => {
+      if (search.status === 200 && search.text) {
+        const urls = Array.from(
+          new Set(
+            [...search.text.matchAll(/https:\/\/uakino\.eu\/[a-z0-9-]+\/\d+-([a-z0-9-]+)\.html/g)].map(
+              (m) => `${m[0]}|${m[1]}`
+            )
+          )
+        );
+
+        const candidates = urls.map((u) => {
           const [url, tail] = u.split('|');
           return { url, tail };
-        })
-        .filter(({ tail }) => {
-          if (!tail.startsWith(slug)) return false;
-          const rest = tail.slice(slug.length);
-          if (/^-\d{4}$/.test(rest)) return Math.abs(parseInt(rest.slice(1), 10) - media.year) <= 1;
-          const m = rest.match(/^-(\d+)-season-(\d{4})$/);
-          if (m) return parseInt(m[1], 10) === season;
-          return false;
         });
-      const pick =
-        candidates.find((c) => (series ? c.tail.includes('-season-') : !c.tail.includes('-season-'))) ||
-        candidates[0];
 
-      if (pick) {
-        const page = await httpText(pick.url);
-        const m = page.text.match(/https:\/\/ashdi\.vip\/(?:vod|serial)\/\d+/);
-        if (m) {
-          result = {
-            id: 'ua-ashdi',
-            name: '🇺🇦 UA • Ashdi (UAKino Дубляж)',
-            badge: '🇺🇦 UA #1',
-            url: m[0],
-            mode: 'embed',
-            langs: ['UA'],
-          };
+        // Filter & rank candidates: match season for series, match year or slug similarity
+        const scored = candidates.map((c) => {
+          let score = 0;
+          if (slug && c.tail.includes(slug)) score += 50;
+          if (origSlug && c.tail.includes(origSlug)) score += 40;
+          if (series && c.tail.includes(`-${season}-season-`)) score += 60;
+          else if (!series && !c.tail.includes('-season-')) score += 30;
+          if (media.year && c.tail.includes(String(media.year))) score += 25;
+          return { ...c, score };
+        });
+
+        scored.sort((a, b) => b.score - a.score);
+        const pick = scored[0];
+
+        if (pick && (pick.score > 20 || candidates.length === 1)) {
+          const page = await httpText(pick.url);
+          // Match Ashdi or UAKino embed URL formats
+          const m =
+            page.text.match(/https:\/\/(?:ashdi\.vip|uakino\.club)\/(?:vod|serial|embed)?\/\d+/) ||
+            page.text.match(/iframe[^>]+src=["'](https?:\/\/[^"']*(?:ashdi|uakino)[^"']*)["']/i);
+          if (m) {
+            const embedUrl = m[1] || m[0];
+            result = {
+              id: 'ua-ashdi',
+              name: '🇺🇦 UA • Ashdi (UAKino Дубляж)',
+              badge: '🇺🇦 UA #1',
+              url: embedUrl.startsWith('//') ? `https:${embedUrl}` : embedUrl,
+              mode: 'embed',
+              langs: ['UA'],
+            };
+          }
         }
       }
+    } catch {
+      // Continue to next query if any
     }
-  } catch {
-    result = null;
   }
+
   uaCache.set(cacheKey, result);
   return result;
 }
 
 export function getCachedUaServer(media: MediaItem, season: number = 1): StreamServer | null {
-  const slug = slugify(media.originalTitle || media.title);
-  return uaCache.get(`${slug}-${media.year}-${season}`) ?? null;
+  const primaryTitle = media.title || media.originalTitle || '';
+  const origTitle = media.originalTitle || '';
+  const slug = slugify(primaryTitle);
+  const origSlug = slugify(origTitle);
+  const k1 = `${media.id}-${slug || origSlug}-${media.year}-${season}`;
+  if (uaCache.has(k1)) return uaCache.get(k1)!;
+  const k2 = `${slug}-${media.year}-${season}`;
+  if (uaCache.has(k2)) return uaCache.get(k2)!;
+  const k3 = `${origSlug}-${media.year}-${season}`;
+  if (origSlug && uaCache.has(k3)) return uaCache.get(k3)!;
+  return null;
 }
 
 // ───────────────────────────── Multi-Language Provider Catalogue ─────────────────────────────
@@ -238,6 +275,11 @@ const PROVIDERS: ProviderDef[] = [
         return c.series
           ? `https://api.loadbox.ws/embed/imdb/${c.imdb}?season=${c.s}&episode=${c.e}&language=uk&audio=ua`
           : `https://api.loadbox.ws/embed/imdb/${c.imdb}?language=uk&audio=ua`;
+      }
+      if (c.tmdb) {
+        return c.series
+          ? `https://api.loadbox.ws/embed/tmdb/${c.tmdb}?season=${c.s}&episode=${c.e}&language=uk&audio=ua`
+          : `https://api.loadbox.ws/embed/tmdb/${c.tmdb}?language=uk&audio=ua`;
       }
       return null;
     },
@@ -380,6 +422,11 @@ const PROVIDERS: ProviderDef[] = [
         return c.series
           ? `https://api.loadbox.ws/embed/imdb/${c.imdb}?season=${c.s}&episode=${c.e}`
           : `https://api.loadbox.ws/embed/imdb/${c.imdb}`;
+      }
+      if (c.tmdb) {
+        return c.series
+          ? `https://api.loadbox.ws/embed/tmdb/${c.tmdb}?season=${c.s}&episode=${c.e}`
+          : `https://api.loadbox.ws/embed/tmdb/${c.tmdb}`;
       }
       return null;
     },
@@ -646,8 +693,8 @@ export function orderByHealth(
       if (d !== 0) return d;
 
       // Within the same health tier, keep Ukrainian channels first
-      const aUa = a.s.id.startsWith('ua-') ? 0 : 1;
-      const bUa = b.s.id.startsWith('ua-') ? 0 : 1;
+      const aUa = a.s.id.startsWith('ua-') || a.s.langs?.includes('UA') ? 0 : 1;
+      const bUa = b.s.id.startsWith('ua-') || b.s.langs?.includes('UA') ? 0 : 1;
       if (aUa !== bUa) return aUa - bUa;
 
       return a.i - b.i;

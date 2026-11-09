@@ -84,7 +84,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
       {/* Top subtle badge */}
       <div className="w-full flex justify-between items-center z-10 pt-1">
         <span className="text-[11px] font-bold text-slate-400 tracking-widest uppercase flex items-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5 text-amber-500" /> CinemaVault PRO • v3.6.1
+          <Sparkles className="w-3.5 h-3.5 text-amber-500" /> CinemaVault PRO • v3.6.2
         </span>
         <button
           tabIndex={0}

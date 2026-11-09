@@ -635,6 +635,16 @@ export function initSpatialNavigation(): () => void {
     const target = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
     if (!target) return 'none';
 
+    // NEVER synthesize clicks on modal backdrop overlays (prevents modal from instantly closing upon opening!)
+    if (
+      target.getAttribute('data-modal-scope') === 'true' ||
+      target.getAttribute('data-modal-backdrop') === 'true' ||
+      target.classList.contains('bg-black/85') ||
+      target.classList.contains('bg-black/80')
+    ) {
+      return 'backdrop_ignored';
+    }
+
     // If clicking on an embedded player <iframe> (e.g., Rezka, Ashdi, Videasy, VidLink),
     // forward the exact relative coordinates into our injected iframe DocumentStart script!
     if (target.tagName === 'IFRAME') {

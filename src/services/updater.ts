@@ -1,6 +1,6 @@
 import { httpGetJson } from './tmdb';
 
-export const APP_VERSION = '3.6.1';
+export const APP_VERSION = '3.6.2';
 export const GITHUB_REPO = 'zod4ix/cinemavault-android';
 export const DEFAULT_APK_URL = `https://github.com/${GITHUB_REPO}/raw/main/CinemaVault-PRO-v${APP_VERSION}.apk`;
 export const GITHUB_RELEASE_PAGE = `https://github.com/${GITHUB_REPO}/releases/latest`;
@@ -110,9 +110,9 @@ export const updaterService = {
     let apkDownloadUrl = DEFAULT_APK_URL;
     let releasePageUrl = GITHUB_RELEASE_PAGE;
     let releaseNotes =
-      '• 📽️ ІДЕАЛЬНА РОБОТА МИШКИ, ПУЛЬТА ТА КЛАВІАТУРИ НА ПРОЄКТОРАХ, SMART TV ТА ВСІХ ДЕВАЙСАХ (v3.6.1): виправлено баг «мишка бігає верхнім шаром і не натискає кнопки» (Window-local координати без зміщення Keystone + збереження нативного SOURCE_MOUSE у WebView + авто-підсвічування при наведенні)\n' +
-      '• 🎛️ УНІВЕРСАЛЬНИЙ КОМБАЙН КЕРУВАННЯ ВСЕРЕДИНІ ПЛЕЄРА (Rezka, Ashdi, Videasy, VidLink, HLS, Торренти): додано нижню панель з інтерактивною шкалою прокрутки (SeekBar), куди пульт миттєво перестрибує стрілкою «Вниз», та прямий міст (WebViewCompat Subframe Bridge) до внутрішніх меню озвучення, якості (4K/1080p/720p/480p) й налаштувань iframe-плеєрів!\n' +
-      '• 🔊 PRO-НАЛАШТУВАННЯ МЕДІА-КОМБАЙНА ДЛЯ ПРОЄКТОРІВ: Підсилювач звуку до 300% (Audio Booster), формат екрана без чорних смуг (16:9 / Crop / Stretch / Кінозум 115%), пресети яскравості та контрасту для проєкторів і швидкість 0.5x–2.0x';
+      '• 🇺🇦 ЗАЛІЗНИЙ ВИБІР УКРАЇНСЬКОЇ ОЗВУЧКИ ТА ВСІХ ВКЛАДОК ПЛЕЄРА (v3.6.2): виправлено швидке закриття віконця вибору мови (захист оверлея та анти-дребезг кнопок), відновлено 100% роботу студій озвучення у плеєрах (Rezka/Ashdi/Videasy) з точним кліком по центру елементів і авто-перемиканням на український дубляж.\n' +
+      '• 🎛️ ПОВНА РОБОТА ВСІХ ВКЛАДОК У ВІДЕОПЛЕЄРІ: Мова/Озвучка, Якість (4K/1080p/720p/480p), Налаштування проєктора (Audio Boost до 300%, масштаб без смуг, яскравість HDR), P2P-торренти та вибір сезонів/серій.\n' +
+      '• 🛡️ БЕЗПЕЧНЕ ТА ПЛАВНЕ ОНОВЛЕННЯ: збережено точний цифровий сертифікат релізу (CB:92:93) для безшовного встановлення поверх попередніх версій без попереджень Google Play Protect.';
     let publishedAt = new Date().toISOString().slice(0, 10);
 
     try {

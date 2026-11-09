@@ -278,25 +278,61 @@ public class MainActivity extends BridgeActivity {
             "window.__cinemaSubframeBridgeInstalled=true;" +
             "var isSubframe=(window!==window.top);" +
             "var audioCtx=null,gainNode=null,hookedVideo=null;" +
+            "var preferUa=true,uaAutoAttempts=0,uaAutoSelected=false;" +
+            "var VOICE_SELECTORS='.b-translators__item, [data-translator_id], .pljs-menu li, [class*=\"translator\"], [class*=\"voice\"], select.pljs-audio option, select[name*=\"voice\"] option, select[name*=\"audio\"] option, [data-voice], .voice-btn, .audio-track-item, [data-audio]';" +
             "function getActiveVideo(){" +
             "  var vids=document.querySelectorAll('video');" +
             "  for(var i=0;i<vids.length;i++){if(vids[i].readyState>0||vids[i].src||vids[i].currentSrc)return vids[i];}" +
             "  return vids[0]||null;" +
             "}" +
+            "function getElementCenter(el){" +
+            "  try{" +
+            "    var r=el.getBoundingClientRect();" +
+            "    if(r&&r.width>0&&r.height>0){return {x:Math.round(r.left+r.width/2),y:Math.round(r.top+r.height/2)};}" +
+            "  }catch(e){}" +
+            "  return {x:30,y:30};" +
+            "}" +
             "function scanVoices(){" +
             "  var out=[];" +
             "  try{" +
-            "    var nodes=document.querySelectorAll('.b-translators__item, [data-translator_id], .pljs-menu li, [class*=\"translator\"], [class*=\"voice\"]');" +
-            "    for(var i=0;i<nodes.length&&out.length<16;i++){" +
+            "    var nodes=document.querySelectorAll(VOICE_SELECTORS);" +
+            "    for(var i=0;i<nodes.length&&out.length<20;i++){" +
             "      var el=nodes[i];" +
-            "      var txt=(el.textContent||'').trim();" +
-            "      if(txt&&txt.length>1&&txt.length<45){" +
-            "        var act=el.classList.contains('active')||el.classList.contains('selected')||el.getAttribute('aria-selected')==='true';" +
+            "      var txt=(el.textContent||el.value||'').trim();" +
+            "      if(txt&&txt.length>1&&txt.length<50){" +
+            "        var act=el.classList.contains('active')||el.classList.contains('selected')||el.getAttribute('aria-selected')==='true'||Boolean(el.selected);" +
             "        out.push({index:i,label:txt,active:act});" +
             "      }" +
             "    }" +
             "  }catch(e){}" +
             "  return out;" +
+            "}" +
+            "function tryAutoSelectUaVoice(){" +
+            "  if(!preferUa||uaAutoSelected||uaAutoAttempts>8)return;" +
+            "  uaAutoAttempts++;" +
+            "  try{" +
+            "    var vList=scanVoices();" +
+            "    if(!vList||vList.length===0)return;" +
+            "    var activeIsUa=vList.some(function(v){return v.active&&/(укр|ukr|ua\\b|укра|дубляж)/i.test(v.label);});" +
+            "    if(activeIsUa){uaAutoSelected=true;return;}" +
+            "    var uaCand=null;" +
+            "    for(var j=0;j<vList.length;j++){" +
+            "      if(/(укр|ukr|ua\\b|укра|дубляж)/i.test(vList[j].label)){uaCand=vList[j];break;}" +
+            "    }" +
+            "    if(uaCand){" +
+            "      var allNodes=document.querySelectorAll(VOICE_SELECTORS);" +
+            "      var targetNode=null;" +
+            "      for(var k=0;k<allNodes.length;k++){" +
+            "        if((allNodes[k].textContent||allNodes[k].value||'').trim()===uaCand.label){targetNode=allNodes[k];break;}" +
+            "      }" +
+            "      if(!targetNode&&allNodes[uaCand.index])targetNode=allNodes[uaCand.index];" +
+            "      if(targetNode){" +
+            "        uaAutoSelected=true;" +
+            "        fireFullTapOnElement(targetNode);" +
+            "        try{window.top.postMessage({__cinemaPlayerBridge:true,type:'uaVoiceAutoActivated',label:uaCand.label},'*');}catch(e){}" +
+            "      }" +
+            "    }" +
+            "  }catch(e){}" +
             "}" +
             "function scanQualities(){" +
             "  var out=[];" +
@@ -341,14 +377,19 @@ public class MainActivity extends BridgeActivity {
             "      v.addEventListener('play',reportState);" +
             "      v.addEventListener('pause',reportState);" +
             "    }" +
+            "    tryAutoSelectUaVoice();" +
             "    if(v)reportState();" +
             "  },650);" +
             "}" +
             "function fireFullTapOnElement(el,cx,cy){" +
             "  if(!el)return;" +
+            "  if(typeof cx!=='number'||typeof cy!=='number'||(cx<=15&&cy<=15)){" +
+            "    var pt=getElementCenter(el);" +
+            "    cx=pt.x; cy=pt.y;" +
+            "  }" +
             "  try{" +
             "    if(typeof Touch!=='undefined'&&typeof TouchEvent!=='undefined'){" +
-            "      var tObj=new Touch({identifier:Date.now()%10000,target:el,clientX:cx,clientY:cy,pageX:cx,pageY:cy,radiusX:2,radiusY:2,force:1});" +
+            "      var tObj=new Touch({identifier:Date.now()%10000,target:el,clientX:cx,clientY:cy,pageX:cx,pageY:cy,radiusX:4,radiusY:4,force:1});" +
             "      el.dispatchEvent(new TouchEvent('touchstart',{bubbles:true,cancelable:true,touches:[tObj],targetTouches:[tObj],changedTouches:[tObj]}));" +
             "      el.dispatchEvent(new TouchEvent('touchend',{bubbles:true,cancelable:true,touches:[],targetTouches:[],changedTouches:[tObj]}));" +
             "    }" +
@@ -360,6 +401,11 @@ public class MainActivity extends BridgeActivity {
             "    el.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,cancelable:true,clientX:cx,clientY:cy,button:0,buttons:0}));" +
             "    el.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,clientX:cx,clientY:cy,button:0}));" +
             "    if(typeof el.click==='function')el.click();" +
+            "    if(el.tagName==='OPTION'&&el.parentElement){" +
+            "      el.parentElement.value=el.value;" +
+            "      el.parentElement.dispatchEvent(new Event('change',{bubbles:true}));" +
+            "      el.parentElement.dispatchEvent(new Event('input',{bubbles:true}));" +
+            "    }" +
             "  }catch(e){}" +
             "}" +
             "window.addEventListener('message',function(ev){" +
@@ -433,16 +479,34 @@ public class MainActivity extends BridgeActivity {
             "    }catch(e){}" +
             "  }" +
             "  else if(cmd==='selectInternalVoice'){" +
-            "    var vNodes=document.querySelectorAll('.b-translators__item, [data-translator_id], .pljs-menu li, [class*=\"translator\"], [class*=\"voice\"]');" +
-            "    if(typeof d.index==='number'&&vNodes[d.index])fireFullTapOnElement(vNodes[d.index],10,10);" +
+            "    var vNodes=document.querySelectorAll(VOICE_SELECTORS);" +
+            "    var target=null;" +
+            "    var targetLabel=(d.label||'').trim().toLowerCase();" +
+            "    if(targetLabel){" +
+            "      for(var vi=0;vi<vNodes.length;vi++){" +
+            "        var nTxt=(vNodes[vi].textContent||vNodes[vi].value||'').trim().toLowerCase();" +
+            "        if(nTxt===targetLabel||(targetLabel.length>3&&nTxt.indexOf(targetLabel)!==-1)){" +
+            "          target=vNodes[vi];break;" +
+            "        }" +
+            "      }" +
+            "    }" +
+            "    if(!target&&typeof d.index==='number'&&vNodes[d.index]){target=vNodes[d.index];}" +
+            "    if(target){" +
+            "      try{target.scrollIntoView({block:'nearest',inline:'nearest'});}catch(e){}" +
+            "      fireFullTapOnElement(target);" +
+            "      try{if(window.jQuery&&target.getAttribute('data-translator_id')){window.jQuery(target).trigger('click');}}catch(e){}" +
+            "    }" +
+            "  }" +
+            "  else if(cmd==='preferLanguage'){" +
+            "    if(d.lang==='ua'){preferUa=true;uaAutoAttempts=0;tryAutoSelectUaVoice();}" +
             "  }" +
             "  else if(cmd==='selectInternalQuality'){" +
             "    var qTarget=String(d.quality||'').toLowerCase();" +
-            "    var qNodes=document.querySelectorAll('li, div, button, span');" +
+            "    var qNodes=document.querySelectorAll('[data-quality], .pljs-quality li, [class*=\"quality\"] li, [class*=\"quality\"] div, li, button, span');" +
             "    for(var qi=0;qi<qNodes.length;qi++){" +
             "      var qt=(qNodes[qi].textContent||'').trim().toLowerCase();" +
-            "      if(qt===qTarget||(qTarget==='4k'&&(qt==='2160p'||qt==='4k'||qt==='2160'))){" +
-            "        fireFullTapOnElement(qNodes[qi],10,10);break;" +
+            "      if(qt===qTarget||(qTarget==='4k'&&(qt==='2160p'||qt==='4k'||qt==='2160'))||(qTarget==='1080p'&&(qt==='1080p'||qt==='1080'))){" +
+            "        fireFullTapOnElement(qNodes[qi]);break;" +
             "      }" +
             "    }" +
             "  }" +
@@ -1221,7 +1285,7 @@ public class MainActivity extends BridgeActivity {
                 } catch (Exception noBrowserException) {
                     // Projector has no browser installed: fall back to direct in-app APK download!
                     downloadAndInstallApkInternal(
-                        "https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.6.1.apk"
+                        "https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.6.2.apk"
                     );
                 }
             });

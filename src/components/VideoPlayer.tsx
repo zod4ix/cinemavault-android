@@ -115,6 +115,23 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const prevMenuRef = useRef<'none' | 'audio' | 'quality' | 'settings' | 'torrents' | 'episodes'>(
     'none'
   );
+  const modalOpenedAtRef = useRef<number>(0);
+  const lastMenuToggleRef = useRef<number>(0);
+  const userExplicitlySelectedServerRef = useRef<boolean>(false);
+
+  const toggleMenu = useCallback((menu: 'audio' | 'quality' | 'settings' | 'torrents' | 'episodes') => {
+    const now = Date.now();
+    if (now - lastMenuToggleRef.current < 280) return;
+    lastMenuToggleRef.current = now;
+    setActiveMenu((prev) => {
+      const next = prev === menu ? 'none' : menu;
+      if (next !== 'none') {
+        modalOpenedAtRef.current = Date.now();
+      }
+      return next;
+    });
+  }, []);
+
   const [audioLangFilter, setAudioLangFilter] = useState<string>('all');
   const [torrentLangFilter, setTorrentLangFilter] = useState<string>('all');
 
@@ -150,8 +167,13 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [serversVersion, setServersVersion] = useState<number>(0);
   useEffect(() => {
     let active = true;
-    Promise.all([ensureIds(media), resolveUaServer(media, activeSeason)]).then(() => {
-      if (active) setServersVersion((v) => v + 1);
+    Promise.all([ensureIds(media), resolveUaServer(media, activeSeason)]).then(([_, ua]) => {
+      if (!active) return;
+      setServersVersion((v) => v + 1);
+      if (ua && !userExplicitlySelectedServerRef.current) {
+        setSelectedServerId(ua.id);
+        showOsd('🇺🇦 Знайдено український дубляж (Ashdi)');
+      }
     });
     return () => {
       active = false;
@@ -234,6 +256,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       );
       if (matched) return matched.id;
     }
+    const uaServer = availableServers.find(
+      (s) => s.id.startsWith('ua-') || s.id.includes('ashdi') || s.langs?.includes('UA')
+    );
+    if (uaServer) return uaServer.id;
     return availableServers[0]?.id || 'vidlink';
   };
 
@@ -359,12 +385,14 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           setIframeQualities(data.qualities);
         }
         setIframeLoading(false);
+      } else if (data.type === 'uaVoiceAutoActivated' && data.label) {
+        showOsd(`🇺🇦 Автоматично увімкнено дубляж: ${data.label}`);
       }
     };
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, []);
+  }, [showOsd]);
 
   // TV remote autofocus on mount: focus Language/Audio button so user can immediately navigate top bar or press Down to jump into the player!
   useEffect(() => {
@@ -474,8 +502,15 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     setIframeQualities([]);
     if (activeServer) {
       rememberWorkingServer(activeServer.id);
+      const isUa =
+        activeServer.id.startsWith('ua-') ||
+        activeServer.id.includes('ashdi') ||
+        activeServer.langs?.includes('UA');
+      if (isUa) {
+        sendIframeCommand('preferLanguage', { lang: 'ua' });
+      }
     }
-  }, [effectiveEmbedUrl, activeServer?.id]);
+  }, [effectiveEmbedUrl, activeServer?.id, sendIframeCommand]);
 
   // In-App Webtor P2P Torrent Streaming Engine
   useEffect(() => {
@@ -884,28 +919,28 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         case 'a':
         case 'A':
           e.preventDefault();
-          setActiveMenu((prev) => (prev === 'audio' ? 'none' : 'audio'));
+          toggleMenu('audio');
           break;
         case 'q':
         case 'Q':
           e.preventDefault();
-          setActiveMenu((prev) => (prev === 'quality' ? 'none' : 'quality'));
+          toggleMenu('quality');
           break;
         case 's':
         case 'S':
           e.preventDefault();
-          setActiveMenu((prev) => (prev === 'settings' ? 'none' : 'settings'));
+          toggleMenu('settings');
           break;
         case 't':
         case 'T':
           e.preventDefault();
-          setActiveMenu((prev) => (prev === 'torrents' ? 'none' : 'torrents'));
+          toggleMenu('torrents');
           break;
         case 'e':
         case 'E':
           if (isSeries) {
             e.preventDefault();
-            setActiveMenu((prev) => (prev === 'episodes' ? 'none' : 'episodes'));
+            toggleMenu('episodes');
           }
           break;
         case 'k':
@@ -966,10 +1001,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         onClose();
       } else if (keyCode === 222 || keyCode === 175) {
         // KEYCODE_MEDIA_AUDIO_TRACK or KEYCODE_CAPTIONS -> Open Language/Audio Menu
-        setActiveMenu((prev) => (prev === 'audio' ? 'none' : 'audio'));
+        toggleMenu('audio');
       } else if (keyCode === 82 || keyCode === 176) {
         // KEYCODE_MENU or KEYCODE_SETTINGS -> Open Settings Menu
-        setActiveMenu((prev) => (prev === 'settings' ? 'none' : 'settings'));
+        toggleMenu('settings');
       }
     };
 
@@ -995,6 +1030,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     seek,
     toggleMute,
     sendIframeCommand,
+    toggleMenu,
     showOsd,
   ]);
 
@@ -1089,7 +1125,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               <button
                 ref={audioBtnRef}
                 type="button"
-                onClick={() => setActiveMenu((prev) => (prev === 'audio' ? 'none' : 'audio'))}
+                onClick={() => toggleMenu('audio')}
                 tabIndex={0}
                 className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 border whitespace-nowrap shrink-0 transition-all tv-btn-focus focus:outline-none ${
                   activeMenu === 'audio'
@@ -1106,7 +1142,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               <button
                 ref={qualityBtnRef}
                 type="button"
-                onClick={() => setActiveMenu((prev) => (prev === 'quality' ? 'none' : 'quality'))}
+                onClick={() => toggleMenu('quality')}
                 tabIndex={0}
                 className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 border whitespace-nowrap shrink-0 transition-all tv-btn-focus focus:outline-none ${
                   activeMenu === 'quality'
@@ -1123,7 +1159,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               <button
                 ref={settingsBtnRef}
                 type="button"
-                onClick={() => setActiveMenu((prev) => (prev === 'settings' ? 'none' : 'settings'))}
+                onClick={() => toggleMenu('settings')}
                 tabIndex={0}
                 className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-extrabold flex items-center gap-1.5 border whitespace-nowrap shrink-0 transition-all tv-btn-focus focus:outline-none ${
                   activeMenu === 'settings'
@@ -1140,7 +1176,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               <button
                 ref={torrentsBtnRef}
                 type="button"
-                onClick={() => setActiveMenu((prev) => (prev === 'torrents' ? 'none' : 'torrents'))}
+                onClick={() => toggleMenu('torrents')}
                 tabIndex={0}
                 className={`px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border whitespace-nowrap shrink-0 transition-all tv-btn-focus focus:outline-none ${
                   activeMenu === 'torrents' || activeServer?.mode === 'torrent'
@@ -1178,9 +1214,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                   <button
                     ref={episodesBtnRef}
                     type="button"
-                    onClick={() =>
-                      setActiveMenu((prev) => (prev === 'episodes' ? 'none' : 'episodes'))
-                    }
+                    onClick={() => toggleMenu('episodes')}
                     tabIndex={0}
                     className={`px-2.5 py-1 rounded-lg text-xs font-extrabold flex items-center gap-1 transition-all tv-btn-focus focus:outline-none ${
                       activeMenu === 'episodes'
@@ -1313,9 +1347,13 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                       key={srv.id}
                       type="button"
                       onClick={() => {
+                        userExplicitlySelectedServerRef.current = true;
                         setSelectedServerId(srv.id);
                         if (srv.mode === 'torrent' && srv.magnet) {
                           setCurrentMagnet(srv.magnet);
+                        }
+                        if (srv.id.startsWith('ua-') || srv.langs?.includes('UA')) {
+                          sendIframeCommand('preferLanguage', { lang: 'ua' });
                         }
                         showOsd(`📡 ${srv.name}`);
                       }}
@@ -1409,8 +1447,13 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       {activeMenu !== 'none' && (
         <div
           data-modal-scope="true"
+          data-modal-backdrop="true"
           className="absolute inset-0 z-40 bg-black/85 flex items-center justify-center p-3 sm:p-5 animate-fadeIn"
-          onClick={() => setActiveMenu('none')}
+          onClick={(e) => {
+            if (e.target === e.currentTarget && Date.now() - modalOpenedAtRef.current > 380) {
+              setActiveMenu('none');
+            }
+          }}
         >
           <div
             ref={modalBoxRef}
@@ -1481,8 +1524,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                               index: v.index,
                               label: v.label,
                             });
-                            setActiveMenu('none');
                             showOsd(`🎙️ Озвучка: ${v.label}`);
+                            setTimeout(() => setActiveMenu('none'), 220);
                           }}
                           tabIndex={0}
                           className={`p-2.5 rounded-xl border text-left text-xs font-bold flex items-center justify-between transition-all tv-btn-focus focus:outline-none ${
@@ -1532,8 +1575,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                   type="button"
                   onClick={() => {
                     sendIframeCommand('openInternalMenu', { target: 'voice' });
-                    setActiveMenu('none');
                     showOsd('🎙️ Меню озвучки всередині плеєра відкрито');
+                    setTimeout(() => setActiveMenu('none'), 180);
                   }}
                   tabIndex={0}
                   className="w-full p-2.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-xs font-extrabold flex items-center justify-between transition-all tv-btn-focus focus:outline-none"
@@ -1604,10 +1647,14 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                           type="button"
                           data-menu-initial-focus={isCur ? 'true' : undefined}
                           onClick={() => {
+                            userExplicitlySelectedServerRef.current = true;
                             setSelectedServerId(srv.id);
                             if (isTorrent && srv.magnet) setCurrentMagnet(srv.magnet);
-                            setActiveMenu('none');
+                            if (srv.id.startsWith('ua-') || srv.langs?.includes('UA')) {
+                              sendIframeCommand('preferLanguage', { lang: 'ua' });
+                            }
                             showOsd(`🔊 ${srv.name}`);
+                            setTimeout(() => setActiveMenu('none'), 180);
                           }}
                           tabIndex={0}
                           className={`w-full p-3 rounded-xl border text-left flex items-center justify-between transition-all tv-btn-focus focus:outline-none ${
@@ -1702,8 +1749,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                               });
                               hlsRef.current.currentLevel = bestLevel;
                             }
-                            setActiveMenu('none');
                             showOsd(`💎 Якість: ${res.label}`);
+                            setTimeout(() => setActiveMenu('none'), 180);
                           }}
                           tabIndex={0}
                           className={`p-3 rounded-xl border text-left flex items-center justify-between transition-all tv-btn-focus focus:outline-none ${
@@ -1736,8 +1783,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                           type="button"
                           onClick={() => {
                             sendIframeCommand('selectInternalQuality', { quality: qStr });
-                            setActiveMenu('none');
                             showOsd(`📺 Якість плеєра: ${qStr}`);
+                            setTimeout(() => setActiveMenu('none'), 180);
                           }}
                           tabIndex={0}
                           className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-emerald-600 text-white text-xs font-bold border border-white/15 tv-btn-focus focus:outline-none"
@@ -1765,11 +1812,15 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                             key={srv.id}
                             type="button"
                             onClick={() => {
+                              userExplicitlySelectedServerRef.current = true;
                               setSelectedServerId(srv.id);
                               if (srv.badge.includes('4K')) setPreferredQuality('4K');
                               else setPreferredQuality('1080p');
-                              setActiveMenu('none');
+                              if (srv.id.startsWith('ua-') || srv.langs?.includes('UA')) {
+                                sendIframeCommand('preferLanguage', { lang: 'ua' });
+                              }
                               showOsd(`📺 Сервер: ${srv.name}`);
+                              setTimeout(() => setActiveMenu('none'), 180);
                             }}
                             tabIndex={0}
                             className={`w-full p-2.5 rounded-xl border text-left flex items-center justify-between transition-all tv-btn-focus focus:outline-none ${
@@ -1926,8 +1977,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                       type="button"
                       onClick={() => {
                         sendIframeCommand('openInternalMenu', { target: 'settings' });
-                        setActiveMenu('none');
                         showOsd('⚙️ Внутрішні налаштування плеєра відкрито');
+                        setTimeout(() => setActiveMenu('none'), 180);
                       }}
                       tabIndex={0}
                       className="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-xs font-bold text-white flex items-center justify-between tv-btn-focus focus:outline-none"
@@ -1939,8 +1990,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                       type="button"
                       onClick={() => {
                         setIsVirtualCursorActive(true);
-                        setActiveMenu('none');
                         showOsd('🖱️ Курсор пульта увімкнено');
+                        setTimeout(() => setActiveMenu('none'), 180);
                       }}
                       tabIndex={0}
                       className="p-2.5 rounded-xl bg-blue-600/30 hover:bg-blue-600/50 border border-blue-400/40 text-xs font-bold text-blue-200 flex items-center justify-between tv-btn-focus focus:outline-none"
@@ -2015,8 +2066,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                         onClick={() => {
                           setCurrentMagnet(tItem.magnet);
                           setSelectedServerId(`torrent-${tItem.id}`);
-                          setActiveMenu('none');
                           showOsd(`⚡ P2P: ${tItem.quality}`);
+                          setTimeout(() => setActiveMenu('none'), 180);
                         }}
                         tabIndex={0}
                         className="w-full p-3 rounded-xl border border-white/10 bg-white/5 hover:bg-purple-900/40 hover:border-purple-500/50 text-left flex items-center justify-between transition-all tv-btn-focus focus:outline-none"
@@ -2098,8 +2149,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                           data-menu-initial-focus={isCurE ? 'true' : undefined}
                           onClick={() => {
                             setActiveEpisode(eNum);
-                            setActiveMenu('none');
                             showOsd(`📺 Сезон ${activeSeason} • Серія ${eNum}`);
+                            setTimeout(() => setActiveMenu('none'), 180);
                           }}
                           tabIndex={0}
                           className={`py-2.5 px-2 rounded-xl text-xs font-extrabold border text-center transition-all tv-btn-focus focus:outline-none ${
@@ -2244,7 +2295,16 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               key={effectiveEmbedUrl}
               src={effectiveEmbedUrl}
               title={title}
-              onLoad={() => setIframeLoading(false)}
+              onLoad={() => {
+                setIframeLoading(false);
+                const isUa =
+                  activeServer?.id.startsWith('ua-') ||
+                  activeServer?.id.includes('ashdi') ||
+                  activeServer?.langs?.includes('UA');
+                if (isUa) {
+                  sendIframeCommand('preferLanguage', { lang: 'ua' });
+                }
+              }}
               referrerPolicy="origin"
               className="w-full h-full border-0 bg-black"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
@@ -2442,7 +2502,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             <div className="flex items-center gap-1.5 shrink-0">
               <button
                 type="button"
-                onClick={() => setActiveMenu((prev) => (prev === 'audio' ? 'none' : 'audio'))}
+                onClick={() => toggleMenu('audio')}
                 tabIndex={0}
                 className="px-2.5 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-extrabold flex items-center gap-1 whitespace-nowrap transition-all tv-btn-focus focus:outline-none"
               >
@@ -2452,7 +2512,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
               <button
                 type="button"
-                onClick={() => setActiveMenu((prev) => (prev === 'quality' ? 'none' : 'quality'))}
+                onClick={() => toggleMenu('quality')}
                 tabIndex={0}
                 className="px-2.5 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-xs font-extrabold flex items-center gap-1 whitespace-nowrap transition-all tv-btn-focus focus:outline-none"
               >
@@ -2462,7 +2522,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
               <button
                 type="button"
-                onClick={() => setActiveMenu((prev) => (prev === 'settings' ? 'none' : 'settings'))}
+                onClick={() => toggleMenu('settings')}
                 tabIndex={0}
                 className="px-2.5 py-1.5 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 text-xs font-extrabold flex items-center gap-1 whitespace-nowrap transition-all tv-btn-focus focus:outline-none"
               >

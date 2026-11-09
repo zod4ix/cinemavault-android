@@ -305,7 +305,7 @@ export const Header: React.FC<HeaderProps> = ({
                 Cinema<span className="text-red-500">Vault</span>
               </span>
               <span className="text-[8.5px] sm:text-[10px] text-amber-400 font-bold tracking-wider block mt-0.5 whitespace-nowrap">
-                PRO v3.6.1 • 4K & LIVE
+                PRO v3.6.2 • 4K & LIVE
               </span>
             </div>
           </div>
