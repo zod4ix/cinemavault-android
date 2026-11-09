@@ -73,6 +73,11 @@ public class MainActivity extends BridgeActivity {
     private boolean mouseExceededSlop = false;
     private boolean isSynthesizingTouch = false;
 
+    // YouTube-style Edge & Center Double-Tap Detection
+    private long lastTapTime = 0L;
+    private float lastTapWinX = -1f;
+    private float lastTapWinY = -1f;
+
     // Native In-App APK Updater state (works on Projectors & Android TV without any browser installed)
     private File pendingInstallApkFile = null;
     private boolean waitingForInstallPermission = false;
@@ -308,28 +313,38 @@ public class MainActivity extends BridgeActivity {
             "  return out;" +
             "}" +
             "function tryAutoSelectUaVoice(){" +
-            "  if(!preferUa||uaAutoSelected||uaAutoAttempts>8)return;" +
+            "  if(!preferUa||uaAutoSelected||uaAutoAttempts>12)return;" +
             "  uaAutoAttempts++;" +
             "  try{" +
             "    var vList=scanVoices();" +
-            "    if(!vList||vList.length===0)return;" +
-            "    var activeIsUa=vList.some(function(v){return v.active&&/(укр|ukr|ua\\b|укра|дубляж)/i.test(v.label);});" +
-            "    if(activeIsUa){uaAutoSelected=true;return;}" +
-            "    var uaCand=null;" +
-            "    for(var j=0;j<vList.length;j++){" +
-            "      if(/(укр|ukr|ua\\b|укра|дубляж)/i.test(vList[j].label)){uaCand=vList[j];break;}" +
-            "    }" +
-            "    if(uaCand){" +
-            "      var allNodes=document.querySelectorAll(VOICE_SELECTORS);" +
-            "      var targetNode=null;" +
-            "      for(var k=0;k<allNodes.length;k++){" +
-            "        if((allNodes[k].textContent||allNodes[k].value||'').trim()===uaCand.label){targetNode=allNodes[k];break;}" +
+            "    if(vList&&vList.length>0){" +
+            "      var activeIsUa=vList.some(function(v){return v.active&&/(укр|ukr|ua\\b|укра|дубляж)/i.test(v.label);});" +
+            "      if(activeIsUa){uaAutoSelected=true;return;}" +
+            "      for(var j=0;j<vList.length;j++){" +
+            "        if(/(укр|ukr|ua\\b|укра|дубляж)/i.test(vList[j].label)){" +
+            "          var allNodes=document.querySelectorAll(VOICE_SELECTORS);" +
+            "          var targetNode=null;" +
+            "          for(var k=0;k<allNodes.length;k++){" +
+            "            if((allNodes[k].textContent||allNodes[k].value||'').trim()===vList[j].label){targetNode=allNodes[k];break;}" +
+            "          }" +
+            "          if(!targetNode&&allNodes[vList[j].index])targetNode=allNodes[vList[j].index];" +
+            "          if(targetNode){" +
+            "            uaAutoSelected=true;" +
+            "            fireFullTapOnElement(targetNode);" +
+            "            try{window.top.postMessage({__cinemaPlayerBridge:true,type:'uaVoiceAutoActivated',label:vList[j].label},'*');}catch(e){}" +
+            "            return;" +
+            "          }" +
+            "        }" +
             "      }" +
-            "      if(!targetNode&&allNodes[uaCand.index])targetNode=allNodes[uaCand.index];" +
-            "      if(targetNode){" +
+            "    }" +
+            "    var allMenuItems=document.querySelectorAll('li, div, button, span, a');" +
+            "    for(var mi=0;mi<allMenuItems.length;mi++){" +
+            "      var mTxt=(allMenuItems[mi].textContent||'').trim();" +
+            "      if(mTxt.length>2&&mTxt.length<40&&/^(украинск|українськ|ukrainian|дубляж\\s*\\(?укр\\)?)/i.test(mTxt)){" +
             "        uaAutoSelected=true;" +
-            "        fireFullTapOnElement(targetNode);" +
-            "        try{window.top.postMessage({__cinemaPlayerBridge:true,type:'uaVoiceAutoActivated',label:uaCand.label},'*');}catch(e){}" +
+            "        fireFullTapOnElement(allMenuItems[mi]);" +
+            "        try{window.top.postMessage({__cinemaPlayerBridge:true,type:'uaVoiceAutoActivated',label:mTxt},'*');}catch(e){}" +
+            "        return;" +
             "      }" +
             "    }" +
             "  }catch(e){}" +
@@ -399,8 +414,8 @@ public class MainActivity extends BridgeActivity {
             "    el.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,cancelable:true,clientX:cx,clientY:cy,button:0,buttons:1}));" +
             "    el.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,cancelable:true,clientX:cx,clientY:cy,pointerType:'touch',isPrimary:true}));" +
             "    el.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,cancelable:true,clientX:cx,clientY:cy,button:0,buttons:0}));" +
-            "    el.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,clientX:cx,clientY:cy,button:0}));" +
             "    if(typeof el.click==='function')el.click();" +
+            "    else el.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,clientX:cx,clientY:cy,button:0}));" +
             "    if(el.tagName==='OPTION'&&el.parentElement){" +
             "      el.parentElement.value=el.value;" +
             "      el.parentElement.dispatchEvent(new Event('change',{bubbles:true}));" +
@@ -449,9 +464,21 @@ public class MainActivity extends BridgeActivity {
             "    return;" +
             "  }" +
             "  var v=getActiveVideo();" +
-            "  if(cmd==='togglePlay'&&v){if(v.paused)v.play().catch(function(){});else v.pause();reportState();}" +
-            "  else if(cmd==='play'&&v){v.play().catch(function(){});reportState();}" +
-            "  else if(cmd==='pause'&&v){v.pause();reportState();}" +
+            "  if(cmd==='togglePlay'){" +
+            "    if(v){if(v.paused)v.play().catch(function(){});else v.pause();reportState();}" +
+            "    var toggleBtn=document.querySelector('.vjs-play-control, .pljs-play, [class*=\"play-pause\"], [class*=\"play_pause\"], button[aria-label*=\"play\" i], button[aria-label*=\"pause\" i], .jw-icon-playback');" +
+            "    if(toggleBtn)try{toggleBtn.click();}catch(e){}" +
+            "  }" +
+            "  else if(cmd==='play'){" +
+            "    if(v){v.play().catch(function(){});reportState();}" +
+            "    var startBtn=document.querySelector('.vjs-play-control.vjs-paused, .pljs-play, button[aria-label*=\"play\" i], .vjs-big-play-button');" +
+            "    if(startBtn)try{startBtn.click();}catch(e){}" +
+            "  }" +
+            "  else if(cmd==='pause'){" +
+            "    if(v){v.pause();reportState();}" +
+            "    var stopBtn=document.querySelector('.vjs-play-control.vjs-playing, .pljs-pause, button[aria-label*=\"pause\" i]');" +
+            "    if(stopBtn)try{stopBtn.click();}catch(e){}" +
+            "  }" +
             "  else if(cmd==='seekBy'&&v){var dur=v.duration||99999;v.currentTime=Math.max(0,Math.min(dur,(v.currentTime||0)+(Number(d.delta)||0)));reportState();}" +
             "  else if(cmd==='seekToPercent'&&v){if(v.duration>0)v.currentTime=Math.max(0,Math.min(v.duration,(Number(d.percent)||0)*v.duration));else if(d.time)v.currentTime=Number(d.time);reportState();}" +
             "  else if(cmd==='toggleMute'&&v){v.muted=typeof d.muted==='boolean'?d.muted:!v.muted;reportState();}" +
@@ -811,9 +838,41 @@ public class MainActivity extends BridgeActivity {
         // Always pass the genuine native event to super.dispatchTouchEvent so WebView's native mouse/touch pipeline stays intact!
         boolean handled = super.dispatchTouchEvent(event);
 
-        // On ACTION_UP of a tap/click, guarantee the click in JS and inside cross-origin iframes!
+        // 1. YouTube-style Edge & Center Double-Tap Detection across ALL video players (Native, Embed & Torrents)!
         if (action == MotionEvent.ACTION_UP && !mouseExceededSlop) {
-            boolean needsIframeFingerFallback = isMouseOrPointer && mouseDownButtonState == 0;
+            long now = SystemClock.uptimeMillis();
+            if (now - lastTapTime < 330) {
+                float tapDist = (float) Math.hypot(event.getX() - lastTapWinX, event.getY() - lastTapWinY);
+                if (tapDist < jitterSlopPx * 2.2f) {
+                    float[] coords = getWebViewCoordsFromWindow(event.getX(), event.getY());
+                    if (coords != null && this.bridge != null && this.bridge.getWebView() != null) {
+                        float normX = coords[0];
+                        String side = (normX < 0.32f) ? "left" : (normX > 0.68f) ? "right" : "center";
+                        String doubleTapJs = String.format(
+                            Locale.US,
+                            "window.dispatchEvent(new CustomEvent('cinema-double-tap', { detail: { side: '%s', normX: %.4f } }));",
+                            side,
+                            normX
+                        );
+                        this.bridge.getWebView().evaluateJavascript(doubleTapJs, null);
+                    }
+                    lastTapTime = 0L;
+                } else {
+                    lastTapTime = now;
+                    lastTapWinX = event.getX();
+                    lastTapWinY = event.getY();
+                }
+            } else {
+                lastTapTime = now;
+                lastTapWinX = event.getX();
+                lastTapWinY = event.getY();
+            }
+        }
+
+        // 2. ONLY synthesize smart click for physical Mouse / Air Mouse / Pointer devices where buttonState was 0!
+        // NEVER for regular touchscreen taps, because WebView already dispatches genuine touch events natively!
+        if (isMouseOrPointer && action == MotionEvent.ACTION_UP && !mouseExceededSlop) {
+            boolean needsIframeFingerFallback = (mouseDownButtonState == 0);
             triggerSmartClickAtWindowCoords(mouseDownWinX, mouseDownWinY, needsIframeFingerFallback);
         }
 
@@ -1285,7 +1344,7 @@ public class MainActivity extends BridgeActivity {
                 } catch (Exception noBrowserException) {
                     // Projector has no browser installed: fall back to direct in-app APK download!
                     downloadAndInstallApkInternal(
-                        "https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.6.2.apk"
+                        "https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.6.3.apk"
                     );
                 }
             });

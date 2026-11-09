@@ -1,6 +1,6 @@
 import { httpGetJson } from './tmdb';
 
-export const APP_VERSION = '3.6.2';
+export const APP_VERSION = '3.6.3';
 export const GITHUB_REPO = 'zod4ix/cinemavault-android';
 export const DEFAULT_APK_URL = `https://github.com/${GITHUB_REPO}/raw/main/CinemaVault-PRO-v${APP_VERSION}.apk`;
 export const GITHUB_RELEASE_PAGE = `https://github.com/${GITHUB_REPO}/releases/latest`;
@@ -110,9 +110,9 @@ export const updaterService = {
     let apkDownloadUrl = DEFAULT_APK_URL;
     let releasePageUrl = GITHUB_RELEASE_PAGE;
     let releaseNotes =
-      '• 🇺🇦 ЗАЛІЗНИЙ ВИБІР УКРАЇНСЬКОЇ ОЗВУЧКИ ТА ВСІХ ВКЛАДОК ПЛЕЄРА (v3.6.2): виправлено швидке закриття віконця вибору мови (захист оверлея та анти-дребезг кнопок), відновлено 100% роботу студій озвучення у плеєрах (Rezka/Ashdi/Videasy) з точним кліком по центру елементів і авто-перемиканням на український дубляж.\n' +
-      '• 🎛️ ПОВНА РОБОТА ВСІХ ВКЛАДОК У ВІДЕОПЛЕЄРІ: Мова/Озвучка, Якість (4K/1080p/720p/480p), Налаштування проєктора (Audio Boost до 300%, масштаб без смуг, яскравість HDR), P2P-торренти та вибір сезонів/серій.\n' +
-      '• 🛡️ БЕЗПЕЧНЕ ТА ПЛАВНЕ ОНОВЛЕННЯ: збережено точний цифровий сертифікат релізу (CB:92:93) для безшовного встановлення поверх попередніх версій без попереджень Google Play Protect.';
+      '• ⏸ ВІДНОВЛЕНО ПАУЗУ ТА ЮТУБ-ПРОКРУТКУ (v3.6.3): пауза тепер працює залізно на всіх плеєрах без мимовільної прокрутки; прибрано зайві кнопки +15/-15 сек, додано зручну перемотку подвійним дотиком по краях екрана (як у YouTube: ⏪ зліва / ⏩ справа).\n' +
+      '• 🇺🇦 ЗАЛІЗНИЙ ВИБІР УКРАЇНСЬКОЇ ОЗВУЧКИ: кнопки вибору мови тепер миттєво активують український дубляж; усунуто самовільне закриття меню налаштувань плеєра (прибрано подвійні кліки у WebView та iframe).\n' +
+      '• 🛡️ БЕЗПЕКА ТА ВІДСУТНІСТЬ СВАРКИ ANDROID: додано схему підпису v3, Network Security Config та сумісність з Android 15 для тихого та безпечного оновлення.';
     let publishedAt = new Date().toISOString().slice(0, 10);
 
     try {

@@ -159,6 +159,24 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   });
   const virtualCursorPosRef = useRef<{ x: number; y: number }>({ x: 0.5, y: 0.55 });
 
+  // YouTube-style Edge Double-Tap Feedback
+  const [doubleTapFeedback, setDoubleTapFeedback] = useState<{
+    side: 'left' | 'right' | 'center';
+    text: string;
+  } | null>(null);
+  const doubleTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const triggerDoubleTapFeedback = useCallback(
+    (side: 'left' | 'right' | 'center', text: string) => {
+      if (doubleTapTimerRef.current) clearTimeout(doubleTapTimerRef.current);
+      setDoubleTapFeedback({ side, text });
+      doubleTapTimerRef.current = setTimeout(() => {
+        setDoubleTapFeedback(null);
+      }, 750);
+    },
+    []
+  );
+
   // Live P2P Torrents
   const [torrentStreams, setTorrentStreams] = useState<TorrentItem[]>([]);
   const [currentMagnet, setCurrentMagnet] = useState<string>(initialMagnet || '');
@@ -673,9 +691,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       return;
     }
 
-    // For embed / torrent mode: send togglePlay to the iframe bridge!
+    // For embed / torrent mode: send explicit play/pause AND togglePlay to the iframe bridge!
     const nextPlaying = !isPlaying;
     setIsPlaying(nextPlaying);
+    sendIframeCommand(nextPlaying ? 'play' : 'pause');
     sendIframeCommand('togglePlay');
     showOsd(nextPlaying ? '▶ Відтворення' : '⏸ Пауза');
   }, [activeServer?.mode, isPlaying, sendIframeCommand, showOsd]);
@@ -719,6 +738,25 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     },
     [activeServer?.mode, duration, sendIframeCommand, showOsd]
   );
+
+  // YouTube-style Edge & Center Double-Tap Listener (from Android MainActivity & Web gestures)
+  useEffect(() => {
+    const handleDoubleTap = (e: any) => {
+      const side = e.detail?.side;
+      if (side === 'left') {
+        seek(-15);
+        triggerDoubleTapFeedback('left', '15 сек');
+      } else if (side === 'right') {
+        seek(15);
+        triggerDoubleTapFeedback('right', '15 сек');
+      } else if (side === 'center') {
+        togglePlay();
+        triggerDoubleTapFeedback('center', isPlaying ? 'Пауза' : 'Пуск');
+      }
+    };
+    window.addEventListener('cinema-double-tap', handleDoubleTap);
+    return () => window.removeEventListener('cinema-double-tap', handleDoubleTap);
+  }, [seek, togglePlay, triggerDoubleTapFeedback, isPlaying]);
 
   const toggleMute = useCallback(() => {
     const nextMuted = !isMuted;
@@ -1547,7 +1585,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                   className="flex items-center gap-1.5 overflow-x-auto scrollbar-none pb-1"
                 >
                   {[
-                    { id: 'all', label: '🌐 Усі мови' },
+                    { id: 'all', label: '🌐 Усі сервери' },
                     { id: 'ua', label: '🇺🇦 Українська' },
                     { id: 'en', label: '🇬🇧 English' },
                     { id: 'pl', label: '🇵🇱 Polski' },
@@ -1557,11 +1595,66 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                     <button
                       key={lf.id}
                       type="button"
-                      onClick={() => setAudioLangFilter(lf.id)}
+                      onClick={() => {
+                        if (lf.id === 'ua') {
+                          setAudioLangFilter('ua');
+                          const uaCand = availableServers.find(
+                            (s) => s.id === 'ua-ashdi' || s.id.startsWith('ua-') || s.langs?.includes('UA') || s.id.includes('ashdi')
+                          );
+                          if (uaCand) {
+                            userExplicitlySelectedServerRef.current = true;
+                            setSelectedServerId(uaCand.id);
+                          }
+                          sendIframeCommand('preferLanguage', { lang: 'ua' });
+                          showOsd('🇺🇦 Увімкнено українську озвучку');
+                          setTimeout(() => setActiveMenu('none'), 220);
+                          return;
+                        }
+                        if (lf.id === 'en') {
+                          setAudioLangFilter('en');
+                          const enCand = availableServers.find(
+                            (s) => s.id.includes('vidlink') || s.id.includes('vidsrc') || s.langs?.includes('EN')
+                          );
+                          if (enCand) {
+                            userExplicitlySelectedServerRef.current = true;
+                            setSelectedServerId(enCand.id);
+                            showOsd(`🇬🇧 ${enCand.name}`);
+                            setTimeout(() => setActiveMenu('none'), 220);
+                          }
+                          return;
+                        }
+                        if (lf.id === 'pl') {
+                          setAudioLangFilter('pl');
+                          const plCand = availableServers.find(
+                            (s) => s.id.startsWith('pl-') || s.langs?.includes('PL')
+                          );
+                          if (plCand) {
+                            userExplicitlySelectedServerRef.current = true;
+                            setSelectedServerId(plCand.id);
+                            showOsd(`🇵🇱 ${plCand.name}`);
+                            setTimeout(() => setActiveMenu('none'), 220);
+                          }
+                          return;
+                        }
+                        if (lf.id === 'es') {
+                          setAudioLangFilter('es');
+                          const esCand = availableServers.find(
+                            (s) => s.id.startsWith('es-') || s.langs?.includes('ES')
+                          );
+                          if (esCand) {
+                            userExplicitlySelectedServerRef.current = true;
+                            setSelectedServerId(esCand.id);
+                            showOsd(`🇪🇸 ${esCand.name}`);
+                            setTimeout(() => setActiveMenu('none'), 220);
+                          }
+                          return;
+                        }
+                        setAudioLangFilter(lf.id);
+                      }}
                       tabIndex={0}
-                      className={`px-2.5 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap border transition-all tv-btn-focus focus:outline-none ${
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap border transition-all tv-btn-focus focus:outline-none ${
                         audioLangFilter === lf.id
-                          ? 'bg-amber-500 text-slate-950 border-amber-400'
+                          ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow'
                           : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/15'
                       }`}
                     >
@@ -2214,6 +2307,35 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           </div>
         )}
 
+        {/* YouTube-style Double-Tap Seeking Animated Ripple Badges */}
+        {doubleTapFeedback?.side === 'left' && (
+          <div className="absolute left-8 top-1/2 -translate-y-1/2 z-40 pointer-events-none flex flex-col items-center gap-2 animate-bounce">
+            <div className="w-20 h-20 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center text-white shadow-2xl">
+              <RotateCcw className="w-10 h-10 text-amber-300" />
+            </div>
+            <span className="text-white text-xs sm:text-sm font-black px-3 py-1 bg-black/80 rounded-full border border-white/20 shadow-lg">
+              - {doubleTapFeedback.text}
+            </span>
+          </div>
+        )}
+        {doubleTapFeedback?.side === 'right' && (
+          <div className="absolute right-8 top-1/2 -translate-y-1/2 z-40 pointer-events-none flex flex-col items-center gap-2 animate-bounce">
+            <div className="w-20 h-20 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center text-white shadow-2xl">
+              <RotateCw className="w-10 h-10 text-amber-300" />
+            </div>
+            <span className="text-white text-xs sm:text-sm font-black px-3 py-1 bg-black/80 rounded-full border border-white/20 shadow-lg">
+              + {doubleTapFeedback.text}
+            </span>
+          </div>
+        )}
+        {doubleTapFeedback?.side === 'center' && (
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-40 pointer-events-none flex items-center justify-center animate-ping">
+            <div className="w-20 h-20 rounded-full bg-black/80 border border-white/30 flex items-center justify-center text-white shadow-2xl">
+              {isPlaying ? <Pause className="w-10 h-10 fill-white" /> : <Play className="w-10 h-10 fill-white" />}
+            </div>
+          </div>
+        )}
+
         {/* Floating Quick-Exit / Show Controls Button when bars are hidden */}
         {cleanCinemaBarsHidden && (
           <div className="absolute top-4 left-4 z-40 animate-fadeIn pointer-events-auto">
@@ -2418,24 +2540,24 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             data-nav-row="player-bottom-controls"
             className="flex items-center justify-between gap-1.5 overflow-x-auto scrollbar-none py-0.5 px-0.5"
           >
-            {/* Left Transport Controls: Play/Pause, -15s, +15s, -1m, +1m, Volume */}
-            <div className="flex items-center gap-1.5 shrink-0">
+            {/* Left Transport Controls: Play/Pause, Volume */}
+            <div className="flex items-center gap-2 shrink-0">
               <button
                 ref={bottomPlayBtnRef}
                 type="button"
                 onClick={togglePlay}
                 tabIndex={0}
-                className="px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-md shadow-red-600/30 active:scale-95 transition-all tv-btn-focus focus:outline-none"
+                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs sm:text-sm font-black flex items-center gap-2 shadow-lg shadow-red-600/40 active:scale-95 transition-all tv-btn-focus focus:outline-none"
                 title="Пуск / Пауза (OK / K)"
               >
                 {isPlaying ? (
                   <>
-                    <Pause className="w-3.5 h-3.5 fill-white" />
+                    <Pause className="w-4 h-4 fill-white" />
                     <span>Пауза</span>
                   </>
                 ) : (
                   <>
-                    <Play className="w-3.5 h-3.5 fill-white" />
+                    <Play className="w-4 h-4 fill-white" />
                     <span>Пуск</span>
                   </>
                 )}
@@ -2443,51 +2565,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
               <button
                 type="button"
-                onClick={() => seek(-15)}
-                tabIndex={0}
-                className="px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold flex items-center gap-1 border border-white/10 transition-all tv-btn-focus focus:outline-none"
-                title="Перемотати назад 15 сек"
-              >
-                <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
-                <span>-15с</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => seek(15)}
-                tabIndex={0}
-                className="px-2.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold flex items-center gap-1 border border-white/10 transition-all tv-btn-focus focus:outline-none"
-                title="Перемотати вперед 15 сек"
-              >
-                <RotateCw className="w-3.5 h-3.5 text-amber-400" />
-                <span>+15с</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => seek(-60)}
-                tabIndex={0}
-                className="hidden sm:flex px-2 py-1.5 rounded-xl bg-white/5 hover:bg-white/15 text-slate-300 text-xs font-bold items-center gap-1 border border-white/10 transition-all tv-btn-focus focus:outline-none"
-                title="Назад 1 хвилину"
-              >
-                <span>-1 хв</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => seek(60)}
-                tabIndex={0}
-                className="hidden sm:flex px-2 py-1.5 rounded-xl bg-white/5 hover:bg-white/15 text-slate-300 text-xs font-bold items-center gap-1 border border-white/10 transition-all tv-btn-focus focus:outline-none"
-                title="Вперед 1 хвилину"
-              >
-                <span>+1 хв</span>
-              </button>
-
-              <button
-                type="button"
                 onClick={toggleMute}
                 tabIndex={0}
-                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/10 transition-all tv-btn-focus focus:outline-none"
+                className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/10 transition-all tv-btn-focus focus:outline-none"
                 title="Звук Увімк/Вимк (M)"
               >
                 {isMuted ? (

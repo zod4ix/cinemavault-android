@@ -7,8 +7,8 @@ android {
         applicationId "net.cinemavault.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 11
-        versionName "3.6.2"
+        versionCode 12
+        versionName "3.6.3"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -24,6 +24,8 @@ android {
             keyPassword 'android'
             v1SigningEnabled true
             v2SigningEnabled true
+            enableV3Signing true
+            enableV4Signing true
         }
     }
     buildTypes {

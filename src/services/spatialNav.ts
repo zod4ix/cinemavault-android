@@ -645,6 +645,11 @@ export function initSpatialNavigation(): () => void {
       return 'backdrop_ignored';
     }
 
+    // If native click already fired within the last 220ms, skip duplicate click!
+    if (Date.now() - lastNativeClickTime < 220) {
+      return 'already_clicked';
+    }
+
     // If clicking on an embedded player <iframe> (e.g., Rezka, Ashdi, Videasy, VidLink),
     // forward the exact relative coordinates into our injected iframe DocumentStart script!
     if (target.tagName === 'IFRAME') {
@@ -661,13 +666,9 @@ export function initSpatialNavigation(): () => void {
         } catch {
           // ignore
         }
+        lastNativeClickTime = Date.now();
       }
       return 'iframe';
-    }
-
-    // If native click already fired within the last 175ms, skip duplicate click
-    if (Date.now() - lastNativeClickTime < 175) {
-      return 'already_clicked';
     }
 
     const interactive =
