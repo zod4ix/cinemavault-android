@@ -36,6 +36,7 @@ import { authSyncService, UserProfile } from './services/authSync';
 import { fetchNovelties } from './services/novelties';
 import {
   updaterService,
+  APP_VERSION,
   UpdateInfo,
   openExternalDownload,
   subscribeApkDownloadProgress,
@@ -919,7 +920,7 @@ const MainAppContent: React.FC = () => {
       <footer className="border-t border-white/10 bg-[#05070a] py-6 text-center text-xs text-slate-500">
         <div className="max-w-[1700px] mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="flex flex-wrap items-center justify-center gap-1.5 font-medium text-slate-400">
-            <span>CinemaVault PRO v3.6.0</span> •{' '}
+            <span>CinemaVault PRO v{APP_VERSION}</span> •{' '}
             <span className="text-amber-400/90 font-bold">
               Smart TV, Air Mouse, Remote D-Pad & Live Sports Edition
             </span>{' '}

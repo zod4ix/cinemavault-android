@@ -1137,7 +1137,9 @@ public class MainActivity extends BridgeActivity {
                 }
 
                 long totalBytes = conn.getContentLengthLong();
-                File apkFile = new File(getCacheDir(), "CinemaVault-PRO-Update.apk");
+                File updateDir = new File(getCacheDir(), "updates");
+                if (!updateDir.exists()) updateDir.mkdirs();
+                File apkFile = new File(updateDir, "CinemaVault-PRO-Update.apk");
                 if (apkFile.exists()) {
                     apkFile.delete();
                 }
@@ -1178,24 +1180,16 @@ public class MainActivity extends BridgeActivity {
                     throw new Exception("Пошкоджений файл APK");
                 }
 
-                // Also copy to public Downloads folder so Projector File Manager can always see it too
-                try {
-                    File pubDownloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
-                    if (pubDownloads != null) {
-                        if (!pubDownloads.exists()) pubDownloads.mkdirs();
-                        File pubCopy = new File(pubDownloads, "CinemaVault-PRO-Update.apk");
-                        try (
-                            FileInputStream fis = new FileInputStream(apkFile);
-                            FileOutputStream fos = new FileOutputStream(pubCopy)
-                        ) {
-                            byte[] copyBuf = new byte[16384];
-                            int r;
-                            while ((r = fis.read(copyBuf)) != -1) {
-                                fos.write(copyBuf, 0, r);
-                            }
-                        }
-                    }
-                } catch (Exception ignored) {
+                // Security & Integrity verification: Ensure downloaded file is a valid Android package strictly for CinemaVault!
+                PackageManager pm = getPackageManager();
+                android.content.pm.PackageInfo archiveInfo = pm.getPackageArchiveInfo(apkFile.getAbsolutePath(), 0);
+                if (archiveInfo == null) {
+                    apkFile.delete();
+                    throw new Exception("Файл оновлення пошкоджено або він не є валідним APK");
+                }
+                if (!getPackageName().equals(archiveInfo.packageName)) {
+                    apkFile.delete();
+                    throw new Exception("Невідповідність пакета додатка: " + archiveInfo.packageName);
                 }
 
                 notifyApkProgress("installing", 100, "Завантаження завершено (100%). Запуск інсталятора Android...");
@@ -1211,7 +1205,7 @@ public class MainActivity extends BridgeActivity {
                 runOnUiThread(() ->
                     Toast.makeText(
                         MainActivity.this,
-                        "⚠️ Не вдалося завантажити APK: перевірте підключення до Інтернету",
+                        "⚠️ Не вдалося завантажити APK: " + (e.getMessage() != null ? e.getMessage() : "перевірте підключення до Інтернету"),
                         Toast.LENGTH_LONG
                     ).show()
                 );
@@ -1276,27 +1270,17 @@ public class MainActivity extends BridgeActivity {
             installIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             installIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
 
-            try {
-                startActivity(installIntent);
-                notifyApkProgress("ready", 100, "Вікно встановлення відкрито! Натисніть «Оновити / Встановити».");
-                return;
-            } catch (Exception firstErr) {
-                Intent fallbackInstall = new Intent(Intent.ACTION_INSTALL_PACKAGE);
-                fallbackInstall.setData(apkUri);
-                fallbackInstall.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                fallbackInstall.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                startActivity(fallbackInstall);
-                notifyApkProgress("ready", 100, "Вікно встановлення відкрито! Натисніть «Оновити / Встановити».");
-            }
+            startActivity(installIntent);
+            notifyApkProgress("ready", 100, "Вікно оновлення відкрито! Натисніть «Оновити».");
         } catch (Exception e) {
             notifyApkProgress(
-                "ready",
-                100,
-                "APK збережено у папку «Завантаження» (Downloads/CinemaVault-PRO-Update.apk). Відкрийте його через Провідник!"
+                "error",
+                0,
+                "Помилка запуску оновлення: " + (e.getMessage() != null ? e.getMessage() : "спробуйте ще раз")
             );
             Toast.makeText(
                 MainActivity.this,
-                "✅ Файл збережено у папку Downloads/CinemaVault-PRO-Update.apk!",
+                "⚠️ Не вдалося відкрити інсталятор: " + e.getMessage(),
                 Toast.LENGTH_LONG
             ).show();
         }
@@ -1344,7 +1328,7 @@ public class MainActivity extends BridgeActivity {
                 } catch (Exception noBrowserException) {
                     // Projector has no browser installed: fall back to direct in-app APK download!
                     downloadAndInstallApkInternal(
-                        "https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.6.3.apk"
+                        "https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.6.4.apk"
                     );
                 }
             });

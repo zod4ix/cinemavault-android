@@ -1,6 +1,6 @@
 import { httpGetJson } from './tmdb';
 
-export const APP_VERSION = '3.6.3';
+export const APP_VERSION = '3.6.4';
 export const GITHUB_REPO = 'zod4ix/cinemavault-android';
 export const DEFAULT_APK_URL = `https://github.com/${GITHUB_REPO}/raw/main/CinemaVault-PRO-v${APP_VERSION}.apk`;
 export const GITHUB_RELEASE_PAGE = `https://github.com/${GITHUB_REPO}/releases/latest`;
@@ -110,9 +110,9 @@ export const updaterService = {
     let apkDownloadUrl = DEFAULT_APK_URL;
     let releasePageUrl = GITHUB_RELEASE_PAGE;
     let releaseNotes =
-      '• ⏸ ВІДНОВЛЕНО ПАУЗУ ТА ЮТУБ-ПРОКРУТКУ (v3.6.3): пауза тепер працює залізно на всіх плеєрах без мимовільної прокрутки; прибрано зайві кнопки +15/-15 сек, додано зручну перемотку подвійним дотиком по краях екрана (як у YouTube: ⏪ зліва / ⏩ справа).\n' +
-      '• 🇺🇦 ЗАЛІЗНИЙ ВИБІР УКРАЇНСЬКОЇ ОЗВУЧКИ: кнопки вибору мови тепер миттєво активують український дубляж; усунуто самовільне закриття меню налаштувань плеєра (прибрано подвійні кліки у WebView та iframe).\n' +
-      '• 🛡️ БЕЗПЕКА ТА ВІДСУТНІСТЬ СВАРКИ ANDROID: додано схему підпису v3, Network Security Config та сумісність з Android 15 для тихого та безпечного оновлення.';
+      '• 🛡️ МАКСИМАЛЬНА БЕЗПЕКА ТА ОНОВЛЕННЯ БЕЗ ПОПЕРЕДЖЕНЬ ANDROID (v3.6.4): усунуто хибні спрацьовування Play Protect / Samsung Knox; очищено внутрішній кеш завантаження APK, увімкнено сувору валідацію пакетів та безпечний Network Security Config.\n' +
+      '• 🔄 ОНОВЛЕННЯ В ОДИН КЛІК: надійний запуск системного інсталятора через FileProvider без дублювання у відкриті папки.\n' +
+      '• 🏷️ ЄДИНА СИНХРОНІЗАЦІЯ ВЕРСІЙ: версія програми у шапці, футері та сплеш-скріні тепер завжди ідеально узгоджена (v3.6.4).';
     let publishedAt = new Date().toISOString().slice(0, 10);
 
     try {

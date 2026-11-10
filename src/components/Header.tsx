@@ -18,6 +18,7 @@ import { LANGUAGES, SupportedLanguage } from '../i18n/translations';
 import { MediaItem } from '../types/movie';
 import { createPosterFallback } from '../services/tmdb';
 import { formatRating } from '../services/rating';
+import { APP_VERSION } from '../services/updater';
 
 interface HeaderProps {
   searchQuery: string;
@@ -305,7 +306,7 @@ export const Header: React.FC<HeaderProps> = ({
                 Cinema<span className="text-red-500">Vault</span>
               </span>
               <span className="text-[8.5px] sm:text-[10px] text-amber-400 font-bold tracking-wider block mt-0.5 whitespace-nowrap">
-                PRO v3.6.3 • 4K & LIVE
+                PRO v{APP_VERSION} • 4K & LIVE
               </span>
             </div>
           </div>

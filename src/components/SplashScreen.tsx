@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { CinemaLogo } from './CinemaLogo';
 import { Sparkles, CheckCircle2 } from 'lucide-react';
 import { useLanguage } from '../i18n/LanguageContext';
+import { APP_VERSION } from '../services/updater';
 
 interface SplashScreenProps {
   onFinish: () => void;
@@ -84,7 +85,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
       {/* Top subtle badge */}
       <div className="w-full flex justify-between items-center z-10 pt-1">
         <span className="text-[11px] font-bold text-slate-400 tracking-widest uppercase flex items-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5 text-amber-500" /> CinemaVault PRO • v3.6.3
+          <Sparkles className="w-3.5 h-3.5 text-amber-500" /> CinemaVault PRO • v{APP_VERSION}
         </span>
         <button
           tabIndex={0}
