@@ -517,7 +517,7 @@ export const MediaModal: React.FC<MediaModalProps> = ({
                     if (sourceLangFilter === 'all') return true;
                     const idLow = src.id.toLowerCase();
                     if (sourceLangFilter === 'ua') {
-                      return idLow.includes('ua-') || idLow.includes('ashdi') || idLow.includes('loadbox') || idLow.includes('videasy');
+                      return idLow.includes('ua-') || idLow.includes('ashdi') || idLow.includes('rezka') || idLow.includes('loadbox') || idLow.includes('videasy');
                     }
                     if (sourceLangFilter === 'en') {
                       return idLow.includes('vidlink') || idLow.includes('vidsrc') || idLow.includes('vidfast') || idLow.includes('2embed');
@@ -537,13 +537,14 @@ export const MediaModal: React.FC<MediaModalProps> = ({
                   const idLow = src.id.toLowerCase();
 
                   const getChannelLangDesc = () => {
+                    if (idLow.includes('rezka-ag')) return '🎬 Офіційна база HDRezka (rezka.ag) • Усі студії озвучки, дубляж та оригінал';
+                    if (idLow.includes('ua-kino-rezka')) return '🇺🇦 HDRezka (rezka.ag) • Професійний український дубляж';
                     if (idLow.includes('ashdi')) return '🇺🇦 Повний український дубляж (UAKino / Ashdi VIP)';
-                    if (idLow.includes('ua-kino-rezka')) return '🇺🇦 Український дубляж та багатоголосе озвучення (КіноБаза UA)';
                     if (idLow.includes('ua-videasy')) return '🇺🇦 Українська звукова доріжка та субтитри у 4K HDR';
                     if (idLow.includes('ua-autoembed')) return '🇺🇦 Український та мультиязичний потік (AutoEmbed UA)';
                     if (idLow.includes('pl-')) return '🇵🇱 Polski Lektor / Dubbing / Napisy PL + EN';
                     if (idLow.includes('es-')) return '🇪🇸 Español Latino / Castellano + Subtítulos';
-                    if (idLow.includes('loadbox')) return '🎭 Мульти-студії: 🇺🇦 UA / 🇬🇧 EN / 🌐 Rezka / LostFilm';
+                    if (idLow.includes('loadbox')) return '🎭 HDRezka (rezka.ag) • Мульти-студії: 🇺🇦 UA / 🇬🇧 EN / 🌐 Rezka / LostFilm';
                     if (idLow.includes('videasy')) return '🌐 Усі мови додатку: 🇺🇦 UA / 🇬🇧 EN / 🇵🇱 PL / 🇪🇸 ES / Multi';
                     return '🇬🇧 English Original 4K/1080p + Multi Subtitles';
                   };

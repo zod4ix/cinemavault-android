@@ -15,13 +15,13 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
 
   const statusMessages: { [key: string]: { [threshold: number]: string } } = {
     uk: {
-      0: 'Ініціалізація дзеркал VidSrc, Ashdi UA та HDRezka...',
+      0: 'Ініціалізація серверів HDRezka (rezka.ag), Ashdi UA та VidSrc...',
       35: 'Синхронізація бази IMDb / TMDB та 4K HDR...',
       70: 'Підключення P2P трекерів Hurtom / Toloka...',
       92: 'Система готова до перегляду! 🍿',
     },
     en: {
-      0: 'Initializing VidSrc, Ashdi & HDRezka mirrors...',
+      0: 'Initializing HDRezka (rezka.ag), Ashdi & VidSrc mirrors...',
       35: 'Synchronizing IMDb / TMDB 4K HDR database...',
       70: 'Connecting P2P Hurtom / Toloka trackers...',
       92: 'System ready for streaming! 🍿',

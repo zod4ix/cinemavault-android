@@ -264,11 +264,30 @@ const anyId = (c: Ctx) => (c.tmdb ? String(c.tmdb) : c.imdb || '');
  * 5) Multi-Audio / Studio (🌐 MULTI / RU) channels & global failovers
  */
 const PROVIDERS: ProviderDef[] = [
-  // ──────── 1. UKRAINIAN CHANNELS (🇺🇦 UA) ────────
+  // ──────── 1. HDREZKA (rezka.ag) & UKRAINIAN CHANNELS (🇺🇦 UA) ────────
+  {
+    id: 'rezka-ag',
+    name: '🎬 HDRezka (rezka.ag • Усі мовні доріжки)',
+    badge: 'rezka.ag #1',
+    langs: ['UA', 'MULTI', 'EN', 'UK', 'RU', 'SUB'],
+    build: (c) => {
+      if (c.imdb) {
+        return c.series
+          ? `https://api.loadbox.ws/embed/imdb/${c.imdb}?season=${c.s}&episode=${c.e}`
+          : `https://api.loadbox.ws/embed/imdb/${c.imdb}`;
+      }
+      if (c.tmdb) {
+        return c.series
+          ? `https://api.loadbox.ws/embed/tmdb/${c.tmdb}?season=${c.s}&episode=${c.e}`
+          : `https://api.loadbox.ws/embed/tmdb/${c.tmdb}`;
+      }
+      return null;
+    },
+  },
   {
     id: 'ua-kino-rezka',
-    name: '🇺🇦 UA • КіноБаза (Українська)',
-    badge: '🇺🇦 UA Dub',
+    name: '🇺🇦 UA • HDRezka UA (Український дубляж)',
+    badge: 'rezka.ag UA',
     langs: ['UA', 'UK'],
     build: (c) => {
       if (c.imdb) {
@@ -511,36 +530,66 @@ export function buildServers(
 
   const servers: StreamServer[] = [];
 
-  // 1. Direct UAKino -> Ashdi VIP Ukrainian Dubbing (always #1 when available)
-  const ua = getCachedUaServer(media, ctx.s);
-  if (ua) servers.push(ua);
+  // 1. Primary HDRezka (rezka.ag) - Huge Library & Multi-Audio Tracks (#1 Provider)
+  const rezkaUrl = ctx.imdb
+    ? (ctx.series
+        ? `https://api.loadbox.ws/embed/imdb/${ctx.imdb}?season=${ctx.s}&episode=${ctx.e}`
+        : `https://api.loadbox.ws/embed/imdb/${ctx.imdb}`)
+    : ctx.tmdb
+    ? (ctx.series
+        ? `https://api.loadbox.ws/embed/tmdb/${ctx.tmdb}?season=${ctx.s}&episode=${ctx.e}`
+        : `https://api.loadbox.ws/embed/tmdb/${ctx.tmdb}`)
+    : (/^\d+$/.test(String(media.id))
+        ? (ctx.series
+            ? `https://api.loadbox.ws/embed/kp/${media.id}?season=${ctx.s}&episode=${ctx.e}`
+            : `https://api.loadbox.ws/embed/movie/${media.id}`)
+        : null);
 
-  // 2. Fallback numeric ID Ukrainian & Multi Rezka server if IMDb not resolved yet
+  if (rezkaUrl) {
+    servers.push({
+      id: 'rezka-ag',
+      name: '🎬 HDRezka (rezka.ag • Усі мовні доріжки)',
+      badge: 'rezka.ag #1',
+      url: rezkaUrl,
+      mode: 'embed',
+      langs: ['UA', 'MULTI', 'EN', 'UK', 'RU', 'SUB'],
+    });
+  }
+
+  // 2. Direct UAKino -> Ashdi VIP Ukrainian Dubbing
+  const ua = getCachedUaServer(media, ctx.s);
+  if (ua && !servers.some((s) => s.id === ua.id)) servers.push(ua);
+
+  // 3. Fallback numeric ID Ukrainian & Multi Rezka server if IMDb not resolved yet
   if (!ids.imdb && /^\d+$/.test(String(media.id))) {
     const numId = String(media.id);
     const uaUrl = ctx.series
       ? `https://api.loadbox.ws/embed/kp/${numId}?season=${ctx.s}&episode=${ctx.e}&language=uk`
       : `https://api.loadbox.ws/embed/movie/${numId}?language=uk`;
-    servers.push({
-      id: 'ua-kino-rezka',
-      name: '🇺🇦 UA • КіноБаза (Українська)',
-      badge: '🇺🇦 UA Dub',
-      url: uaUrl,
-      mode: 'embed',
-      langs: ['UA', 'UK'],
-    });
+    if (!servers.some((s) => s.id === 'ua-kino-rezka')) {
+      servers.push({
+        id: 'ua-kino-rezka',
+        name: '🇺🇦 UA • HDRezka UA (Український дубляж)',
+        badge: 'rezka.ag UA',
+        url: uaUrl,
+        mode: 'embed',
+        langs: ['UA', 'UK'],
+      });
+    }
 
     const multiUrl = ctx.series
       ? `https://api.loadbox.ws/embed/kp/${numId}?season=${ctx.s}&episode=${ctx.e}`
       : `https://api.loadbox.ws/embed/movie/${numId}`;
-    servers.push({
-      id: 'loadbox',
-      name: '🎭 Rezka Multi-Studio (UA/EN/RU)',
-      badge: 'Multi Audio',
-      url: multiUrl,
-      mode: 'embed',
-      langs: ['UA', 'MULTI', 'RU', 'EN'],
-    });
+    if (!servers.some((s) => s.id === 'rezka-ag')) {
+      servers.push({
+        id: 'rezka-ag',
+        name: '🎬 HDRezka (rezka.ag • Усі мовні доріжки)',
+        badge: 'rezka.ag #1',
+        url: multiUrl,
+        mode: 'embed',
+        langs: ['UA', 'MULTI', 'RU', 'EN', 'SUB'],
+      });
+    }
   }
 
   // 3. Build all configured multi-language providers

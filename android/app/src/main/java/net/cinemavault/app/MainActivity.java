@@ -396,26 +396,27 @@ public class MainActivity extends BridgeActivity {
             "    if(v)reportState();" +
             "  },650);" +
             "}" +
+            "var lastTapTimestamp = 0;" +
             "function fireFullTapOnElement(el,cx,cy){" +
             "  if(!el)return;" +
+            "  var now = Date.now();" +
+            "  if(now - lastTapTimestamp < 400) return;" +
+            "  lastTapTimestamp = now;" +
             "  if(typeof cx!=='number'||typeof cy!=='number'||(cx<=15&&cy<=15)){" +
             "    var pt=getElementCenter(el);" +
             "    cx=pt.x; cy=pt.y;" +
             "  }" +
             "  try{" +
-            "    if(typeof Touch!=='undefined'&&typeof TouchEvent!=='undefined'){" +
-            "      var tObj=new Touch({identifier:Date.now()%10000,target:el,clientX:cx,clientY:cy,pageX:cx,pageY:cy,radiusX:4,radiusY:4,force:1});" +
-            "      el.dispatchEvent(new TouchEvent('touchstart',{bubbles:true,cancelable:true,touches:[tObj],targetTouches:[tObj],changedTouches:[tObj]}));" +
-            "      el.dispatchEvent(new TouchEvent('touchend',{bubbles:true,cancelable:true,touches:[],targetTouches:[],changedTouches:[tObj]}));" +
+            "    var pDown=new PointerEvent('pointerdown',{bubbles:true,cancelable:true,clientX:cx,clientY:cy,pointerType:'touch',isPrimary:true});" +
+            "    var pUp=new PointerEvent('pointerup',{bubbles:true,cancelable:true,clientX:cx,clientY:cy,pointerType:'touch',isPrimary:true});" +
+            "    el.dispatchEvent(pDown);" +
+            "    el.dispatchEvent(pUp);" +
+            "    if(typeof el.click==='function'){" +
+            "      try{el.focus();}catch(ex){}" +
+            "      el.click();" +
+            "    }else{" +
+            "      el.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,clientX:cx,clientY:cy,button:0}));" +
             "    }" +
-            "  }catch(e){}" +
-            "  try{" +
-            "    el.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,cancelable:true,clientX:cx,clientY:cy,pointerType:'touch',isPrimary:true}));" +
-            "    el.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,cancelable:true,clientX:cx,clientY:cy,button:0,buttons:1}));" +
-            "    el.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,cancelable:true,clientX:cx,clientY:cy,pointerType:'touch',isPrimary:true}));" +
-            "    el.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,cancelable:true,clientX:cx,clientY:cy,button:0,buttons:0}));" +
-            "    if(typeof el.click==='function')el.click();" +
-            "    else el.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,clientX:cx,clientY:cy,button:0}));" +
             "    if(el.tagName==='OPTION'&&el.parentElement){" +
             "      el.parentElement.value=el.value;" +
             "      el.parentElement.dispatchEvent(new Event('change',{bubbles:true}));" +
@@ -670,7 +671,6 @@ public class MainActivity extends BridgeActivity {
     private void synthesizeAsyncWebViewTapAtWindowCoords(float winX, float winY) {
         float[] coords = getWebViewCoordsFromWindow(winX, winY);
         if (coords == null) return;
-        dispatchAsyncFingerTapToWebView(coords[2], coords[3]);
         triggerSmartClickAtWindowCoords(winX, winY, false);
     }
 
@@ -1328,7 +1328,7 @@ public class MainActivity extends BridgeActivity {
                 } catch (Exception noBrowserException) {
                     // Projector has no browser installed: fall back to direct in-app APK download!
                     downloadAndInstallApkInternal(
-                        "https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.6.4.apk"
+                        "https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.6.5.apk"
                     );
                 }
             });

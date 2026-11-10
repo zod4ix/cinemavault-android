@@ -1,6 +1,6 @@
 import { httpGetJson } from './tmdb';
 
-export const APP_VERSION = '3.6.4';
+export const APP_VERSION = '3.6.5';
 export const GITHUB_REPO = 'zod4ix/cinemavault-android';
 export const DEFAULT_APK_URL = `https://github.com/${GITHUB_REPO}/raw/main/CinemaVault-PRO-v${APP_VERSION}.apk`;
 export const GITHUB_RELEASE_PAGE = `https://github.com/${GITHUB_REPO}/releases/latest`;
@@ -110,9 +110,9 @@ export const updaterService = {
     let apkDownloadUrl = DEFAULT_APK_URL;
     let releasePageUrl = GITHUB_RELEASE_PAGE;
     let releaseNotes =
-      '• 🛡️ МАКСИМАЛЬНА БЕЗПЕКА ТА ОНОВЛЕННЯ БЕЗ ПОПЕРЕДЖЕНЬ ANDROID (v3.6.4): усунуто хибні спрацьовування Play Protect / Samsung Knox; очищено внутрішній кеш завантаження APK, увімкнено сувору валідацію пакетів та безпечний Network Security Config.\n' +
-      '• 🔄 ОНОВЛЕННЯ В ОДИН КЛІК: надійний запуск системного інсталятора через FileProvider без дублювання у відкриті папки.\n' +
-      '• 🏷️ ЄДИНА СИНХРОНІЗАЦІЯ ВЕРСІЙ: версія програми у шапці, футері та сплеш-скріні тепер завжди ідеально узгоджена (v3.6.4).';
+      '• 🖱️ НАДІЙНИЙ КУРСОР ТА СТАБІЛЬНІ НАЛАШТУВАННЯ (v3.6.5): усунуто миттєве закриття меню при кліку курсором пульта. Тепер налаштування, озвучки та якість спокійно відкриваються, зберігають зміни та закриваються без збоїв!\n' +
+      '• 🎬 ІНТЕГРАЦІЯ HDREZKA (rezka.ag #1): офіційна бібліотека HDRezka інтегрована як головний сервер №1 з усіма мовними доріжками, студіями дубляжу та якістю 1080p.\n' +
+      '• 🛡️ БЕЗДОГАННЕ КЕРУВАННЯ: усунуто подвійний клік та паразитні події у вбудованих плеєрах.';
     let publishedAt = new Date().toISOString().slice(0, 10);
 
     try {

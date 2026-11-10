@@ -188,7 +188,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     Promise.all([ensureIds(media), resolveUaServer(media, activeSeason)]).then(([_, ua]) => {
       if (!active) return;
       setServersVersion((v) => v + 1);
-      if (ua && !userExplicitlySelectedServerRef.current) {
+      if (ua && !userExplicitlySelectedServerRef.current && !selectedServerId.includes('rezka')) {
         setSelectedServerId(ua.id);
         showOsd('🇺🇦 Знайдено український дубляж (Ashdi)');
       }
@@ -479,10 +479,19 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
     window.__cinemaCustomDpadEnterHandler = () => {
       const pos = virtualCursorPosRef.current;
+      let handled = false;
       if (window.__cinemaEnsureClickAt) {
-        window.__cinemaEnsureClickAt(pos.x, pos.y);
+        const res = window.__cinemaEnsureClickAt(pos.x, pos.y);
+        if (
+          res === 'clicked' ||
+          res === 'iframe' ||
+          res === 'backdrop_ignored' ||
+          res === 'already_clicked'
+        ) {
+          handled = true;
+        }
       }
-      if (window.AndroidCinemaBridge?.simulateScreenTap) {
+      if (!handled && window.AndroidCinemaBridge?.simulateScreenTap) {
         window.AndroidCinemaBridge.simulateScreenTap(pos.x, pos.y);
       }
       showOsd('🖱️ Клік виконано');
@@ -1074,11 +1083,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   const getCurrentAudioLabel = () => {
     const idLow = (activeServer?.id || '').toLowerCase();
+    if (idLow.includes('rezka-ag')) return '🎬 HDRezka.ag';
     if (idLow.includes('ashdi')) return '🇺🇦 Ashdi UA';
-    if (idLow.includes('ua-kino-rezka')) return '🇺🇦 КіноБаза UA';
+    if (idLow.includes('ua-kino-rezka')) return '🇺🇦 HDRezka UA';
     if (idLow.includes('ua-videasy')) return '🇺🇦 Videasy UA';
     if (idLow.includes('ua-autoembed')) return '🇺🇦 AutoEmbed UA';
-    if (idLow.includes('loadbox')) return '🎭 Rezka Multi';
+    if (idLow.includes('loadbox')) return '🎭 HDRezka Multi';
     if (idLow.startsWith('pl-')) return '🇵🇱 Polski';
     if (idLow.startsWith('es-')) return '🇪🇸 Español';
     if (activeServer?.mode === 'torrent') return '⚡ P2P Торрент';
@@ -1563,7 +1573,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                               label: v.label,
                             });
                             showOsd(`🎙️ Озвучка: ${v.label}`);
-                            setTimeout(() => setActiveMenu('none'), 220);
                           }}
                           tabIndex={0}
                           className={`p-2.5 rounded-xl border text-left text-xs font-bold flex items-center justify-between transition-all tv-btn-focus focus:outline-none ${
@@ -1599,7 +1608,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                         if (lf.id === 'ua') {
                           setAudioLangFilter('ua');
                           const uaCand = availableServers.find(
-                            (s) => s.id === 'ua-ashdi' || s.id.startsWith('ua-') || s.langs?.includes('UA') || s.id.includes('ashdi')
+                            (s) => s.id === 'rezka-ag' || s.id === 'ua-ashdi' || s.id.startsWith('ua-') || s.langs?.includes('UA') || s.id.includes('ashdi')
                           );
                           if (uaCand) {
                             userExplicitlySelectedServerRef.current = true;
@@ -1607,7 +1616,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                           }
                           sendIframeCommand('preferLanguage', { lang: 'ua' });
                           showOsd('🇺🇦 Увімкнено українську озвучку');
-                          setTimeout(() => setActiveMenu('none'), 220);
                           return;
                         }
                         if (lf.id === 'en') {
@@ -1619,7 +1627,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                             userExplicitlySelectedServerRef.current = true;
                             setSelectedServerId(enCand.id);
                             showOsd(`🇬🇧 ${enCand.name}`);
-                            setTimeout(() => setActiveMenu('none'), 220);
                           }
                           return;
                         }
@@ -1632,7 +1639,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                             userExplicitlySelectedServerRef.current = true;
                             setSelectedServerId(plCand.id);
                             showOsd(`🇵🇱 ${plCand.name}`);
-                            setTimeout(() => setActiveMenu('none'), 220);
                           }
                           return;
                         }
@@ -1645,7 +1651,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                             userExplicitlySelectedServerRef.current = true;
                             setSelectedServerId(esCand.id);
                             showOsd(`🇪🇸 ${esCand.name}`);
-                            setTimeout(() => setActiveMenu('none'), 220);
                           }
                           return;
                         }
@@ -1688,6 +1693,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                         return (
                           idLow.startsWith('ua-') ||
                           idLow.includes('ashdi') ||
+                          idLow.includes('rezka') ||
                           srv.langs?.includes('UA')
                         );
                       if (audioLangFilter === 'en')
@@ -1704,6 +1710,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                       return (
                         srv.langs?.includes('MULTI') ||
                         srv.langs?.includes('RU') ||
+                        idLow.includes('rezka') ||
                         idLow.includes('loadbox')
                       );
                     })
@@ -1713,14 +1720,16 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                       const isUa = idLow.startsWith('ua-') || idLow.includes('ashdi');
                       const isPl = idLow.startsWith('pl-');
                       const isEs = idLow.startsWith('es-');
-                      const isRezka = idLow.includes('loadbox');
+                      const isRezka = idLow.includes('rezka') || idLow.includes('loadbox');
                       const isTorrent = srv.mode === 'torrent';
 
                       const getDesc = () => {
+                        if (idLow.includes('rezka-ag'))
+                          return '🎬 Офіційна бібліотека HDRezka (rezka.ag): повний вибір мовних доріжок, дубляж та студії';
+                        if (idLow.includes('ua-kino-rezka'))
+                          return '🇺🇦 HDRezka (rezka.ag) • Український професійний дубляж';
                         if (idLow.includes('ashdi'))
                           return '🇺🇦 Повний професійний український дубляж (UAKino / Ashdi)';
-                        if (idLow.includes('ua-kino-rezka'))
-                          return '🇺🇦 Українська озвучка та дубляж (КіноБаза UA)';
                         if (idLow.includes('ua-videasy'))
                           return '🇺🇦 Український потік 4K HDR + субтитри';
                         if (idLow.includes('ua-autoembed'))
@@ -1747,7 +1756,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                               sendIframeCommand('preferLanguage', { lang: 'ua' });
                             }
                             showOsd(`🔊 ${srv.name}`);
-                            setTimeout(() => setActiveMenu('none'), 180);
                           }}
                           tabIndex={0}
                           className={`w-full p-3 rounded-xl border text-left flex items-center justify-between transition-all tv-btn-focus focus:outline-none ${
@@ -1877,7 +1885,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                           onClick={() => {
                             sendIframeCommand('selectInternalQuality', { quality: qStr });
                             showOsd(`📺 Якість плеєра: ${qStr}`);
-                            setTimeout(() => setActiveMenu('none'), 180);
                           }}
                           tabIndex={0}
                           className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-emerald-600 text-white text-xs font-bold border border-white/15 tv-btn-focus focus:outline-none"
@@ -1913,7 +1920,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                                 sendIframeCommand('preferLanguage', { lang: 'ua' });
                               }
                               showOsd(`📺 Сервер: ${srv.name}`);
-                              setTimeout(() => setActiveMenu('none'), 180);
                             }}
                             tabIndex={0}
                             className={`w-full p-2.5 rounded-xl border text-left flex items-center justify-between transition-all tv-btn-focus focus:outline-none ${
@@ -2070,8 +2076,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                       type="button"
                       onClick={() => {
                         sendIframeCommand('openInternalMenu', { target: 'settings' });
-                        showOsd('⚙️ Внутрішні налаштування плеєра відкрито');
-                        setTimeout(() => setActiveMenu('none'), 180);
+                        setIsVirtualCursorActive(true);
+                        showOsd('⚙️ Шестерню в плеєрі відкрито • Курсор увімкнено');
+                        setActiveMenu('none');
                       }}
                       tabIndex={0}
                       className="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/15 text-xs font-bold text-white flex items-center justify-between tv-btn-focus focus:outline-none"
@@ -2083,8 +2090,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                       type="button"
                       onClick={() => {
                         setIsVirtualCursorActive(true);
-                        showOsd('🖱️ Курсор пульта увімкнено');
-                        setTimeout(() => setActiveMenu('none'), 180);
+                        showOsd('🖱️ Курсор пульта увімкнено (Стрілки = рух, ОК = клік)');
+                        setActiveMenu('none');
                       }}
                       tabIndex={0}
                       className="p-2.5 rounded-xl bg-blue-600/30 hover:bg-blue-600/50 border border-blue-400/40 text-xs font-bold text-blue-200 flex items-center justify-between tv-btn-focus focus:outline-none"
