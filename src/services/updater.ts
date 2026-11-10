@@ -1,9 +1,10 @@
 import { httpGetJson } from './tmdb';
 
-export const APP_VERSION = '3.6.5';
+export const APP_VERSION = '3.6.6';
 export const GITHUB_REPO = 'zod4ix/cinemavault-android';
 export const DEFAULT_APK_URL = `https://github.com/${GITHUB_REPO}/raw/main/CinemaVault-PRO-v${APP_VERSION}.apk`;
 export const GITHUB_RELEASE_PAGE = `https://github.com/${GITHUB_REPO}/releases/latest`;
+export const VINEGRET_PORTAL_URL = 'https://vinegret.net/prostye-poleznye-programmy-dlja-windows/';
 
 export interface UpdateInfo {
   currentVersion: string;
@@ -110,9 +111,10 @@ export const updaterService = {
     let apkDownloadUrl = DEFAULT_APK_URL;
     let releasePageUrl = GITHUB_RELEASE_PAGE;
     let releaseNotes =
-      '• 🖱️ НАДІЙНИЙ КУРСОР ТА СТАБІЛЬНІ НАЛАШТУВАННЯ (v3.6.5): усунуто миттєве закриття меню при кліку курсором пульта. Тепер налаштування, озвучки та якість спокійно відкриваються, зберігають зміни та закриваються без збоїв!\n' +
-      '• 🎬 ІНТЕГРАЦІЯ HDREZKA (rezka.ag #1): офіційна бібліотека HDRezka інтегрована як головний сервер №1 з усіма мовними доріжками, студіями дубляжу та якістю 1080p.\n' +
-      '• 🛡️ БЕЗДОГАННЕ КЕРУВАННЯ: усунуто подвійний клік та паразитні події у вбудованих плеєрах.';
+      '• 📺 БЕЗДОГАННИЙ ПОВНИЙ ЕКРАН ТА АВТОПРИХОВУВАННЯ (v3.6.6): усунуто постійне світіння кнопки «Повернути панель (Назад)» при розгортанні на весь екран. Тепер під час перегляду відео екран на 100% чистий, а панелі плавно зʼявляються за будь-яким натисканням пульта чи кліком та автоматично ховаються!\n' +
+      '• ⏩ ШВИДКА ПРОКРУТКА ПУЛЬТОМ +10/-10 СЕКУНД: реалізовано сучасне ергономічне перемотування стрілками Вліво/Вправо на пультах Android TV, кнопками в плеєрі та жестами з анімованим індикатором накопичення часу.\n' +
+      '• 🌐 ОФІЦІЙНИЙ КАТАЛОГ ПРОГРАМ VINEGRET.NET: додано прямий доступ до перевірених програм сайту vinegret.net/prostye-poleznye-programmy-dlja-windows/ для всіх мовних версій.\n' +
+      '• 🎬 HDREZKA (rezka.ag #1) ТА НАДІЙНІ СТРІМИ: стабільна робота всіх серверів, аудіодоріжок і налаштувань без паразитних подій.';
     let publishedAt = new Date().toISOString().slice(0, 10);
 
     try {

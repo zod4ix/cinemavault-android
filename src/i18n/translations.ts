@@ -184,6 +184,10 @@ const uk = {
   infiniteCatalogSubtitle: 'Автоматичне підвантаження нових релізів, класики, мультфільмів та аніме',
   updateAvailableToast: 'Доступне оновлення CinemaVault PRO!',
   updateBtn: 'Оновити APK',
+  vinegretCatalogBtn: 'Каталог корисних програм Vinegret.net',
+  returnPanel: 'Повернути панель (Назад)',
+  seekRewind10: 'Перемотати на 10с назад',
+  seekForward10: 'Перемотати на 10с вперед',
 };
 
 export type TranslationKey = keyof typeof uk;
@@ -349,6 +353,10 @@ const en: Dict = {
   infiniteCatalogSubtitle: 'Auto-loading new releases, timeless classics, cartoons and anime',
   updateAvailableToast: 'CinemaVault PRO update available!',
   updateBtn: 'Update APK',
+  vinegretCatalogBtn: 'Useful Software Catalog Vinegret.net',
+  returnPanel: 'Show Controls (Back)',
+  seekRewind10: 'Rewind 10s',
+  seekForward10: 'Forward 10s',
 };
 
 const pl: Dict = {
@@ -511,6 +519,10 @@ const pl: Dict = {
   infiniteCatalogSubtitle: 'Automatyczne ładowanie nowości, klasyki, kreskówek i anime',
   updateAvailableToast: 'Dostępna aktualizacja CinemaVault PRO!',
   updateBtn: 'Aktualizuj APK',
+  vinegretCatalogBtn: 'Katalog przydatnych programów Vinegret.net',
+  returnPanel: 'Pokaż panel (Wstecz)',
+  seekRewind10: 'Cofnij o 10s',
+  seekForward10: 'Do przodu o 10s',
 };
 
 const es: Dict = {
@@ -673,6 +685,10 @@ const es: Dict = {
   infiniteCatalogSubtitle: 'Carga automática de nuevos estrenos, clásicos, dibujos animados y anime',
   updateAvailableToast: '¡Actualización de CinemaVault PRO disponible!',
   updateBtn: 'Actualizar APK',
+  vinegretCatalogBtn: 'Catálogo de programas útiles Vinegret.net',
+  returnPanel: 'Mostrar panel (Atrás)',
+  seekRewind10: 'Retroceder 10s',
+  seekForward10: 'Adelantar 10s',
 };
 
 const ru: Dict = {
@@ -835,6 +851,10 @@ const ru: Dict = {
   infiniteCatalogSubtitle: 'Автоматическая подгрузка новых релизов, классики, мультфильмов и аниме',
   updateAvailableToast: 'Доступно обновление CinemaVault PRO!',
   updateBtn: 'Обновить APK',
+  vinegretCatalogBtn: 'Каталог полезных программ Vinegret.net',
+  returnPanel: 'Вернуть панель (Назад)',
+  seekRewind10: 'Перемотать на 10с назад',
+  seekForward10: 'Перемотать на 10с вперед',
 };
 
 export const translations: Record<SupportedLanguage, Dict> = { uk, en, pl, es, ru };

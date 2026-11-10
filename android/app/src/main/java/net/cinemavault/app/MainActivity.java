@@ -1328,7 +1328,7 @@ public class MainActivity extends BridgeActivity {
                 } catch (Exception noBrowserException) {
                     // Projector has no browser installed: fall back to direct in-app APK download!
                     downloadAndInstallApkInternal(
-                        "https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.6.5.apk"
+                        "https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.6.6.apk"
                     );
                 }
             });

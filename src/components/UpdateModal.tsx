@@ -18,8 +18,10 @@ import {
   openExternalDownload,
   subscribeApkDownloadProgress,
   ApkDownloadProgress,
+  VINEGRET_PORTAL_URL,
 } from '../services/updater';
 import { selfHealService } from '../services/selfHeal';
+import { useLanguage } from '../i18n/LanguageContext';
 
 interface UpdateModalProps {
   isOpen: boolean;
@@ -36,6 +38,7 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
   onRefreshCheck,
   onRegenerateApp,
 }) => {
+  const { t } = useLanguage();
   const [isChecking, setIsChecking] = useState(false);
   const [isHealing, setIsHealing] = useState(false);
   const [healDoneMsg, setHealDoneMsg] = useState<string | null>(null);
@@ -208,6 +211,15 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
             >
               <ExternalLink className="w-4 h-4 text-amber-400" />
               <span>Сторінка релізу на GitHub</span>
+            </button>
+
+            <button
+              onClick={() => openExternalDownload(VINEGRET_PORTAL_URL)}
+              tabIndex={0}
+              className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-emerald-950/70 via-teal-900/60 to-emerald-950/70 hover:from-emerald-900/80 hover:to-teal-800/80 text-emerald-200 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 border border-emerald-500/40 active:scale-95 transition-all tv-btn-focus focus:outline-none sm:col-span-2 shadow-lg shadow-emerald-950/50"
+            >
+              <ExternalLink className="w-4 h-4 text-emerald-400" />
+              <span>{t('vinegretCatalogBtn')} (vinegret.net)</span>
             </button>
           </div>
 

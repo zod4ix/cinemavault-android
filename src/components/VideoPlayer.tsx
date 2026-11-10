@@ -327,7 +327,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [volume] = useState<number>(1);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
-  const [, setShowControls] = useState<boolean>(true);
+  const [showControls, setShowControls] = useState<boolean>(true);
   const [bufferedEnd, setBufferedEnd] = useState<number>(0);
   const [iframeLoading, setIframeLoading] = useState<boolean>(true);
   const [osdMessage, setOsdMessage] = useState<string | null>(null);
@@ -445,64 +445,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       return () => clearTimeout(tId);
     }
   }, [activeMenu]);
-
-  // Virtual Remote Mouse Cursor D-Pad Interceptor (with live hover highlighting & reliable click)
-  useEffect(() => {
-    if (!isVirtualCursorActive) {
-      window.__cinemaCustomDpadHandler = null;
-      window.__cinemaCustomDpadEnterHandler = null;
-      return;
-    }
-
-    const stepX = 0.032;
-    const stepY = 0.042;
-
-    window.__cinemaCustomDpadHandler = (key: string) => {
-      const prev = virtualCursorPosRef.current;
-      let nx = prev.x;
-      let ny = prev.y;
-      if (key === 'ArrowLeft') nx = Math.max(0.02, prev.x - stepX);
-      else if (key === 'ArrowRight') nx = Math.min(0.98, prev.x + stepX);
-      else if (key === 'ArrowUp') ny = Math.max(0.03, prev.y - stepY);
-      else if (key === 'ArrowDown') ny = Math.min(0.97, prev.y + stepY);
-
-      const nextPos = { x: nx, y: ny };
-      virtualCursorPosRef.current = nextPos;
-      setVirtualCursorPos(nextPos);
-
-      // Highlight any button or wake up iframe controls under the virtual cursor!
-      if (window.__cinemaOnMouseHover) {
-        window.__cinemaOnMouseHover(nx, ny);
-      }
-      return true;
-    };
-
-    window.__cinemaCustomDpadEnterHandler = () => {
-      const pos = virtualCursorPosRef.current;
-      let handled = false;
-      if (window.__cinemaEnsureClickAt) {
-        const res = window.__cinemaEnsureClickAt(pos.x, pos.y);
-        if (
-          res === 'clicked' ||
-          res === 'iframe' ||
-          res === 'backdrop_ignored' ||
-          res === 'already_clicked'
-        ) {
-          handled = true;
-        }
-      }
-      if (!handled && window.AndroidCinemaBridge?.simulateScreenTap) {
-        window.AndroidCinemaBridge.simulateScreenTap(pos.x, pos.y);
-      }
-      showOsd('🖱️ Клік виконано');
-      return true;
-    };
-
-    return () => {
-      window.__cinemaCustomDpadHandler = null;
-      window.__cinemaCustomDpadEnterHandler = null;
-    };
-  }, [isVirtualCursorActive, showOsd]);
 
   // Probe current active server health on mount or when switching
   useEffect(() => {
@@ -748,16 +690,63 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     [activeServer?.mode, duration, sendIframeCommand, showOsd]
   );
 
+  const resetControlsTimeout = useCallback(() => {
+    setShowControls(true);
+    if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+    controlsTimeoutRef.current = setTimeout(() => {
+      if (isPlaying && activeMenu === 'none') {
+        setShowControls(false);
+      }
+    }, 3800);
+  }, [isPlaying, activeMenu]);
+
+  // Modern Player Rapid Seek Accumulator (+10 / -10s steps with visual HUD badge)
+  const seekAccumulatorRef = useRef<{
+    timer: ReturnType<typeof setTimeout> | null;
+    accumulatedSec: number;
+    dir: number;
+  }>({
+    timer: null,
+    accumulatedSec: 0,
+    dir: 0,
+  });
+
+  const handleRemoteSeek = useCallback(
+    (stepSeconds: number) => {
+      const step = stepSeconds || 10;
+      const dir = step > 0 ? 1 : -1;
+      const absStep = Math.abs(step);
+
+      if (seekAccumulatorRef.current.dir === dir && seekAccumulatorRef.current.timer) {
+        clearTimeout(seekAccumulatorRef.current.timer);
+        seekAccumulatorRef.current.accumulatedSec += absStep;
+      } else {
+        seekAccumulatorRef.current.accumulatedSec = absStep;
+        seekAccumulatorRef.current.dir = dir;
+      }
+
+      const totalSec = seekAccumulatorRef.current.accumulatedSec;
+      seekAccumulatorRef.current.timer = setTimeout(() => {
+        seekAccumulatorRef.current.accumulatedSec = 0;
+        seekAccumulatorRef.current.dir = 0;
+        seekAccumulatorRef.current.timer = null;
+      }, 750);
+
+      seek(step);
+      triggerDoubleTapFeedback(dir > 0 ? 'right' : 'left', `${totalSec} сек`);
+      resetControlsTimeout();
+    },
+    [seek, triggerDoubleTapFeedback, resetControlsTimeout]
+  );
+
   // YouTube-style Edge & Center Double-Tap Listener (from Android MainActivity & Web gestures)
   useEffect(() => {
     const handleDoubleTap = (e: any) => {
       const side = e.detail?.side;
       if (side === 'left') {
-        seek(-15);
-        triggerDoubleTapFeedback('left', '15 сек');
+        handleRemoteSeek(-10);
       } else if (side === 'right') {
-        seek(15);
-        triggerDoubleTapFeedback('right', '15 сек');
+        handleRemoteSeek(10);
       } else if (side === 'center') {
         togglePlay();
         triggerDoubleTapFeedback('center', isPlaying ? 'Пауза' : 'Пуск');
@@ -765,7 +754,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     };
     window.addEventListener('cinema-double-tap', handleDoubleTap);
     return () => window.removeEventListener('cinema-double-tap', handleDoubleTap);
-  }, [seek, togglePlay, triggerDoubleTapFeedback, isPlaying]);
+  }, [handleRemoteSeek, togglePlay, triggerDoubleTapFeedback, isPlaying]);
 
   const toggleMute = useCallback(() => {
     const nextMuted = !isMuted;
@@ -823,7 +812,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
     const onStep = (e: Event) => {
       const dir = (e as CustomEvent).detail?.direction || 1;
-      seek(dir * 15);
+      handleRemoteSeek(dir * 10);
     };
 
     const onRatioClick = (e: Event) => {
@@ -839,18 +828,146 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       el.removeEventListener('cinema-seekbar-step', onStep);
       el.removeEventListener('cinema-seekbar-click-ratio', onRatioClick);
     };
-  }, [seek, seekToRatio]);
+  }, [handleRemoteSeek, seekToRatio]);
 
-  const resetControlsTimeout = useCallback(() => {
-    setShowControls(true);
-    if (cleanCinemaBarsHidden) {
-      setCleanCinemaBarsHidden(false);
+  // Unified D-Pad and Center/OK remote interceptor (handles BOTH Virtual Cursor Mode AND TV Remote Seeking & Controls)
+  useEffect(() => {
+    if (isVirtualCursorActive) {
+      const stepX = 0.032;
+      const stepY = 0.042;
+
+      window.__cinemaCustomDpadHandler = (key: string) => {
+        const prev = virtualCursorPosRef.current;
+        let nx = prev.x;
+        let ny = prev.y;
+        if (key === 'ArrowLeft') nx = Math.max(0.02, prev.x - stepX);
+        else if (key === 'ArrowRight') nx = Math.min(0.98, prev.x + stepX);
+        else if (key === 'ArrowUp') ny = Math.max(0.03, prev.y - stepY);
+        else if (key === 'ArrowDown') ny = Math.min(0.97, prev.y + stepY);
+
+        const nextPos = { x: nx, y: ny };
+        virtualCursorPosRef.current = nextPos;
+        setVirtualCursorPos(nextPos);
+
+        if (window.__cinemaOnMouseHover) {
+          window.__cinemaOnMouseHover(nx, ny);
+        }
+        return true;
+      };
+
+      window.__cinemaCustomDpadEnterHandler = () => {
+        const pos = virtualCursorPosRef.current;
+        let handled = false;
+        if (window.__cinemaEnsureClickAt) {
+          const res = window.__cinemaEnsureClickAt(pos.x, pos.y);
+          if (
+            res === 'clicked' ||
+            res === 'iframe' ||
+            res === 'backdrop_ignored' ||
+            res === 'already_clicked'
+          ) {
+            handled = true;
+          }
+        }
+        if (!handled && window.AndroidCinemaBridge?.simulateScreenTap) {
+          window.AndroidCinemaBridge.simulateScreenTap(pos.x, pos.y);
+        }
+        showOsd('🖱️ Клік виконано');
+        return true;
+      };
+
+      return () => {
+        window.__cinemaCustomDpadHandler = null;
+        window.__cinemaCustomDpadEnterHandler = null;
+      };
     }
-    if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
-    controlsTimeoutRef.current = setTimeout(() => {
-      if (isPlaying && activeMenu === 'none') setShowControls(false);
-    }, 5000);
-  }, [cleanCinemaBarsHidden, isPlaying, activeMenu]);
+
+    // Standard TV / Projector Remote Control Mode
+    window.__cinemaCustomDpadHandler = (key: string) => {
+      // 1. If any modal menu is open, let spatial navigation navigate options freely!
+      if (activeMenu !== 'none') {
+        return false;
+      }
+
+      // 2. In fullscreen / clean cinema mode OR when player controls are auto-hidden:
+      if (!showControls || cleanCinemaBarsHidden) {
+        if (key === 'ArrowLeft') {
+          handleRemoteSeek(-10);
+          return true;
+        }
+        if (key === 'ArrowRight') {
+          handleRemoteSeek(10);
+          return true;
+        }
+        if (key === 'ArrowUp' || key === 'ArrowDown') {
+          resetControlsTimeout();
+          return true;
+        }
+      } else {
+        // Controls are visible
+        const activeEl = document.activeElement as HTMLElement | null;
+        const isSeekBarFocused = activeEl?.getAttribute('data-player-seekbar') === 'true';
+        const isButtonFocused =
+          activeEl &&
+          (activeEl.tagName === 'BUTTON' ||
+            activeEl.getAttribute('role') === 'button' ||
+            activeEl.tagName === 'A');
+
+        if (key === 'ArrowLeft' || key === 'ArrowRight') {
+          // If seekbar is focused or no specific adjacent button has focus, seek +10/-10s!
+          if (isSeekBarFocused || !isButtonFocused) {
+            handleRemoteSeek(key === 'ArrowRight' ? 10 : -10);
+            return true;
+          }
+          // If a button is focused, allow spatialNav to step between buttons in the control row!
+          return false;
+        }
+      }
+      return false;
+    };
+
+    window.__cinemaCustomDpadEnterHandler = () => {
+      // If modal menu is open, let standard enter click the active option
+      if (activeMenu !== 'none') {
+        return false;
+      }
+
+      // If controls are hidden / fullscreen: OK wakes up controls and toggles play/pause!
+      if (!showControls || cleanCinemaBarsHidden) {
+        resetControlsTimeout();
+        togglePlay();
+        return true;
+      }
+
+      const activeEl = document.activeElement as HTMLElement | null;
+      const isButtonFocused =
+        activeEl &&
+        (activeEl.tagName === 'BUTTON' ||
+          activeEl.getAttribute('role') === 'button' ||
+          activeEl.tagName === 'A');
+
+      if (isButtonFocused && activeEl.getAttribute('data-player-seekbar') !== 'true') {
+        return false;
+      }
+
+      togglePlay();
+      return true;
+    };
+
+    return () => {
+      window.__cinemaCustomDpadHandler = null;
+      window.__cinemaCustomDpadEnterHandler = null;
+    };
+  }, [
+    isVirtualCursorActive,
+    activeMenu,
+    showControls,
+    cleanCinemaBarsHidden,
+    handleRemoteSeek,
+    resetControlsTimeout,
+    togglePlay,
+    showOsd,
+  ]);
 
   // Wake up controls on any D-Pad activity
   useEffect(() => {
@@ -875,7 +992,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         setActiveMenu('none');
         return true;
       }
-      // 3. If bars were hidden in full screen ("Повний екран"), unhide bars!
+      // 3. If controls are showing and bars are not locked in clean mode, hide controls immediately!
+      if (showControls && !cleanCinemaBarsHidden) {
+        setShowControls(false);
+        return true;
+      }
+      // 4. If bars were hidden in full screen ("Повний екран"), unhide bars!
       if (cleanCinemaBarsHidden) {
         setCleanCinemaBarsHidden(false);
         setShowControls(true);
@@ -918,6 +1040,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   }, [
     isVirtualCursorActive,
     activeMenu,
+    showControls,
     cleanCinemaBarsHidden,
     isFullscreen,
     isLandscapeLocked,
@@ -939,6 +1062,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         }
         if (activeMenu !== 'none') {
           setActiveMenu('none');
+          return;
+        }
+        if (showControls && !cleanCinemaBarsHidden) {
+          setShowControls(false);
           return;
         }
         if (cleanCinemaBarsHidden) {
@@ -998,12 +1125,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         case 'j':
         case 'J':
           e.preventDefault();
-          seek(-15);
+          handleRemoteSeek(-10);
           break;
         case 'l':
         case 'L':
           e.preventDefault();
-          seek(15);
+          handleRemoteSeek(10);
           break;
         case 'm':
         case 'M':
@@ -1035,9 +1162,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         setIsPlaying(false);
         showOsd('⏸ Пауза');
       } else if (keyCode === 90) {
-        seek(15);
+        handleRemoteSeek(10);
       } else if (keyCode === 89) {
-        seek(-15);
+        handleRemoteSeek(-10);
       } else if (keyCode === 87 && isSeries) {
         setActiveEpisode((prev) => prev + 1);
         showOsd('⏭ Наступна серія');
@@ -1070,11 +1197,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     isSeries,
     activeMenu,
     isVirtualCursorActive,
+    showControls,
     cleanCinemaBarsHidden,
     onClose,
     resetControlsTimeout,
     togglePlay,
-    seek,
+    handleRemoteSeek,
     toggleMute,
     sendIframeCommand,
     toggleMenu,
@@ -1137,8 +1265,15 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       {/* ========================================================
           DEDICATED TV REMOTE & MOUSE TOP CONTROL BAR
           ======================================================== */}
-      {!cleanCinemaBarsHidden && (
-        <div className="shrink-0 z-30 bg-[#07090e] border-b border-white/15 px-2.5 sm:px-5 py-1.5 sm:py-2 space-y-1.5">
+      <div
+        className={`shrink-0 z-30 bg-[#07090e] border-b border-white/15 px-2.5 sm:px-5 py-1.5 sm:py-2 space-y-1.5 transition-all duration-300 ${
+          cleanCinemaBarsHidden
+            ? 'hidden'
+            : showControls
+            ? 'opacity-100 max-h-48 pointer-events-auto'
+            : 'opacity-0 max-h-0 py-0 border-b-0 overflow-hidden pointer-events-none'
+        }`}
+      >
           {/* Row 1: Unified Single-Row Navigation Strip (D-Pad Left/Right steps across every control!) */}
           <div
             data-nav-row="player-top"
@@ -1478,7 +1613,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             </div>
           )}
         </div>
-      )}
 
       {/* Auto Failover Notification Toast */}
       {autoFailoverMsg && (
@@ -2343,8 +2477,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           </div>
         )}
 
-        {/* Floating Quick-Exit / Show Controls Button when bars are hidden */}
-        {cleanCinemaBarsHidden && (
+        {/* Floating Quick-Exit / Show Controls Button when bars are hidden (Auto-hides with OSD timeout, NEVER stays permanently!) */}
+        {cleanCinemaBarsHidden && showControls && (
           <div className="absolute top-4 left-4 z-40 animate-fadeIn pointer-events-auto">
             <button
               type="button"
@@ -2357,8 +2491,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               className="px-4 py-2 rounded-2xl bg-black/85 hover:bg-red-600 active:scale-95 text-white font-black text-xs sm:text-sm flex items-center gap-2 border border-white/25 backdrop-blur-md shadow-2xl transition-all tv-btn-focus focus:outline-none"
               title="Повернути панелі / Вийти з повного екрану (Назад / ESC / Стрілка)"
             >
-              <ChevronLeft className="w-4 h-4 text-amber-400" />
-              <span>Повернути панель (Назад)</span>
+              <RotateCcw className="w-4 h-4 text-amber-400" />
+              <span>{t('returnPanel')}</span>
             </button>
           </div>
         )}
@@ -2477,47 +2611,52 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           UNIFIED BOTTOM PLAYER CONTROL DOCK (FOR ALL SERVERS: REZKA, ASHDI, VIDEASY, NATIVE & TORRENTS)
           100% accessible by TV/Projector Remote (D-Pad Down jumps right here!), Mouse & Touch!
           ======================================================== */}
-      {!cleanCinemaBarsHidden && (
-        <div
-          className="shrink-0 z-30 bg-[#07090e] border-t border-white/15 px-3 sm:px-5 py-2 space-y-2"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Row 1: Interactive Timeline Scrubber / Seek Bar (Прокрутка) */}
-          <div data-nav-row="player-bottom-seek" className="flex items-center gap-2.5 w-full">
-            <span className="text-[11px] font-mono font-bold text-amber-400 shrink-0 min-w-[46px]">
-              {formatTime(currentTime)}
-            </span>
+      <div
+        className={`shrink-0 z-30 bg-[#07090e] border-t border-white/15 px-3 sm:px-5 py-2 space-y-2 transition-all duration-300 ${
+          cleanCinemaBarsHidden
+            ? 'hidden'
+            : showControls
+            ? 'opacity-100 max-h-48 pointer-events-auto'
+            : 'opacity-0 max-h-0 py-0 border-t-0 overflow-hidden pointer-events-none'
+        }`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Row 1: Interactive Timeline Scrubber / Seek Bar (Прокрутка) */}
+        <div data-nav-row="player-bottom-seek" className="flex items-center gap-2.5 w-full">
+          <span className="text-[11px] font-mono font-bold text-amber-400 shrink-0 min-w-[46px]">
+            {formatTime(currentTime)}
+          </span>
 
-            <div
-              ref={seekBarRef}
-              tabIndex={0}
-              role="button"
-              data-player-seekbar="true"
-              aria-label="Шкала прокрутки відео (Стрілки Вліво/Вправо на пульті або клік мишкою)"
-              title="Прокрутка: натискайте Вліво / Вправо на пульті (-15с / +15с) або клікніть мишкою в потрібне місце"
-              onClick={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                if (rect.width > 0) {
-                  const ratio = (e.clientX - rect.left) / rect.width;
-                  seekToRatio(ratio);
-                }
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'ArrowLeft') {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  seek(-15);
-                } else if (e.key === 'ArrowRight') {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  seek(15);
-                } else if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  togglePlay();
-                }
-              }}
-              className="group relative flex-1 h-4 bg-white/15 hover:bg-white/25 rounded-full cursor-pointer flex items-center px-0.5 tv-btn-focus focus:outline-none border border-white/10"
-            >
+          <div
+            ref={seekBarRef}
+            tabIndex={0}
+            role="button"
+            data-player-seekbar="true"
+            aria-label="Шкала прокрутки відео (Стрілки Вліво/Вправо на пульті або клік мишкою)"
+            title="Прокрутка: натискайте Вліво / Вправо на пульті (-10с / +10с) або клікніть мишкою в потрібне місце"
+            onClick={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              if (rect.width > 0) {
+                const ratio = (e.clientX - rect.left) / rect.width;
+                seekToRatio(ratio);
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                e.stopPropagation();
+                handleRemoteSeek(-10);
+              } else if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                e.stopPropagation();
+                handleRemoteSeek(10);
+              } else if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                togglePlay();
+              }
+            }}
+            className="group relative flex-1 h-4 bg-white/15 hover:bg-white/25 rounded-full cursor-pointer flex items-center px-0.5 tv-btn-focus focus:outline-none border border-white/10"
+          >
               {/* Buffered track */}
               <div
                 className="absolute top-0 left-0 bottom-0 bg-white/25 rounded-full pointer-events-none"
@@ -2583,6 +2722,28 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                   <Volume2 className="w-4 h-4 text-emerald-400" />
                 )}
               </button>
+
+              <button
+                type="button"
+                onClick={() => handleRemoteSeek(-10)}
+                tabIndex={0}
+                className="px-2.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 text-white font-bold text-xs flex items-center gap-1 border border-white/10 transition-all tv-btn-focus focus:outline-none"
+                title={`${t('seekRewind10')} (Вліво на пульті)`}
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-amber-300" />
+                <span>-10с</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleRemoteSeek(10)}
+                tabIndex={0}
+                className="px-2.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 text-white font-bold text-xs flex items-center gap-1 border border-white/10 transition-all tv-btn-focus focus:outline-none"
+                title={`${t('seekForward10')} (Вправо на пульті)`}
+              >
+                <RotateCw className="w-3.5 h-3.5 text-amber-300" />
+                <span>+10с</span>
+              </button>
             </div>
 
             {/* Right Quick Media Center Controls: Voiceover, Quality, Settings, Aspect, Clean Screen */}
@@ -2641,7 +2802,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 type="button"
                 onClick={() => {
                   setCleanCinemaBarsHidden(true);
-                  showOsd('🗖 Повний екран (натисніть будь-яку кнопку пульта для панелі)');
+                  setShowControls(false);
+                  showOsd('🗖 Чистий кіноекран (натисніть будь-яку кнопку пульта для панелі)');
                 }}
                 tabIndex={0}
                 className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/15 transition-all tv-btn-focus focus:outline-none"
@@ -2656,7 +2818,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             </div>
           </div>
         </div>
-      )}
     </div>
   );
 };
