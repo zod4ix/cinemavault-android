@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Header } from './components/Header';
 import { HeroBanner } from './components/HeroBanner';
 import { MediaRow } from './components/MediaRow';
+import { UserTopRatedSection } from './components/UserTopRatedSection';
 import { MediaModal } from './components/MediaModal';
 import { VideoPlayer } from './components/VideoPlayer';
 import { DonateModal } from './components/DonateModal';
@@ -784,6 +785,15 @@ const MainAppContent: React.FC = () => {
                 />
               </div>
             )}
+
+            {/* 🏆 НАРОДНИЙ РЕЙТИНГ: ТОП ВИБІР ГЛЯДАЧІВ (Увесь час / Рік / Місяць / Тиждень) */}
+            <UserTopRatedSection
+              items={cleanHomePool}
+              onSelectMedia={setSelectedMedia}
+              onPlayMedia={handlePlayMedia}
+              favorites={favorites}
+              onToggleFavorite={handleToggleFavorite}
+            />
 
             {/* Curated + Live Media Carousels */}
             <div className="space-y-3 sm:space-y-4">

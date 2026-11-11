@@ -29,6 +29,7 @@ import {
   Gauge,
   Sun,
   Monitor,
+  EyeOff,
 } from 'lucide-react';
 import { MediaItem, AudioTrack, StreamQuality, StreamServer, TorrentItem } from '../types/movie';
 import { buildServers, ensureIds, resolveUaServer, probeServer, ServerHealth } from '../services/servers';
@@ -554,11 +555,11 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   };
 
   const toggleAndroidLandscape = () => {
-    const next = !isLandscapeLocked;
+    const next = !(isLandscapeLocked || isFullscreen);
     setIsLandscapeLocked(next);
     setIsFullscreen(next);
     try {
-      if (window.AndroidCinemaBridge) {
+      if (window.AndroidCinemaBridge?.setPlayerFullscreen) {
         window.AndroidCinemaBridge.setPlayerFullscreen(next);
       } else if (containerRef.current) {
         if (next && !document.fullscreenElement) {
@@ -570,6 +571,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     } catch {
       // Ignore
     }
+    showOsd(next ? '🗖 ' + (t('enterFullscreen') || 'Повний екран') : '🗗 ' + (t('exitFullscreen') || 'Звичайний екран'));
   };
 
   // Initialize native HTML5 / HLS playback when in 'native' server mode
@@ -2798,6 +2800,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 <span>Масштаб</span>
               </button>
 
+              {/* Clean Cinema Bars Hidden Mode */}
               <button
                 type="button"
                 onClick={() => {
@@ -2806,10 +2809,27 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                   showOsd('🗖 Чистий кіноекран (натисніть будь-яку кнопку пульта для панелі)');
                 }}
                 tabIndex={0}
-                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/15 transition-all tv-btn-focus focus:outline-none"
-                title="Сховати панелі на весь екран"
+                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white border border-white/15 transition-all tv-btn-focus focus:outline-none"
+                title="Сховати панелі керування (Чистий кіноекран)"
+                aria-label="Сховати панелі керування"
               >
-                {isFullscreen ? (
+                <EyeOff className="w-4 h-4" />
+              </button>
+
+              {/* True Fullscreen / Rotate Orientation Button */}
+              <button
+                type="button"
+                onClick={toggleAndroidLandscape}
+                tabIndex={0}
+                className={`p-1.5 rounded-xl border transition-all tv-btn-focus focus:outline-none ${
+                  isFullscreen || isLandscapeLocked
+                    ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold'
+                    : 'bg-white/10 hover:bg-white/20 text-white border-white/15'
+                }`}
+                title={isFullscreen || isLandscapeLocked ? (t('exitFullscreen') || 'Вийти з повного екрану') : (t('enterFullscreen') || 'Повний екран')}
+                aria-label={isFullscreen || isLandscapeLocked ? 'Вийти з повного екрану' : 'Повний екран'}
+              >
+                {isFullscreen || isLandscapeLocked ? (
                   <Minimize className="w-4 h-4" />
                 ) : (
                   <Maximize className="w-4 h-4" />

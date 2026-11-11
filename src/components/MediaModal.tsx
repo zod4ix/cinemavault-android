@@ -13,6 +13,7 @@ import { useLanguage } from '../i18n/LanguageContext';
 import { useOverview } from '../i18n/useOverview';
 import { ServerHealth } from '../services/servers';
 import { openExternalDownload } from '../services/updater';
+import { RatingFeedback } from './RatingFeedback';
 
 interface MediaModalProps {
   media: MediaItem | null;
@@ -247,7 +248,7 @@ export const MediaModal: React.FC<MediaModalProps> = ({
               )}
             </div>
 
-            <div data-nav-row="modal-hero-actions" className="flex items-center gap-2 shrink-0">
+            <div data-nav-row="modal-hero-actions" className="flex flex-wrap items-center gap-2 shrink-0">
               <button
                 ref={watchNowBtnRef}
                 type="button"
@@ -274,6 +275,8 @@ export const MediaModal: React.FC<MediaModalProps> = ({
               >
                 <Heart className={`w-5 h-5 ${isFavorite ? 'fill-white' : ''}`} />
               </button>
+
+              <RatingFeedback media={media} size="md" />
             </div>
           </div>
         </div>

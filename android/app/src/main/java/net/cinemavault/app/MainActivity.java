@@ -5,6 +5,7 @@ import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.content.res.Configuration;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
@@ -57,6 +58,7 @@ public class MainActivity extends BridgeActivity {
     private View customFullscreenView = null;
     private BridgeWebChromeClient.CustomViewCallback customViewCallback = null;
     private boolean isPlayerLandscape = false;
+    private int orientationBeforeFullscreen = Configuration.ORIENTATION_UNDEFINED;
 
     // Universal Mouse, Air Mouse & Projector Remote Pointer Tracking (in Window coordinates!)
     private float lastPointerWinX = -1f;
@@ -1018,6 +1020,13 @@ public class MainActivity extends BridgeActivity {
 
     private void enterImmersiveLandscape() {
         runOnUiThread(() -> {
+            if (!isPlayerLandscape) {
+                try {
+                    orientationBeforeFullscreen = getResources().getConfiguration().orientation;
+                } catch (Exception ignored) {
+                    orientationBeforeFullscreen = Configuration.ORIENTATION_UNDEFINED;
+                }
+            }
             isPlayerLandscape = true;
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
             WindowInsetsControllerCompat controller =
@@ -1036,7 +1045,40 @@ public class MainActivity extends BridgeActivity {
     private void exitImmersiveLandscape() {
         runOnUiThread(() -> {
             isPlayerLandscape = false;
-            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+            final boolean wasPortrait = (orientationBeforeFullscreen == Configuration.ORIENTATION_PORTRAIT);
+            orientationBeforeFullscreen = Configuration.ORIENTATION_UNDEFINED;
+
+            if (wasPortrait) {
+                // Device (especially tablet or phone) was in vertical (portrait) orientation before entering fullscreen!
+                // Force immediate return to portrait orientation so the tablet does not stay trapped in landscape:
+                try {
+                    setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+                } catch (Exception ignored) {}
+
+                // Once orientation animation settles, allow natural user orientation sensor to take over
+                View decor = getWindow().getDecorView();
+                decor.postDelayed(() -> {
+                    if (!isPlayerLandscape) {
+                        try {
+                            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_USER);
+                        } catch (Exception ignored) {
+                            try {
+                                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+                            } catch (Exception ignored2) {}
+                        }
+                    }
+                }, 600);
+            } else {
+                // TV, projector, or tablet already naturally held in landscape:
+                try {
+                    setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_USER);
+                } catch (Exception ignored) {
+                    try {
+                        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+                    } catch (Exception ignored2) {}
+                }
+            }
+
             WindowInsetsControllerCompat controller =
                 WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
             if (controller != null) {
@@ -1328,7 +1370,7 @@ public class MainActivity extends BridgeActivity {
                 } catch (Exception noBrowserException) {
                     // Projector has no browser installed: fall back to direct in-app APK download!
                     downloadAndInstallApkInternal(
-                        "https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.6.6.apk"
+                        "https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.6.7.apk"
                     );
                 }
             });

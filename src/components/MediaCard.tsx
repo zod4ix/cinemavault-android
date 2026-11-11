@@ -3,6 +3,7 @@ import { Heart, Play } from 'lucide-react';
 import { MediaItem } from '../types/movie';
 import { createPosterFallback } from '../services/tmdb';
 import { formatRating } from '../services/rating';
+import { userRatingService } from '../services/userRatingService';
 import { useLanguage } from '../i18n/LanguageContext';
 
 interface MediaCardProps {
@@ -31,6 +32,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
 
   const displayTitle = title(media);
   const primaryGenre = media.genres && media.genres.length > 0 ? tg(media.genres[0]) : t('genreFilm');
+  const communityStats = userRatingService.getRatingStats(media);
 
   return (
     <div
@@ -101,13 +103,24 @@ export const MediaCard: React.FC<MediaCardProps> = ({
 
         {/* Bottom Rating + Tactile Quick Play Button */}
         <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between z-10">
-          <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-black/90 backdrop-blur-md border border-white/10 shadow-md">
-            <span className="px-1 py-0.5 rounded-[3px] text-[8.5px] font-black bg-[#f5c518] text-black leading-none tracking-tight">
-              IMDb
-            </span>
-            <span className="text-amber-400 text-[11px] font-extrabold tracking-tight">
-              {formatRating(media.rating)}
-            </span>
+          <div className="flex items-center gap-1 min-w-0">
+            <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-black/90 backdrop-blur-md border border-white/10 shadow-md shrink-0">
+              <span className="px-1 py-0.5 rounded-[3px] text-[8.5px] font-black bg-[#f5c518] text-black leading-none tracking-tight">
+                IMDb
+              </span>
+              <span className="text-amber-400 text-[10.5px] font-extrabold tracking-tight">
+                {formatRating(media.rating)}
+              </span>
+            </div>
+            {communityStats.approvalPercent >= 75 && (
+              <div
+                className="hidden xs:flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-black/90 backdrop-blur-md border border-emerald-500/30 text-emerald-400 text-[9.5px] font-black shadow-md shrink-0"
+                title={`Рейтинг глядачів: ${communityStats.approvalPercent}% (${communityStats.likes.toLocaleString()} лайків)`}
+              >
+                <span>👍</span>
+                <span>{communityStats.approvalPercent}%</span>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-1.5">

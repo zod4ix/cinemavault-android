@@ -1,0 +1,308 @@
+<div class="vng-hub-master">
+<style>
+.vng-hub-master, .vng-hub-master * {
+  box-sizing: border-box;
+}
+.vng-hub-master {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  color: #f1f5f9;
+  margin: 0 auto;
+  max-width: 1200px;
+  line-height: 1.5;
+}
+/* Grid layout: 3 equal columns on desktop, 1-col on mobile */
+.vng-apps-grid {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 24px !important;
+  margin-bottom: 36px !important;
+  align-items: stretch !important;
+}
+/* Neutralize any WordPress wpautop tags inside grid */
+.vng-apps-grid > p,
+.vng-apps-grid > br,
+.vng-hub-master > p:empty {
+  display: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  height: 0 !important;
+  width: 0 !important;
+  border: 0 !important;
+  position: absolute !important;
+  pointer-events: none !important;
+}
+/* Uniform Cards */
+.vng-card {
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: space-between !important;
+  height: 100% !important;
+  scroll-margin-top: 100px;
+  background: #0b0f19;
+  border: 1px solid #1e293b;
+  border-radius: 18px;
+  padding: 26px;
+  box-shadow: 0 12px 36px rgba(0,0,0,0.5);
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+}
+.vng-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 44px rgba(0,0,0,0.7);
+  border-color: #334155;
+}
+/* Roadmap spans full width across all 3 columns */
+.vng-card-roadmap {
+  grid-column: 1 / -1 !important;
+  border: 1px dashed #334155 !important;
+  background: #090e1a !important;
+}
+.vng-card-roadmap:hover {
+  border-color: #8b5cf6 !important;
+}
+.vng-roadmap-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+@media (max-width: 1024px) {
+  .vng-apps-grid {
+    grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)) !important;
+  }
+  .vng-card-roadmap {
+    grid-column: 1 / -1 !important;
+  }
+}
+@media (max-width: 768px) {
+  .vng-apps-grid {
+    grid-template-columns: 1fr !important;
+    gap: 20px !important;
+  }
+  .vng-card-roadmap {
+    grid-column: auto !important;
+  }
+  .vng-roadmap-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+}
+.vng-feature-item {
+  margin-bottom: 11px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.vng-feature-item:last-child {
+  margin-bottom: 0;
+}
+.vng-pill {
+  transition: all 0.2s ease;
+}
+.vng-pill:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+}
+.vng-btn-primary {
+  transition: all 0.2s ease;
+}
+.vng-btn-primary:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.12);
+}
+.vng-btn-secondary {
+  transition: all 0.2s ease;
+}
+.vng-btn-secondary:hover {
+  background: #192438 !important;
+  border-color: #475569 !important;
+  color: #ffffff !important;
+}
+</style>
+<!-- HERO BANNER -->
+<div style="position:relative;border-radius:20px;overflow:hidden;margin-bottom:32px;box-shadow:0 16px 48px rgba(0,0,0,0.7);border:1px solid #1e293b;background:linear-gradient(135deg, #090d16 0%, #0f172a 50%, #07090e 100%);">
+<div style="position:absolute;inset:0;background:radial-gradient(circle at 15% 25%, rgba(0,210,255,0.12) 0%, transparent 50%), radial-gradient(circle at 85% 75%, rgba(229,9,20,0.12) 0%, transparent 50%);pointer-events:none;"></div>
+<div style="position:relative;padding:36px 28px;z-index:2;">
+<div style="display:inline-flex;align-items:center;gap:8px;background:rgba(0,210,255,0.12);border:1px solid rgba(0,210,255,0.35);backdrop-filter:blur(8px);padding:6px 14px;border-radius:30px;width:fit-content;margin-bottom:16px;">
+<span style="width:8px;height:8px;border-radius:50%;background:#00d2ff;box-shadow:0 0 10px #00d2ff;"></span>
+<span style="color:#00d2ff;font-size:11px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;">OFFICIAL SOFTWARE & SERVICES HUB</span>
+</div>
+<h1 style="margin:0 0 14px;font-size:clamp(24px, 4vw, 38px);font-weight:900;letter-spacing:-0.5px;color:#ffffff;line-height:1.2;text-shadow:0 2px 10px rgba(0,0,0,0.8);">Useful Apps, Bots & Digital Tools by Vinegret</h1>
+<p style="margin:0;font-size:clamp(14px, 1.8vw, 16px);color:#cbd5e1;max-width:920px;line-height:1.65;text-shadow:0 1px 4px rgba(0,0,0,0.8);">Exclusive proprietary software, verified tools, and fast bots for Android, projectors, Smart TV, Telegram, Windows, and web. 100% free, zero annoying ads, no hidden fees. Download safely at maximum speed.</p>
+<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:24px;">
+<a href="#cinemavault-app" class="vng-pill" style="background:#0f172a;color:#00d2ff;border:1px solid rgba(0,210,255,0.4);padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">🍿 CinemaVault PRO v3.6.7 (4K & Live)</a>
+<a href="#fly-tickets-bot" class="vng-pill" style="background:#0f172a;color:#10b981;border:1px solid rgba(16,185,129,0.4);padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">✈️ Telegram Flight Bot</a>
+<a href="#shutdown-timer" class="vng-pill" style="background:#0f172a;color:#f8fafc;border:1px solid #334155;padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">⏱️ Shutdown Timer</a>
+<a href="#support-section" class="vng-pill" style="background:#0f172a;color:#f59e0b;border:1px solid rgba(245,158,11,0.4);padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">💖 Support the Project</a>
+</div>
+</div>
+</div>
+<!-- APPS GRID (Clean layout without loose comments/blank lines) -->
+<div class="vng-apps-grid">
+<div id="cinemavault-app" class="vng-card">
+<div style="position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg, #e50914, #f59e0b);"></div>
+<div>
+<div style="display:inline-flex;align-items:center;gap:6px;background:rgba(229,9,20,0.15);border:1px solid rgba(229,9,20,0.35);padding:4px 12px;border-radius:20px;margin-bottom:14px;">
+<span style="width:6px;height:6px;border-radius:50%;background:#e50914;box-shadow:0 0 8px #e50914;"></span>
+<span style="color:#f87171;font-size:10px;font-weight:800;letter-spacing:1px;text-transform:uppercase;">UPDATED • PRO MEDIA CENTER v3.6.7</span>
+</div>
+<h2 style="margin:0 0 8px;font-size:23px;font-weight:900;color:#ffffff;display:flex;align-items:center;gap:8px;"><span>🎬</span> CinemaVault PRO v3.6.7</h2>
+<p style="margin:0 0 16px;font-size:13.5px;color:#94a3b8;line-height:1.5;">Flagship 4K HDR online cinema & live sports media center for tablets, smartphones, projectors, Smart TV, and TV boxes (mouse, remote, keyboard, touch)</p>
+<div style="margin-bottom:20px;">
+<div class="vng-feature-item"><strong style="color:#00d2ff;">• Tablet Fullscreen & Rotation Mastery (v3.6.7):</strong><span style="color:#cbd5e1;"> Fixed tablet orientation lock when exiting fullscreen. Returning to vertical view or pressing Back now immediately restores portrait mode without app restarts. Fullscreen button seamlessly controls view mode.</span></div>
+<div class="vng-feature-item"><strong style="color:#eab308;">• Audience Top Rating & Time Gradations (All Time / Year / Month / Week):</strong><span style="color:#cbd5e1;"> Interactive likes/dislikes with live counters under every movie and show (one vote per user, anti-spam, persistent across updates). New curated Top Rated showcase on the home screen.</span></div>
+<div class="vng-feature-item"><strong style="color:#38bdf8;">• Clean Cinema Fullscreen & D-Pad Remote Seek +10/-10s:</strong><span style="color:#cbd5e1;"> Controls auto-hide after 3.8s for 100% clean video playback. D-Pad Left/Right arrows instantly seek ±10s with rapid accumulation badge and double-tap gestures.</span></div>
+<div class="vng-feature-item"><strong style="color:#f43f5e;">• Official HDRezka Library (rezka.ag #1) & Stable Controls:</strong><span style="color:#cbd5e1;"> HDRezka integrated as Primary Server #1 with all dubbing studios and 1080p streams. Settings menu auto-close bug is resolved — adjust audio tracks, volume booster, and picture presets effortlessly.</span></div>
+<div class="vng-feature-item"><strong style="color:#38bdf8;">• Deep In-Player Control Bridge & Dubbing Selection:</strong><span style="color:#cbd5e1;"> Unified bottom dock with interactive SeekBar and direct Subframe Bridge to switch audio dubbing, voiceovers, quality (4K / 1080p / 720p / 480p), and settings via remote or mouse.</span></div>
+<div class="vng-feature-item"><strong style="color:#f59e0b;">• Projector Pro Media Suite (300% Audio & Cinema Zoom):</strong><span style="color:#cbd5e1;"> 300% Audio Booster for quiet projector speakers, black-bar crop modes (16:9 / Crop / Stretch / 115% Cinema Zoom), projector brightness presets, 0.5x–2.0x speed, and 14+ multi-source servers.</span></div>
+<div class="vng-feature-item"><strong style="color:#10b981;">• Live Sports Scanner Hub + Online P2P Torrents:</strong><span style="color:#cbd5e1;"> Live streams for NBA, Champions League, Formula 1, Boxing/UFC, and Tennis (5 cascading streams A–E + 12 24/7 channels) plus direct in-app torrent streaming.</span></div>
+<div class="vng-feature-item"><strong style="color:#c084fc;">• Infinite Library, Cloud Sync & Built-In Native Updater:</strong><span style="color:#cbd5e1;"> Golden Classics + 2024–2026 New Releases, 5 UI languages (UK, EN, PL, ES, RU), cross-device CV-XXXXXX cloud sync, and 1-click native APK updates right on your projector.</span></div>
+</div>
+</div>
+<div>
+<div style="display:flex;flex-wrap:wrap;gap:8px;padding:12px 14px;background:#060911;border:1px solid #1e293b;border-radius:12px;margin-bottom:16px;font-size:11px;color:#94a3b8;">
+<div><span style="color:#64748b;">Version:</span> <strong style="color:#f1f5f9;">v3.6.7 PRO</strong></div>
+<div>•</div>
+<div><span style="color:#64748b;">Size:</span> <strong style="color:#f1f5f9;">3.74 MB</strong></div>
+<div>•</div>
+<div><span style="color:#64748b;">Compatibility:</span> <strong style="color:#38bdf8;">Android 8.0+ / Tablets / Smart TV</strong></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:10px;">
+<a href="https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.6.7.apk" target="_blank" rel="noopener noreferrer" class="vng-btn-primary" style="background:linear-gradient(90deg, #e50914, #b91c1c);color:#ffffff;padding:14px 20px;border-radius:12px;font-size:14px;font-weight:800;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 8px 24px rgba(229,9,20,0.35);">
+<span>⬇️</span> Download CinemaVault-PRO-v3.6.7.apk (Direct Link)
+</a>
+<a href="https://github.com/zod4ix/cinemavault-android/releases/latest" target="_blank" rel="noopener noreferrer" class="vng-btn-secondary" style="background:#131d2e;color:#cbd5e1;border:1px solid #334155;padding:10px 16px;border-radius:12px;font-size:13px;font-weight:700;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:6px;">
+<span>🐙</span> GitHub Release Page & Source Code (v3.6.7)
+</a>
+</div>
+</div>
+</div>
+<div id="fly-tickets-bot" class="vng-card">
+<div style="position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg, #0088cc, #10b981);"></div>
+<div>
+<div style="display:inline-flex;align-items:center;gap:6px;background:rgba(0,136,204,0.15);border:1px solid rgba(0,136,204,0.35);padding:4px 12px;border-radius:20px;margin-bottom:14px;">
+<span style="width:6px;height:6px;border-radius:50%;background:#0088cc;box-shadow:0 0 8px #0088cc;"></span>
+<span style="color:#38bdf8;font-size:10px;font-weight:800;letter-spacing:1px;text-transform:uppercase;">TELEGRAM BOT • FLIGHT TICKETS & PNR</span>
+</div>
+<h2 style="margin:0 0 8px;font-size:23px;font-weight:900;color:#ffffff;display:flex;align-items:center;gap:8px;"><span>✈️</span> Fly Tickets & PNR Assistant</h2>
+<p style="margin:0 0 16px;font-size:13.5px;color:#94a3b8;line-height:1.5;">Smart Telegram aviation assistant: instant PNR status lookup, flight monitoring, and lowest airfare search</p>
+<div style="margin-bottom:20px;">
+<div class="vng-feature-item"><strong style="color:#38bdf8;">• Instant PNR Booking Status Check:</strong><span style="color:#cbd5e1;"> Enter your PNR code and passenger surname to get real-time ticket confirmation, seat allocation, and live airline schedule.</span></div>
+<div class="vng-feature-item"><strong style="color:#10b981;">• Lowest Airfare & Low-Cost Flight Alerts:</strong><span style="color:#cbd5e1;"> Smart tracking algorithm monitors flash sales, connections, and low-cost airlines (Ryanair, Wizz Air, EasyJet) worldwide.</span></div>
+<div class="vng-feature-item"><strong style="color:#f59e0b;">• Real-Time Flight Change Notifications:</strong><span style="color:#cbd5e1;"> Automated tracking for delays, gate changes, and departure statuses delivered directly to your Telegram chat.</span></div>
+<div class="vng-feature-item"><strong style="color:#00d2ff;">• Convenient 24/7 Telegram Interface:</strong><span style="color:#cbd5e1;"> Zero bloatware apps, no registrations required — instant access to full aviation info at any time.</span></div>
+<div class="vng-feature-item"><strong style="color:#c084fc;">• Live Global Airline Data (GDS):</strong><span style="color:#cbd5e1;"> Direct integration with Global Distribution Systems (Amadeus, Sabre, Galileo) for 100% verified data.</span></div>
+</div>
+</div>
+<div>
+<div style="display:flex;flex-wrap:wrap;gap:8px;padding:12px 14px;background:#060911;border:1px solid #1e293b;border-radius:12px;margin-bottom:16px;font-size:11px;color:#94a3b8;">
+<div><span style="color:#64748b;">Platform:</span> <strong style="color:#f1f5f9;">Telegram</strong></div>
+<div>•</div>
+<div><span style="color:#64748b;">Status:</span> <strong style="color:#10b981;">Online 24/7</strong></div>
+<div>•</div>
+<div><span style="color:#64748b;">Speed:</span> <strong style="color:#38bdf8;">0.2s</strong></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:10px;">
+<a href="https://t.me/fly_tickets_pnr_bot" target="_blank" rel="noopener noreferrer" class="vng-btn-primary" style="background:linear-gradient(90deg, #0088cc, #0284c7);color:#ffffff;padding:14px 20px;border-radius:12px;font-size:14px;font-weight:800;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 8px 24px rgba(0,136,204,0.35);">
+<span>🚀</span> Open Bot in Telegram (@fly_tickets_pnr_bot)
+</a>
+</div>
+</div>
+</div>
+<div id="shutdown-timer" class="vng-card">
+<div style="position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg, #3b82f6, #00d2ff);"></div>
+<div>
+<div style="display:inline-flex;align-items:center;gap:6px;background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.35);padding:4px 12px;border-radius:20px;margin-bottom:14px;">
+<span style="width:6px;height:6px;border-radius:50%;background:#3b82f6;box-shadow:0 0 8px #3b82f6;"></span>
+<span style="color:#93c5fd;font-size:10px;font-weight:800;letter-spacing:1px;text-transform:uppercase;">WINDOWS UTILITY • AUTO SHUTDOWN</span>
+</div>
+<h2 style="margin:0 0 8px;font-size:23px;font-weight:900;color:#ffffff;display:flex;align-items:center;gap:8px;"><span>⏱️</span> Shutdown Timer v1.0</h2>
+<p style="margin:0 0 16px;font-size:13.5px;color:#94a3b8;line-height:1.5;">Clean and reliable PC shutdown, sleep, and hibernate scheduler for Windows 11 / 10 / 8 / 7</p>
+<div style="margin-bottom:20px;">
+<div class="vng-feature-item"><strong style="color:#00d2ff;">• Automatic Countdown & Clock Shutdown:</strong><span style="color:#cbd5e1;"> Set a timer in minutes or exact clock time — PC shuts down automatically once downloads, renders, or streams finish.</span></div>
+<div class="vng-feature-item"><strong style="color:#38bdf8;">• Shutdown, Sleep & Hibernate Modes:</strong><span style="color:#cbd5e1;"> Choose your desired action: full shutdown, energy-saving sleep, hibernation, or system restart.</span></div>
+<div class="vng-feature-item"><strong style="color:#10b981;">• 100% Portable (No Installation):</strong><span style="color:#cbd5e1;"> Runs instantly from any folder or USB flash drive without registry clutter or administrator privileges.</span></div>
+<div class="vng-feature-item"><strong style="color:#f59e0b;">• 0% System Resource Overhead:</strong><span style="color:#cbd5e1;"> Ultra-lightweight software under 2 MB with zero background processes, spyware, or intrusive auto-updates.</span></div>
+<div class="vng-feature-item"><strong style="color:#c084fc;">• Full Windows Compatibility:</strong><span style="color:#cbd5e1;"> Rock-solid performance across 64-bit and 32-bit editions of Windows 11, Windows 10, 8.1, and 7.</span></div>
+</div>
+</div>
+<div>
+<div style="display:flex;flex-wrap:wrap;gap:8px;padding:12px 14px;background:#060911;border:1px solid #1e293b;border-radius:12px;margin-bottom:16px;font-size:11px;color:#94a3b8;">
+<div><span style="color:#64748b;">OS:</span> <strong style="color:#f1f5f9;">Windows 11 / 10 / 8 / 7</strong></div>
+<div>•</div>
+<div><span style="color:#64748b;">Format:</span> <strong style="color:#f1f5f9;">Portable .exe</strong></div>
+<div>•</div>
+<div><span style="color:#64748b;">Price:</span> <strong style="color:#10b981;">Free</strong></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:10px;">
+<a href="https://drive.google.com/file/d/1xcIdvip6kKyTaB--B27bxXP0wcBWSKgG/view?usp=sharing" target="_blank" rel="noopener noreferrer" class="vng-btn-primary" style="background:#1e293b;color:#f8fafc;border:1px solid #475569;padding:14px 20px;border-radius:12px;font-size:14px;font-weight:800;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 8px 24px rgba(0,0,0,0.3);">
+<span>⬇️</span> Download Shutdown Timer v1.0 (Google Drive)
+</a>
+</div>
+</div>
+</div>
+<div id="vinegret-lab" class="vng-card vng-card-roadmap">
+<div style="position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg, #8b5cf6, #ec4899);"></div>
+<div>
+<div style="display:inline-flex;align-items:center;gap:6px;background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.35);padding:4px 12px;border-radius:20px;margin-bottom:14px;">
+<span style="width:6px;height:6px;border-radius:50%;background:#8b5cf6;box-shadow:0 0 8px #8b5cf6;"></span>
+<span style="color:#c084fc;font-size:10px;font-weight:800;letter-spacing:1px;text-transform:uppercase;">DEVELOPMENT LAB • COMING SOON</span>
+</div>
+<h2 style="margin:0 0 8px;font-size:22px;font-weight:900;color:#ffffff;display:flex;align-items:center;gap:8px;"><span>🔮</span> Upcoming Vinegret Lab Projects</h2>
+<p style="margin:0 0 18px;font-size:13.5px;color:#94a3b8;line-height:1.5;">Our latest proprietary software, online services, and digital utilities will appear here:</p>
+<div class="vng-roadmap-grid">
+<div style="background:#05070d;padding:16px;border-radius:12px;border:1px solid #1e293b;">
+<div style="color:#c084fc;font-weight:800;font-size:13.5px;margin-bottom:6px;">🔮 Telegram & AI Bots</div>
+<div style="color:#cbd5e1;font-size:12.5px;line-height:1.5;">Development of new specialized bots for travel assistance, smart media discovery, price alerts, and analytics.</div>
+</div>
+<div style="background:#05070d;padding:16px;border-radius:12px;border:1px solid #1e293b;">
+<div style="color:#38bdf8;font-weight:800;font-size:13.5px;margin-bottom:6px;">💻 Desktop Utilities</div>
+<div style="color:#cbd5e1;font-size:12.5px;line-height:1.5;">Lightweight, modern desktop utilities for workflow automation, system cleanup, media management, and efficiency.</div>
+</div>
+<div style="background:#05070d;padding:16px;border-radius:12px;border:1px solid #1e293b;">
+<div style="color:#10b981;font-weight:800;font-size:13.5px;margin-bottom:6px;">🌐 Open Web Services</div>
+<div style="color:#cbd5e1;font-size:12.5px;line-height:1.5;">Expanding our ecosystem of free, non-commercial digital services and APIs without subscriptions or limits.</div>
+</div>
+</div>
+</div>
+<div style="padding:12px 16px;background:#05070d;border:1px solid #1e293b;border-radius:12px;text-align:center;font-size:12px;color:#94a3b8;">
+🚀 All new releases will be published on this page. Stay tuned!
+</div>
+</div>
+</div>
+<!-- SUPPORT / DONATE SECTION -->
+<div id="support-section" style="background:#090d16;border:1px solid rgba(245,158,11,0.3);border-radius:20px;padding:32px 28px;box-shadow:0 16px 40px rgba(0,0,0,0.6);margin-bottom:28px;scroll-margin-top:100px;">
+<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+<span style="font-size:24px;">💖</span>
+<h3 style="margin:0;font-size:22px;font-weight:900;color:#ffffff;">Support Project Development</h3>
+</div>
+<p style="margin:0 0 20px;font-size:14px;color:#cbd5e1;line-height:1.6;max-width:900px;">All our apps and bots are 100% free. If you would like to support server hosting and new development, you can make a donation:</p>
+<div style="margin-bottom:24px;">
+<a href="https://www.paypal.com/donate?token=eh38QKp3BSWjD6S_bQDFQWuYoTQyJb14dN_DAKlxphBKz_NiAXhHkYAAVsH8dldkKPfJpoTwjreJRAt5" target="_blank" rel="noopener noreferrer" style="background:linear-gradient(90deg, #0070ba, #003087);color:#ffffff;padding:12px 28px;border-radius:12px;font-size:14px;font-weight:800;text-decoration:none;display:inline-flex;align-items:center;gap:8px;box-shadow:0 6px 20px rgba(0,112,186,0.35);">
+<span>💳</span> Donate via PayPal
+</a>
+</div>
+<div style="margin-top:20px;border-top:1px solid #1e293b;padding-top:20px;">
+<div style="font-size:13px;font-weight:800;color:#f59e0b;margin-bottom:14px;text-transform:uppercase;letter-spacing:1px;">Cryptocurrency Addresses:</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:12px;font-size:12px;">
+<div style="background:#05070d;padding:12px;border-radius:10px;border:1px solid #1e293b;">
+<div style="color:#f59e0b;font-weight:700;">USDT (TRC-20):</div>
+<code style="color:#cbd5e1;word-break:break-all;font-size:11px;">TXUa9P8kE3xZ4mQ7hK2nL9jF5wB6cV1yR4</code>
+</div>
+<div style="background:#05070d;padding:12px;border-radius:10px;border:1px solid #1e293b;">
+<div style="color:#f59e0b;font-weight:700;">Bitcoin (BTC):</div>
+<code style="color:#cbd5e1;word-break:break-all;font-size:11px;">1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa</code>
+</div>
+<div style="background:#05070d;padding:12px;border-radius:10px;border:1px solid #1e293b;">
+<div style="color:#f59e0b;font-weight:700;">Ethereum (ERC-20):</div>
+<code style="color:#cbd5e1;word-break:break-all;font-size:11px;">0x71C...B29</code>
+</div>
+<div style="background:#05070d;padding:12px;border-radius:10px;border:1px solid #1e293b;">
+<div style="color:#f59e0b;font-weight:700;">XRP (Ripple):</div>
+<code style="color:#cbd5e1;word-break:break-all;font-size:11px;">rEb8TK3gBgk5auZyyb6BiCc2g3gkSbjZ8e</code>
+<div style="color:#ef4444;font-size:10px;font-weight:800;margin-top:4px;">MEMO: 427632553 (MEMO IS MANDATORY FOR XRP TRANSFERS!)</div>
+</div>
+</div>
+</div>
+</div>
+</div>
