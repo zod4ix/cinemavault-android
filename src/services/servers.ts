@@ -432,25 +432,6 @@ const PROVIDERS: ProviderDef[] = [
 
   // ──────── 5. MULTI-AUDIO & STUDIO CHANNELS (🌐 MULTI / RU) ────────
   {
-    id: 'loadbox',
-    name: '🎭 Rezka Multi-Studio (UA/EN/RU)',
-    badge: 'Multi Audio',
-    langs: ['UA', 'MULTI', 'RU', 'EN', 'SUB'],
-    build: (c) => {
-      if (c.imdb) {
-        return c.series
-          ? `https://api.loadbox.ws/embed/imdb/${c.imdb}?season=${c.s}&episode=${c.e}`
-          : `https://api.loadbox.ws/embed/imdb/${c.imdb}`;
-      }
-      if (c.tmdb) {
-        return c.series
-          ? `https://api.loadbox.ws/embed/tmdb/${c.tmdb}?season=${c.s}&episode=${c.e}`
-          : `https://api.loadbox.ws/embed/tmdb/${c.tmdb}`;
-      }
-      return null;
-    },
-  },
-  {
     id: 'videasy',
     name: '🌐 Videasy Global 4K (All Langs)',
     badge: '4K Multi',

@@ -520,7 +520,7 @@ export const MediaModal: React.FC<MediaModalProps> = ({
                     if (sourceLangFilter === 'all') return true;
                     const idLow = src.id.toLowerCase();
                     if (sourceLangFilter === 'ua') {
-                      return idLow.includes('ua-') || idLow.includes('ashdi') || idLow.includes('rezka') || idLow.includes('loadbox') || idLow.includes('videasy');
+                      return idLow.includes('ua-') || idLow.includes('ashdi') || idLow.includes('rezka') || idLow.includes('videasy');
                     }
                     if (sourceLangFilter === 'en') {
                       return idLow.includes('vidlink') || idLow.includes('vidsrc') || idLow.includes('vidfast') || idLow.includes('2embed');
@@ -547,7 +547,6 @@ export const MediaModal: React.FC<MediaModalProps> = ({
                     if (idLow.includes('ua-autoembed')) return '🇺🇦 Український та мультиязичний потік (AutoEmbed UA)';
                     if (idLow.includes('pl-')) return '🇵🇱 Polski Lektor / Dubbing / Napisy PL + EN';
                     if (idLow.includes('es-')) return '🇪🇸 Español Latino / Castellano + Subtítulos';
-                    if (idLow.includes('loadbox')) return '🎭 HDRezka (rezka.ag) • Мульти-студії: 🇺🇦 UA / 🇬🇧 EN / 🌐 Rezka / LostFilm';
                     if (idLow.includes('videasy')) return '🌐 Усі мови додатку: 🇺🇦 UA / 🇬🇧 EN / 🇵🇱 PL / 🇪🇸 ES / Multi';
                     return '🇬🇧 English Original 4K/1080p + Multi Subtitles';
                   };

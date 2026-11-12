@@ -1218,7 +1218,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     if (idLow.includes('ua-kino-rezka')) return '🇺🇦 HDRezka UA';
     if (idLow.includes('ua-videasy')) return '🇺🇦 Videasy UA';
     if (idLow.includes('ua-autoembed')) return '🇺🇦 AutoEmbed UA';
-    if (idLow.includes('loadbox')) return '🎭 HDRezka Multi';
     if (idLow.startsWith('pl-')) return '🇵🇱 Polski';
     if (idLow.startsWith('es-')) return '🇪🇸 Español';
     if (activeServer?.mode === 'torrent') return '⚡ P2P Торрент';
@@ -1846,8 +1845,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                       return (
                         srv.langs?.includes('MULTI') ||
                         srv.langs?.includes('RU') ||
-                        idLow.includes('rezka') ||
-                        idLow.includes('loadbox')
+                        idLow.includes('rezka')
                       );
                     })
                     .map((srv) => {
@@ -1856,7 +1854,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                       const isUa = idLow.startsWith('ua-') || idLow.includes('ashdi');
                       const isPl = idLow.startsWith('pl-');
                       const isEs = idLow.startsWith('es-');
-                      const isRezka = idLow.includes('rezka') || idLow.includes('loadbox');
+                      const isRezka = idLow.includes('rezka');
                       const isTorrent = srv.mode === 'torrent';
 
                       const getDesc = () => {

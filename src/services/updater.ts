@@ -1,6 +1,6 @@
 import { httpGetJson } from './tmdb';
 
-export const APP_VERSION = '3.6.7';
+export const APP_VERSION = '3.6.7-b';
 export const GITHUB_REPO = 'zod4ix/cinemavault-android';
 export const DEFAULT_APK_URL = `https://github.com/${GITHUB_REPO}/raw/main/CinemaVault-PRO-v${APP_VERSION}.apk`;
 export const GITHUB_RELEASE_PAGE = `https://github.com/${GITHUB_REPO}/releases/latest`;
@@ -21,14 +21,30 @@ const DISMISSED_VERSION_KEY = 'cinemavault_dismissed_update_version';
 
 function parseSemver(v: string): number[] {
   const clean = (v || '').replace(/^v/i, '').trim();
+  const match = clean.match(/^(\d+)\.(\d+)\.(\d+)(?:[.-]([a-zA-Z0-9]+))?$/);
+  if (match) {
+    const major = parseInt(match[1], 10) || 0;
+    const minor = parseInt(match[2], 10) || 0;
+    const patch = parseInt(match[3], 10) || 0;
+    let extra = 0;
+    if (match[4]) {
+      const num = parseInt(match[4], 10);
+      if (!isNaN(num)) {
+        extra = num;
+      } else {
+        extra = match[4].toLowerCase().charCodeAt(0) - 96;
+      }
+    }
+    return [major, minor, patch, extra];
+  }
   const parts = clean.split(/[.-]/).map((n) => parseInt(n, 10));
-  return [parts[0] || 0, parts[1] || 0, parts[2] || 0];
+  return [parts[0] || 0, parts[1] || 0, parts[2] || 0, parts[3] || 0];
 }
 
 export function isNewerVersion(current: string, remote: string): boolean {
   const c = parseSemver(current);
   const r = parseSemver(remote);
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 4; i++) {
     if (r[i] > c[i]) return true;
     if (r[i] < c[i]) return false;
   }
@@ -111,6 +127,7 @@ export const updaterService = {
     let apkDownloadUrl = DEFAULT_APK_URL;
     let releasePageUrl = GITHUB_RELEASE_PAGE;
     let releaseNotes =
+      '• 🎬 ОПТИМІЗАЦІЯ ДЖЕРЕЛ ТА ОЧИЩЕННЯ HDREZKA (v3.6.7-b): усунуто зайве дублювання серверів HDRezka. Залишено єдину чисту офіційну бібліотеку «HDRezka (rezka.ag • Усі мовні доріжки)» та швидкий прямий український потік «HDRezka UA». Прискорено ініціалізацію та перемикання плеєрів без зайвого навантаження.\n' +
       '• 📱 ІДЕАЛЬНИЙ ПОВНИЙ ЕКРАН ДЛЯ ПЛАНШЕТІВ (v3.6.7): усунуто блокування орієнтації на планшетах при розгортанні на весь екран! Тепер при виході з повноекранного режиму планшет миттєво повертається у вертикальний перегляд без зависань та потреби перезапускати додаток. Кнопка повного екрану надійно розгортає та згортає плеєр на смартфонах, планшетах і ТБ.\n' +
       '• 🏆 НАРОДНИЙ РЕЙТИНГ: ЛАЙКИ ТА ДІЗЛАЙКИ З ГРАДАЦІЄЮ ЧАСУ: запроваджено інтерактивні оцінки глядачів із лічильниками під кожним фільмом, серіалом та мультфільмом. Кожен глядач може проголосувати лише один раз, надійно захищено від накруток із залізобетонним збереженням оцінок при оновленнях додатку!\n' +
       '• 🔥 ТОП ВИБІР ГЛЯДАЧІВ НА ГОЛОВНОМУ ЕКРАНІ: додано преміальний розділ із фільтрацією за градацією: «За увесь час», «За рік», «За місяць» та «За тиждень» зі стильними золотими, срібними та бронзовими нагородами #1, #2, #3!\n' +
