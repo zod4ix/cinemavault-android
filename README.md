@@ -1,15 +1,15 @@
-# 🎬 CinemaVault PRO v3.6.7-b (Clean HDRezka Single Source, Tablet Fullscreen & Top Rating)
+# 🎬 CinemaVault PRO v3.6.8 (Clean HDRezka Single Source, Tablet Fullscreen & Top Rating)
 
 > **Автономний мультиплатформний онлайн-кінотеатр та спортивний хаб «для своїх»**: оптимізований під **Smart TV (Android TV / Google TV / TV-бокси / проєктори)**, пульти дистанційного керування (2D Spatial D-Pad), **пульти-указки (Air Mouse / гіроскоп)**, планшети, смартфони, комп'ютерні миші та клавіатури. Без реклами, з прямим **P2P-програванням торрентів онлайн (Torrentio + TPB + YTS + EZTV)**, наскрізним керуванням усіма внутрішніми елементами плеєрів (HDRezka, Ashdi, Videasy, VidLink, HLS), окремим комбайном **🔴 Спорт Live (NBA, NFL, Ліга Чемпіонів, Формула 1, Бокс/UFC, Теніс)**, **15+ каналами (HDRezka rezka.ag #1 на чолі списку + усі мови додатку)**, нескінченною бібліотекою контенту (від золотої класики до новинок 2026), самовідновленням (`Self-Healing Engine`), GitHub Auto-Updater та крос-девайс хмарною синхронізацією.
 
 ## 📲 Завантажити актуальний Android `.apk`
-- **[Завантажити CinemaVault-PRO-v3.6.7-b.apk (Пряме посилання)](https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.6.7-b.apk)** *(Найновіша актуальна версія v3.6.7-b для планшетів, смартфонів, Smart TV, проєкторів та TV Box)*
+- **[Завантажити CinemaVault-PRO-v3.6.8.apk (Пряме посилання)](https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.6.8.apk)** *(Найновіша актуальна версія v3.6.8 для планшетів, смартфонів, Smart TV, проєкторів та TV Box)*
 - **[Офіційний каталог програм Vinegret.net](https://vinegret.net/prostye-poleznye-programmy-dlja-windows/)** *(Корисні програми та утиліти для Windows та Android)*
 - **[Сторінка релізу на GitHub](https://github.com/zod4ix/cinemavault-android/releases/latest)**
 
 ---
 
-## 🔥 Що нового у версії v3.6.7-b PRO
+## 🔥 Що нового у версії v3.6.8 PRO
 
 0. **🎬 Оптимізація та ліквідація дублювання HDRezka**:
    - **Усунуто зайве затроєння плеєрів**: видалено застарілий дублікат `loadbox`, який на 100% повторював основний сервер `rezka-ag`.
