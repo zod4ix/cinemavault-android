@@ -140,3 +140,11 @@ select:focus-visible,
     padding-right: clamp(1.5rem, 4vw, 3.5rem);
   }
 }
+
+/* Low-end GPU & TV Chipset rendering optimization:
+   Skip layout passes for offscreen rows & cards to maintain solid 60 FPS */
+[data-nav-row="media-row"] {
+  content-visibility: auto;
+  contain-intrinsic-size: 260px;
+  will-change: transform;
+}

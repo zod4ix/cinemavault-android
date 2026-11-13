@@ -54,6 +54,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
           src={imgSrc}
           alt={displayTitle}
           loading="lazy"
+          decoding="async"
           onError={() => setImgSrc(createPosterFallback(media.title, media.year, media.rating))}
           className="w-full h-full object-cover object-center group-hover:scale-105 group-focus-visible:scale-105 transition-transform duration-500"
         />

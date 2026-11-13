@@ -3,6 +3,7 @@ import { Trophy, ChevronLeft, ChevronRight, Sparkles, Calendar, Zap, Clock } fro
 import { MediaItem } from '../types/movie';
 import { MediaCard } from './MediaCard';
 import { userRatingService, RatingGradation } from '../services/userRatingService';
+import { deduplicateMediaItems } from '../services/mediaDedupe';
 import { useLanguage } from '../i18n/LanguageContext';
 
 interface UserTopRatedSectionProps {
@@ -34,7 +35,8 @@ export const UserTopRatedSection: React.FC<UserTopRatedSectionProps> = ({
   }, []);
 
   const topItems = useMemo(() => {
-    return userRatingService.getTopRatedItems(items, selectedGradation, 24);
+    const ranked = userRatingService.getTopRatedItems(items, selectedGradation, 24);
+    return deduplicateMediaItems(ranked);
   }, [items, selectedGradation, version]);
 
   // Mouse Drag-to-Scroll support

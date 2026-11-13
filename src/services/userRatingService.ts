@@ -1,4 +1,5 @@
 import { MediaItem } from '../types/movie';
+import { deduplicateMediaItems } from './mediaDedupe';
 
 export type VoteType = 'like' | 'dislike';
 export type RatingGradation = 'all' | 'year' | 'month' | 'week';
@@ -360,9 +361,11 @@ class UserRatingService {
   ): MediaItem[] {
     if (!items || items.length === 0) return [];
 
+    // Strictly eliminate any duplicate films (e.g. curated slug vs dynamic IMDb id)
+    const uniqueItems = deduplicateMediaItems(items);
     const currentYear = new Date().getFullYear();
 
-    const scored = items.map((item) => {
+    const scored = uniqueItems.map((item) => {
       const stats = this.getRatingStats(item);
       const year = item.year || currentYear;
       let rankingMetric = 0;

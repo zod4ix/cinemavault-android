@@ -154,7 +154,9 @@ public class MainActivity extends BridgeActivity {
             settings.setNeedInitialFocus(true);
             settings.setRenderPriority(WebSettings.RenderPriority.HIGH);
             settings.setCacheMode(WebSettings.LOAD_DEFAULT);
-            settings.setOffscreenPreRaster(true);
+            // Low-RAM Projectors & Smart TV: disable forced pre-raster to save GPU VRAM & eliminate stutter
+            settings.setOffscreenPreRaster(false);
+            webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
             // Trap popup ads via onCreateWindow so balancers never redirect main app
             settings.setSupportMultipleWindows(true);
             settings.setJavaScriptCanOpenWindowsAutomatically(false);
@@ -1370,7 +1372,7 @@ public class MainActivity extends BridgeActivity {
                 } catch (Exception noBrowserException) {
                     // Projector has no browser installed: fall back to direct in-app APK download!
                     downloadAndInstallApkInternal(
-                        "https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.6.7.apk"
+                        "https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.6.9.apk"
                     );
                 }
             });

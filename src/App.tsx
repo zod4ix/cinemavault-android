@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Header } from './components/Header';
 import { HeroBanner } from './components/HeroBanner';
 import { MediaRow } from './components/MediaRow';
@@ -15,6 +15,7 @@ import { UpdateModal } from './components/UpdateModal';
 import { tmdbService, CURATED_CATALOG } from './services/tmdb';
 import { searchEverywhere, fetchCatalogPage } from './services/search';
 import { isRussianOrSoviet } from './services/contentFilter';
+import { deduplicateMediaItems } from './services/mediaDedupe';
 import { rezkaService } from './services/rezka';
 import { storageService } from './services/storage';
 import { MediaItem, MediaSource, Episode, PlaybackProgress, CatalogFilter } from './types/movie';
@@ -218,11 +219,8 @@ const MainAppContent: React.FC = () => {
       if (!items || items.length === 0) return;
       setNovelties(items);
       setLiveCatalogPool((prev) => {
-        const map = new Map<string, MediaItem>();
-        [...items, ...prev]
-          .filter((item) => !isRussianOrSoviet(item))
-          .forEach((item) => map.set(item.id.toString(), item));
-        return Array.from(map.values());
+        const merged = [...items, ...prev].filter((item) => !isRussianOrSoviet(item));
+        return deduplicateMediaItems(merged);
       });
     });
   }, []);
@@ -252,13 +250,10 @@ const MainAppContent: React.FC = () => {
     ]).then(([movies, series, anime, classics]) => {
       if (!active) return;
       setLiveCatalogPool((prev) => {
-        const map = new Map<string, MediaItem>();
-        [...prev, ...movies, ...series, ...anime, ...classics]
-          .filter((item) => !isRussianOrSoviet(item))
-          .forEach((item) => {
-            map.set(item.id.toString(), item);
-          });
-        return Array.from(map.values());
+        const merged = [...prev, ...movies, ...series, ...anime, ...classics].filter(
+          (item) => !isRussianOrSoviet(item)
+        );
+        return deduplicateMediaItems(merged);
       });
     });
     return () => {
@@ -321,13 +316,8 @@ const MainAppContent: React.FC = () => {
       const moreItems = await fetchCatalogPage(filter.category, nextPage, filter.genre);
       if (moreItems.length > 0) {
         setLiveCatalogPool((prev) => {
-          const map = new Map<string, MediaItem>();
-          [...prev, ...moreItems]
-            .filter((item) => !isRussianOrSoviet(item))
-            .forEach((item) => {
-              map.set(item.id.toString(), item);
-            });
-          return Array.from(map.values());
+          const merged = [...prev, ...moreItems].filter((item) => !isRussianOrSoviet(item));
+          return deduplicateMediaItems(merged);
         });
       }
       setCatalogPage(nextPage);
@@ -410,7 +400,9 @@ const MainAppContent: React.FC = () => {
     }
   };
 
-  const cleanHomePool = liveCatalogPool.filter((i) => !isRussianOrSoviet(i));
+  const cleanHomePool: MediaItem[] = useMemo(() => {
+    return deduplicateMediaItems(liveCatalogPool.filter((i) => !isRussianOrSoviet(i)));
+  }, [liveCatalogPool]);
   const heroCarouselItems =
     novelties.length > 0 ? novelties.slice(0, 10) : cleanHomePool.slice(0, 10);
   const filteredCatalog = tmdbService.filterAndSort(cleanHomePool, filter);
