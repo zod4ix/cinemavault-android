@@ -2,6 +2,8 @@
   "name": "cinemavault-app",
   "private": true,
   "version": "3.7.0",
+  "description": "CinemaVault PRO — 4K HDR Online Cinema & Live Sports",
+  "author": "CinemaVault PRO",
   "releaseNotes": "• 🎬 ОФІЦІЙНИЙ РЕЛІЗ 3.7.0: ІНТЕЛЕКТУАЛЬНИЙ ПІДБІР «СХОЖИХ КАРТИН» (РЕКОМЕНДАЦІЇ): у картці кожного фільму додано автоматичну секцію схожих фільмів та серіалів на основі аналізу режисера, провідного акторського складу, сюжету, франшизи та жанру зі зручними бейджами-підказками.\n• 👁️ ЧИСТИЙ ТА СТАБІЛЬНИЙ ПЛЕЄР: видалено застарілу кнопку «Око», яка блокувала керування у сторонніх iframe. Панелі тепер мають бездоганне плавне авто-приховування (3.8 с), зберігаючи повний доступ до таймлайну, аудіодоріжок та налаштувань за будь-якого дотику чи руху пульта.\n• 🛡️ 100% ПОВНОЕКРАННИЙ РЕЖИМ ТА ШВИДКИЙ ПЕРЕХІД: сусідня кнопка «Повний екран» стабільно повертає пристрій у ландшафтну орієнтацію, а перегляд схожих картин дозволяє миттєво запускати або відкривати новий фільм в один клік без виходу з картки.\n• 🚀 ОФІЦІЙНИЙ ЦИФРОВИЙ СЕРТИФІКАТ (net.cinemavault.pro): стабільна робота на Smart TV, планшетах, смартфонах та проєкторах із бездоганною цифровою репутацією.",
   "type": "module",
   "main": "electron/main.cjs",
@@ -20,31 +22,38 @@
   "build": {
     "appId": "net.cinemavault.pro",
     "productName": "CinemaVault PRO",
+    "npmRebuild": false,
     "artifactName": "CinemaVault-PRO-v${version}-${os}.${ext}",
     "directories": {
       "output": "release-desktop"
     },
     "files": [
       "dist/**/*",
-      "electron/**/*"
+      "electron/**/*",
+      "!node_modules/**/*"
     ],
     "win": {
       "target": [
-        "nsis",
-        "portable"
+        "nsis"
       ],
+      "artifactName": "CinemaVault-PRO-v${version}-Windows.${ext}",
       "icon": "electron/icon.png"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "runAfterFinish": true,
       "shortcutName": "CinemaVault PRO"
     },
     "mac": {
       "target": [
-        "dmg",
-        "zip"
+        "zip",
+        "dir"
       ],
+      "artifactName": "CinemaVault-PRO-v${version}-macOS.${ext}",
+      "identity": null,
       "icon": "electron/icon.png",
       "category": "public.app-category.entertainment"
     }
