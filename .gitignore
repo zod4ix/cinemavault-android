@@ -1,3 +1,10 @@
+# GitHub Workflows (requires workflow scope PAT)
+.github/
+
+# Desktop Release Artifacts
+release-desktop/
+*.blockmap
+
 # Dependencies
 node_modules/
 .pnp

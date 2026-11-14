@@ -4,13 +4,50 @@
   "version": "3.7.0",
   "releaseNotes": "• 🎬 ОФІЦІЙНИЙ РЕЛІЗ 3.7.0: ІНТЕЛЕКТУАЛЬНИЙ ПІДБІР «СХОЖИХ КАРТИН» (РЕКОМЕНДАЦІЇ): у картці кожного фільму додано автоматичну секцію схожих фільмів та серіалів на основі аналізу режисера, провідного акторського складу, сюжету, франшизи та жанру зі зручними бейджами-підказками.\n• 👁️ ЧИСТИЙ ТА СТАБІЛЬНИЙ ПЛЕЄР: видалено застарілу кнопку «Око», яка блокувала керування у сторонніх iframe. Панелі тепер мають бездоганне плавне авто-приховування (3.8 с), зберігаючи повний доступ до таймлайну, аудіодоріжок та налаштувань за будь-якого дотику чи руху пульта.\n• 🛡️ 100% ПОВНОЕКРАННИЙ РЕЖИМ ТА ШВИДКИЙ ПЕРЕХІД: сусідня кнопка «Повний екран» стабільно повертає пристрій у ландшафтну орієнтацію, а перегляд схожих картин дозволяє миттєво запускати або відкривати новий фільм в один клік без виходу з картки.\n• 🚀 ОФІЦІЙНИЙ ЦИФРОВИЙ СЕРТИФІКАТ (net.cinemavault.pro): стабільна робота на Smart TV, планшетах, смартфонах та проєкторах із бездоганною цифровою репутацією.",
   "type": "module",
+  "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "cap:sync": "npm run build && npx cap sync",
     "cap:open": "npx cap open android",
-    "cap:build": "cd android && gradlew.bat assembleRelease"
+    "cap:build": "cd android && gradlew.bat assembleRelease",
+    "electron:start": "electron .",
+    "build:win": "npm run build && electron-builder --win",
+    "build:mac": "npm run build && electron-builder --mac",
+    "build:desktop": "npm run build && electron-builder -mw"
+  },
+  "build": {
+    "appId": "net.cinemavault.pro",
+    "productName": "CinemaVault PRO",
+    "artifactName": "CinemaVault-PRO-v${version}-${os}.${ext}",
+    "directories": {
+      "output": "release-desktop"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "electron/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "CinemaVault PRO"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "electron/icon.png",
+      "category": "public.app-category.entertainment"
+    }
   },
   "dependencies": {
     "@capacitor/android": "^8.6.0",
@@ -31,6 +68,8 @@
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
+    "electron": "^45.3.2",
+    "electron-builder": "^26.18.0",
     "postcss": "^8.5.1",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.3",
