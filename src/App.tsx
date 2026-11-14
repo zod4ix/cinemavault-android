@@ -981,6 +981,8 @@ const MainAppContent: React.FC = () => {
       <MediaModal
         media={selectedMedia}
         onClose={() => setSelectedMedia(null)}
+        onSelectMedia={(item) => setSelectedMedia(item)}
+        favorites={favorites}
         onPlayOnline={(media, src, ep) => {
           setSelectedMedia(null);
           setActivePlayback({ media, source: src, episode: ep });

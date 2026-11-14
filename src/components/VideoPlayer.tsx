@@ -29,7 +29,6 @@ import {
   Gauge,
   Sun,
   Monitor,
-  EyeOff,
 } from 'lucide-react';
 import { MediaItem, AudioTrack, StreamQuality, StreamServer, TorrentItem } from '../types/movie';
 import { buildServers, ensureIds, resolveUaServer, probeServer, ServerHealth } from '../services/servers';
@@ -146,7 +145,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [picturePreset, setPicturePreset] = useState<
     'normal' | 'projector_bright' | 'cinema_hdr' | 'warm'
   >('normal');
-  const [cleanCinemaBarsHidden, setCleanCinemaBarsHidden] = useState<boolean>(false);
 
   // Detected internal voices & qualities from cross-origin iframe (Rezka / Ashdi / PlayerJS)
   const [iframeVoices, setIframeVoices] = useState<IframeVoiceItem[]>([]);
@@ -891,8 +889,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         return false;
       }
 
-      // 2. In fullscreen / clean cinema mode OR when player controls are auto-hidden:
-      if (!showControls || cleanCinemaBarsHidden) {
+      // 2. In fullscreen / auto-hidden controls mode:
+      if (!showControls) {
         if (key === 'ArrowLeft') {
           handleRemoteSeek(-10);
           return true;
@@ -935,7 +933,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       }
 
       // If controls are hidden / fullscreen: OK wakes up controls and toggles play/pause!
-      if (!showControls || cleanCinemaBarsHidden) {
+      if (!showControls) {
         resetControlsTimeout();
         togglePlay();
         return true;
@@ -964,7 +962,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     isVirtualCursorActive,
     activeMenu,
     showControls,
-    cleanCinemaBarsHidden,
     handleRemoteSeek,
     resetControlsTimeout,
     togglePlay,
@@ -994,16 +991,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         setActiveMenu('none');
         return true;
       }
-      // 3. If controls are showing and bars are not locked in clean mode, hide controls immediately!
-      if (showControls && !cleanCinemaBarsHidden) {
+      // 3. If controls are showing, hide controls immediately!
+      if (showControls) {
         setShowControls(false);
-        return true;
-      }
-      // 4. If bars were hidden in full screen ("Повний екран"), unhide bars!
-      if (cleanCinemaBarsHidden) {
-        setCleanCinemaBarsHidden(false);
-        setShowControls(true);
-        showOsd('Панель керування відновлено');
         return true;
       }
       // 4. If in Fullscreen or Landscape mode or HTML5 fullscreen, exit fullscreen!
@@ -1043,7 +1033,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     isVirtualCursorActive,
     activeMenu,
     showControls,
-    cleanCinemaBarsHidden,
     isFullscreen,
     isLandscapeLocked,
     showOsd,
@@ -1066,13 +1055,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           setActiveMenu('none');
           return;
         }
-        if (showControls && !cleanCinemaBarsHidden) {
+        if (showControls) {
           setShowControls(false);
-          return;
-        }
-        if (cleanCinemaBarsHidden) {
-          setCleanCinemaBarsHidden(false);
-          setShowControls(true);
           return;
         }
         if (isFullscreen || isLandscapeLocked || document.fullscreenElement) {
@@ -1200,7 +1184,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     activeMenu,
     isVirtualCursorActive,
     showControls,
-    cleanCinemaBarsHidden,
     onClose,
     resetControlsTimeout,
     togglePlay,
@@ -1268,9 +1251,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           ======================================================== */}
       <div
         className={`shrink-0 z-30 bg-[#07090e] border-b border-white/15 px-2.5 sm:px-5 py-1.5 sm:py-2 space-y-1.5 transition-all duration-300 ${
-          cleanCinemaBarsHidden
-            ? 'hidden'
-            : showControls
+          showControls
             ? 'opacity-100 max-h-48 pointer-events-auto'
             : 'opacity-0 max-h-0 py-0 border-b-0 overflow-hidden pointer-events-none'
         }`}
@@ -2477,26 +2458,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           </div>
         )}
 
-        {/* Floating Quick-Exit / Show Controls Button when bars are hidden (Auto-hides with OSD timeout, NEVER stays permanently!) */}
-        {cleanCinemaBarsHidden && showControls && (
-          <div className="absolute top-4 left-4 z-40 animate-fadeIn pointer-events-auto">
-            <button
-              type="button"
-              onClick={() => {
-                setCleanCinemaBarsHidden(false);
-                setShowControls(true);
-              }}
-              tabIndex={0}
-              data-nav-item="player-exit-clean"
-              className="px-4 py-2 rounded-2xl bg-black/85 hover:bg-red-600 active:scale-95 text-white font-black text-xs sm:text-sm flex items-center gap-2 border border-white/25 backdrop-blur-md shadow-2xl transition-all tv-btn-focus focus:outline-none"
-              title="Повернути панелі / Вийти з повного екрану (Назад / ESC / Стрілка)"
-            >
-              <RotateCcw className="w-4 h-4 text-amber-400" />
-              <span>{t('returnPanel')}</span>
-            </button>
-          </div>
-        )}
-
         {/* 1. TORRENT STREAMING VIEWPORT */}
         {activeServer?.mode === 'torrent' ? (
           <div className="relative w-full h-full flex items-center justify-center bg-black">
@@ -2613,9 +2574,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           ======================================================== */}
       <div
         className={`shrink-0 z-30 bg-[#07090e] border-t border-white/15 px-3 sm:px-5 py-2 space-y-2 transition-all duration-300 ${
-          cleanCinemaBarsHidden
-            ? 'hidden'
-            : showControls
+          showControls
             ? 'opacity-100 max-h-48 pointer-events-auto'
             : 'opacity-0 max-h-0 py-0 border-t-0 overflow-hidden pointer-events-none'
         }`}
@@ -2796,22 +2755,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               >
                 <Monitor className="w-3.5 h-3.5" />
                 <span>Масштаб</span>
-              </button>
-
-              {/* Clean Cinema Bars Hidden Mode */}
-              <button
-                type="button"
-                onClick={() => {
-                  setCleanCinemaBarsHidden(true);
-                  setShowControls(false);
-                  showOsd('🗖 Чистий кіноекран (натисніть будь-яку кнопку пульта для панелі)');
-                }}
-                tabIndex={0}
-                className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white border border-white/15 transition-all tv-btn-focus focus:outline-none"
-                title="Сховати панелі керування (Чистий кіноекран)"
-                aria-label="Сховати панелі керування"
-              >
-                <EyeOff className="w-4 h-4" />
               </button>
 
               {/* True Fullscreen / Rotate Orientation Button */}

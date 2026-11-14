@@ -203,6 +203,12 @@ const uk = {
   communityRating: 'Рейтинг глядачів',
   enterFullscreen: 'Повний екран',
   exitFullscreen: 'Звичайний екран',
+  similarMovies: 'Схожі картини',
+  similarMoviesSubtitle: 'Рекомендації за жанром, сюжетом, режисером та акторським складом',
+  sameDirectorReason: 'Режисер',
+  sameCastReason: 'У головній ролі',
+  sameFranchiseReason: 'Франшиза та всесвіт',
+  sameGenreReason: 'Схожий жанр',
 };
 
 export type TranslationKey = keyof typeof uk;
@@ -387,6 +393,12 @@ const en: Dict = {
   communityRating: 'Audience Rating',
   enterFullscreen: 'Fullscreen',
   exitFullscreen: 'Exit Fullscreen',
+  similarMovies: 'Similar Titles',
+  similarMoviesSubtitle: 'Recommendations by genre, plot, director and cast',
+  sameDirectorReason: 'Director',
+  sameCastReason: 'Starring',
+  sameFranchiseReason: 'Franchise & Universe',
+  sameGenreReason: 'Similar Genre',
 };
 
 const pl: Dict = {
@@ -568,6 +580,12 @@ const pl: Dict = {
   communityRating: 'Ocena widzów',
   enterFullscreen: 'Pełny ekran',
   exitFullscreen: 'Opuść pełny ekran',
+  similarMovies: 'Podobne tytuły',
+  similarMoviesSubtitle: 'Rekomendacje według gatunku, fabuły, reżysera i obsady',
+  sameDirectorReason: 'Reżyser',
+  sameCastReason: 'W roli głównej',
+  sameFranchiseReason: 'Franczyza i uniwersum',
+  sameGenreReason: 'Podobny gatunek',
 };
 
 const es: Dict = {
@@ -749,6 +767,12 @@ const es: Dict = {
   communityRating: 'Valoración del público',
   enterFullscreen: 'Pantalla completa',
   exitFullscreen: 'Salir de pantalla completa',
+  similarMovies: 'Títulos similares',
+  similarMoviesSubtitle: 'Recomendaciones por género, trama, director y reparto',
+  sameDirectorReason: 'Director',
+  sameCastReason: 'Protagonizada por',
+  sameFranchiseReason: 'Franquicia y universo',
+  sameGenreReason: 'Género similar',
 };
 
 const ru: Dict = {
@@ -930,6 +954,12 @@ const ru: Dict = {
   communityRating: 'Рейтинг зрителей',
   enterFullscreen: 'Полный экран',
   exitFullscreen: 'Обычный экран',
+  similarMovies: 'Похожие картины',
+  similarMoviesSubtitle: 'Рекомендации по жанру, сюжету, режиссёру и актёрскому составу',
+  sameDirectorReason: 'Режиссёр',
+  sameCastReason: 'В главной роли',
+  sameFranchiseReason: 'Франшиза и сюжет',
+  sameGenreReason: 'Похожий жанр',
 };
 
 export const translations: Record<SupportedLanguage, Dict> = { uk, en, pl, es, ru };

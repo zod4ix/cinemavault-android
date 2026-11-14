@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, Play, Heart, Download, Check, Wifi, HardDrive, 
-  Layers, Clock, Copy, Sparkles, Globe, Youtube, Loader2, Users, ExternalLink
+  Layers, Clock, Copy, Sparkles, Globe, Youtube, Loader2, Users, ExternalLink,
+  ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { MediaItem, Season, Episode, MediaSource, TorrentItem } from '../types/movie';
 import { tmdbService, createPosterFallback } from '../services/tmdb';
@@ -14,6 +15,8 @@ import { useOverview } from '../i18n/useOverview';
 import { ServerHealth } from '../services/servers';
 import { openExternalDownload } from '../services/updater';
 import { RatingFeedback } from './RatingFeedback';
+import { MediaCard } from './MediaCard';
+import { getSimilarMedia, SimilarMediaItem } from '../services/recommendations';
 
 interface MediaModalProps {
   media: MediaItem | null;
@@ -21,6 +24,8 @@ interface MediaModalProps {
   onPlayOnline: (media: MediaItem, source: MediaSource, episode?: Episode) => void;
   isFavorite: boolean;
   onToggleFavorite: (media: MediaItem) => void;
+  onSelectMedia?: (media: MediaItem) => void;
+  favorites?: MediaItem[];
 }
 
 export const MediaModal: React.FC<MediaModalProps> = ({
@@ -29,6 +34,8 @@ export const MediaModal: React.FC<MediaModalProps> = ({
   onPlayOnline,
   isFavorite,
   onToggleFavorite,
+  onSelectMedia,
+  favorites = [],
 }) => {
   const { t, tg, title } = useLanguage();
   const overview = useOverview(media);
@@ -45,7 +52,11 @@ export const MediaModal: React.FC<MediaModalProps> = ({
   const [serverHealth, setServerHealth] = useState<Record<string, ServerHealth>>({});
   const [sourceLangFilter, setSourceLangFilter] = useState<string>('all');
   const [torrentFilter, setTorrentFilter] = useState<string>('all');
+  const [similarItems, setSimilarItems] = useState<SimilarMediaItem[]>([]);
+  const [loadingSimilar, setLoadingSimilar] = useState<boolean>(false);
   const watchNowBtnRef = useRef<HTMLButtonElement>(null);
+  const modalScrollRef = useRef<HTMLDivElement>(null);
+  const similarRowRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!media) return;
@@ -121,6 +132,39 @@ export const MediaModal: React.FC<MediaModalProps> = ({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [media, onClose]);
+
+  // Load similar movies & recommendations based on genre, plot, director and cast
+  useEffect(() => {
+    if (!media) {
+      setSimilarItems([]);
+      return;
+    }
+    let isCancelled = false;
+    setLoadingSimilar(true);
+    getSimilarMedia(media, 20)
+      .then((items) => {
+        if (!isCancelled) {
+          setSimilarItems(items);
+          setLoadingSimilar(false);
+        }
+      })
+      .catch(() => {
+        if (!isCancelled) setLoadingSimilar(false);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [media]);
+
+  const scrollSimilar = (direction: 'left' | 'right') => {
+    if (!similarRowRef.current) return;
+    const scrollStep = Math.max(220, Math.round(similarRowRef.current.clientWidth * 0.7));
+    similarRowRef.current.scrollBy({
+      left: direction === 'left' ? -scrollStep : scrollStep,
+      behavior: 'smooth',
+    });
+  };
 
   if (!media) return null;
 
@@ -329,7 +373,7 @@ export const MediaModal: React.FC<MediaModalProps> = ({
         </div>
 
         {/* Modal Scrollable Body */}
-        <div className="p-4 sm:p-6 overflow-y-auto space-y-5 custom-scrollbar">
+        <div ref={modalScrollRef} className="p-4 sm:p-6 overflow-y-auto space-y-5 custom-scrollbar">
           {/* Metadata info */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs sm:text-sm text-slate-400">
             <div className="flex items-center gap-1.5 text-amber-400 font-bold">
@@ -755,6 +799,115 @@ export const MediaModal: React.FC<MediaModalProps> = ({
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ========================================================
+              СХОЖІ КАРТИНИ (ЗА ЖАНРОМ, СЮЖЕТОМ, РЕЖИСЕРОМ ТА АКТОРАМИ)
+              ======================================================== */}
+          {(loadingSimilar || similarItems.length > 0) && (
+            <div className="pt-6 border-t border-white/10 space-y-3.5">
+              <div className="flex items-center justify-between gap-2">
+                <div className="space-y-0.5 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                    <h3 className="text-sm sm:text-base font-extrabold text-white tracking-tight truncate">
+                      {t('similarMovies')}
+                    </h3>
+                    {similarItems.length > 0 && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">
+                        {similarItems.length}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-400 truncate">
+                    {t('similarMoviesSubtitle')}
+                  </p>
+                </div>
+
+                {/* Navigation Carousel Buttons */}
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => scrollSimilar('left')}
+                    tabIndex={0}
+                    aria-label="Попередні схожі"
+                    className="p-1.5 rounded-xl bg-white/5 hover:bg-red-600 active:bg-red-600 text-slate-300 hover:text-white transition-all tv-btn-focus focus:outline-none border border-white/10"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => scrollSimilar('right')}
+                    tabIndex={0}
+                    aria-label="Наступні схожі"
+                    className="p-1.5 rounded-xl bg-white/5 hover:bg-red-600 active:bg-red-600 text-slate-300 hover:text-white transition-all tv-btn-focus focus:outline-none border border-white/10"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Carousel container */}
+              <div
+                ref={similarRowRef}
+                data-nav-row="modal-similar-row"
+                className="flex items-start gap-3 sm:gap-3.5 overflow-x-auto pb-2 pt-1 scrollbar-none snap-x snap-mandatory"
+              >
+                {loadingSimilar && similarItems.length === 0 ? (
+                  Array.from({ length: 5 }).map((_, idx) => (
+                    <div
+                      key={`similar-skel-${idx}`}
+                      className="w-32 sm:w-40 shrink-0 space-y-2 animate-pulse"
+                    >
+                      <div className="aspect-[2/3] rounded-2xl bg-white/10" />
+                      <div className="h-3 bg-white/10 rounded w-4/5" />
+                      <div className="h-2.5 bg-white/5 rounded w-1/2" />
+                    </div>
+                  ))
+                ) : (
+                  similarItems.map((simItem) => {
+                    const isFav =
+                      favorites.some((f) => f.id.toString() === simItem.id.toString()) || false;
+                    return (
+                      <div
+                        key={simItem.id}
+                        className="w-32 sm:w-40 shrink-0 snap-start space-y-1.5"
+                      >
+                        <div className="relative group/card">
+                          <MediaCard
+                            media={simItem}
+                            onClick={(clicked) => {
+                              if (onSelectMedia) {
+                                onSelectMedia(clicked);
+                              }
+                              modalScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+                            }}
+                            onPlay={(clicked) => {
+                              rezkaService.resolveSources(clicked, 1, 1).then((resolvedSources) => {
+                                if (resolvedSources[0]) {
+                                  onPlayOnline(clicked, resolvedSources[0]);
+                                }
+                              });
+                            }}
+                            isFavorite={isFav}
+                            onToggleFavorite={onToggleFavorite}
+                          />
+                        </div>
+                        {simItem.matchReason && (
+                          <div
+                            className="px-2 py-0.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[10px] font-bold text-amber-300/90 flex items-center gap-1 shadow-sm"
+                            title={simItem.matchReason}
+                          >
+                            <Sparkles className="w-2.5 h-2.5 text-amber-400 shrink-0" />
+                            <span className="truncate">{simItem.matchReason}</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             </div>
           )}
         </div>
