@@ -17,10 +17,11 @@ export function buildServersForMedia(
   return buildServers(media, seasonNumber, episodeNumber);
 }
 
-const BEST_KEY = 'cinemavault_best_server';
+const BEST_KEY = 'cinemavault_best_server_v372';
 
 export function rememberWorkingServer(id: string) {
   try {
+    if (!id || id.startsWith('rezka-')) return;
     localStorage.setItem(BEST_KEY, id);
   } catch {
     // ignore
@@ -29,7 +30,9 @@ export function rememberWorkingServer(id: string) {
 
 function preferredServerId(): string | null {
   try {
-    return localStorage.getItem(BEST_KEY);
+    const val = localStorage.getItem(BEST_KEY);
+    if (val && val.startsWith('rezka-')) return null;
+    return val;
   } catch {
     return null;
   }
@@ -69,10 +72,11 @@ export const rezkaService = {
     const s = seasonNumber || 1;
     const e = episodeNumber || 1;
 
-    // ids + UA lookup in parallel (UA lookup is best-effort and capped at 5s)
-    await Promise.all([
-      ensureIds(media),
-      Promise.race([resolveUaServer(media, s), new Promise((r) => setTimeout(() => r(null), 5000))]),
+    // Resolve IDs first so Kinobox & UAKino lookups always have IMDb + TMDB IDs
+    await ensureIds(media);
+    await Promise.race([
+      resolveUaServer(media, s),
+      new Promise((r) => setTimeout(() => r(null), 4200)),
     ]);
 
     let servers = buildServers(media, s, e);
@@ -82,10 +86,10 @@ export const rezkaService = {
       healthMap = await probeServers(servers, (srv, h) => options.onHealth?.(srv.id, h));
       servers = orderByHealth(servers, healthMap);
 
-      // Prefer the server that worked last time if it is also healthy now
+      // Prefer the server that worked last time if it is healthy, but never displace direct UA Ashdi (#1)
       const pref = preferredServerId();
       const prefIdx = servers.findIndex((x) => x.id === pref && healthMap.get(x.id) === 'ok');
-      if (prefIdx > 0) {
+      if (prefIdx > 0 && servers[0]?.id !== 'ua-ashdi') {
         const [p] = servers.splice(prefIdx, 1);
         servers.unshift(p);
       }

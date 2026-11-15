@@ -15,9 +15,10 @@
       font-family: system-ui, -apple-system, sans-serif;
       overflow: hidden;
     }
-    .kinobox_player {
+    .kinobox_player, #direct-iframe {
       width: 100%;
       height: 100%;
+      border: none;
     }
     #fallback-msg {
       display: none;
@@ -38,8 +39,8 @@
 <body>
   <div class="kinobox_player"></div>
   <div id="fallback-msg">
-    <h3>Дзеркало Kinobox недоступне у вашій мережі</h3>
-    <p>Будь ласка, оберіть сусідній сервер угорі плеєра (<b>VidSrc PRO</b>, <b>VidLink 4K</b> або <b>AutoEmbed</b>) — вони працюють без VPN.</p>
+    <h3>Перемикання на резервне дзеркало...</h3>
+    <p>Дзеркало Kinobox недоступне у вашій мережі. Автоматичний перехід на сусідній робочий сервер...</p>
   </div>
 
   <script>
@@ -48,54 +49,122 @@
       var imdb = params.get('imdb') || '';
       var tmdb = params.get('tmdb') || '';
       var title = params.get('title') || '';
+      var season = params.get('season') || '';
+      var episode = params.get('episode') || '';
+      var reportedFatal = false;
 
-      var script = document.createElement('script');
-      script.src = 'https://kinobox.tv/static/kinobox.min.js';
-      script.async = true;
+      function notifyFatal(reason) {
+        if (reportedFatal) return;
+        reportedFatal = true;
+        document.getElementById('fallback-msg').style.display = 'flex';
+        try {
+          window.top.postMessage({
+            __cinemaPlayerBridge: true,
+            type: 'subframeFatalError',
+            reason: reason || 'kinoboxUnavailable'
+          }, '*');
+        } catch (e) {}
+      }
+
+      // First try direct Kinobox API to extract Ashdi / Voidboost / Alloha / Kodik iframe URLs directly
+      var apiUrl = 'https://api.kinobox.tv/api/players?';
+      var q = [];
+      if (imdb) q.push('imdb=' + encodeURIComponent(imdb));
+      if (tmdb) q.push('tmdb=' + encodeURIComponent(tmdb));
+      if (title) q.push('title=' + encodeURIComponent(title));
 
       var timeout = setTimeout(function () {
-        if (typeof window.kbox === 'undefined') {
-          document.getElementById('fallback-msg').style.display = 'flex';
+        var container = document.querySelector('.kinobox_player');
+        var hasIframe = container && container.querySelector('iframe');
+        if (!hasIframe) {
+          notifyFatal('kinoboxTimeout');
         }
-      }, 7000);
+      }, 4500);
 
-      script.onload = function () {
-        clearTimeout(timeout);
-        if (typeof window.kbox === 'function') {
-          var searchCfg = {};
-          if (imdb) searchCfg.imdb = imdb;
-          if (tmdb) searchCfg.tmdb = tmdb;
-          if (title) searchCfg.title = title;
+      function bootKinoboxScript() {
+        var script = document.createElement('script');
+        script.src = 'https://kinobox.tv/static/kinobox.min.js';
+        script.async = true;
 
-          window.kbox('.kinobox_player', {
-            search: searchCfg,
-            menu: {
-              enable: true,
-              default: 'menu_list',
-              mobile: 'menu_button',
-              format: '{N} :: {T} ({Q})'
-            },
-            players: {
-              ashdi: { enable: true, position: 1 },
-              voidboost: { enable: true, position: 2 },
-              alloha: { enable: true, position: 3 },
-              kodik: { enable: true, position: 4 },
-              collaps: { enable: true, position: 5 },
-              veoveo: { enable: true, position: 6 },
-              cdnmovies: { enable: true, position: 7 }
-            }
+        script.onload = function () {
+          if (typeof window.kbox === 'function') {
+            var searchCfg = {};
+            if (imdb) searchCfg.imdb = imdb;
+            if (tmdb) searchCfg.tmdb = tmdb;
+            if (title) searchCfg.title = title;
+
+            window.kbox('.kinobox_player', {
+              search: searchCfg,
+              menu: {
+                enable: true,
+                default: 'menu_list',
+                mobile: 'menu_button',
+                format: '{N} :: {T} ({Q})'
+              },
+              players: {
+                ashdi: { enable: true, position: 1 },
+                voidboost: { enable: true, position: 2 },
+                alloha: { enable: true, position: 3 },
+                kodik: { enable: true, position: 4 },
+                collaps: { enable: true, position: 5 },
+                veoveo: { enable: true, position: 6 },
+                cdnmovies: { enable: true, position: 7 }
+              }
+            });
+          } else {
+            notifyFatal('kinoboxInitFailed');
+          }
+        };
+
+        script.onerror = function () {
+          notifyFatal('kinoboxScriptBlocked');
+        };
+
+        document.body.appendChild(script);
+      }
+
+      fetch(apiUrl + q.join('&'))
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          var list = Array.isArray(data) ? data : (data && Array.isArray(data.data) ? data.data : []);
+          var valid = list.filter(function (p) {
+            if (!p || !p.iframeUrl || typeof p.iframeUrl !== 'string') return false;
+            var u = p.iframeUrl.toLowerCase();
+            var s = String(p.source || '').toLowerCase();
+            // Skip broken Collaps/Loadbox theme servers if alternatives exist
+            if (u.indexOf('loadbox') !== -1 || u.indexOf('namy.ws') !== -1 || s.indexOf('collaps') !== -1) return false;
+            return true;
           });
-        } else {
-          document.getElementById('fallback-msg').style.display = 'flex';
-        }
-      };
-
-      script.onerror = function () {
-        clearTimeout(timeout);
-        document.getElementById('fallback-msg').style.display = 'flex';
-      };
-
-      document.body.appendChild(script);
+          if (valid.length === 0) {
+            valid = list.filter(function (p) { return p && p.iframeUrl && typeof p.iframeUrl === 'string'; });
+          }
+          if (valid.length > 0) {
+            clearTimeout(timeout);
+            var priority = ['ashdi', 'voidboost', 'alloha', 'kodik', 'cdnmovies', 'veoveo', 'vibix'];
+            var best = null;
+            for (var i = 0; i < priority.length; i++) {
+              var key = priority[i];
+              best = valid.find(function (p) {
+                return String(p.source || '').toLowerCase().indexOf(key) !== -1 ||
+                       String(p.iframeUrl || '').toLowerCase().indexOf(key) !== -1;
+              });
+              if (best) break;
+            }
+            if (!best) best = valid[0];
+            var targetUrl = best.iframeUrl.indexOf('//') === 0 ? 'https:' + best.iframeUrl : best.iframeUrl;
+            if (season && episode) {
+              var sep = targetUrl.indexOf('?') === -1 ? '?' : '&';
+              targetUrl += sep + 'season=' + encodeURIComponent(season) + '&episode=' + encodeURIComponent(episode);
+            }
+            var container = document.querySelector('.kinobox_player');
+            container.innerHTML = '<iframe id="direct-iframe" scrolling="no" style="overflow:hidden;width:100%;height:100%;border:0;" src="' + targetUrl + '" allowfullscreen allow="autoplay; fullscreen; encrypted-media"></iframe>';
+          } else {
+            bootKinoboxScript();
+          }
+        })
+        .catch(function () {
+          bootKinoboxScript();
+        });
     })();
   </script>
 </body>

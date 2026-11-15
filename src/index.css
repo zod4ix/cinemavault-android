@@ -46,6 +46,48 @@ html, body, #root {
   position: relative;
   margin: 0;
   padding: 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) #07090e;
+}
+
+/* Global Desktop & WebView Scrollbar Adaptation — eliminates white Windows scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #07090e;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(239, 68, 68, 0.7);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Hide scrollbars completely when fullscreen player is open or inside iframes */
+body:has([data-cinema-player-fullscreen="true"]) {
+  overflow: hidden !important;
+}
+
+iframe {
+  overflow: hidden !important;
+  border: 0 !important;
+  scrollbar-width: none !important;
+}
+
+iframe::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
 /* Universal pointer feedback for mouse & air mouse */

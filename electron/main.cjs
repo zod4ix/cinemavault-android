@@ -3,13 +3,20 @@ const path = require('path');
 const http = require('http');
 const fs = require('fs');
 
-// Enable unrestricted media playback, HLS streaming & cross-origin API access
+// Enable unrestricted media playback, HLS streaming, DNS-over-HTTPS & ECH (ISP block bypass)
+app.commandLine.appendSwitch('no-sandbox');
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 app.commandLine.appendSwitch(
+  'enable-features',
+  'DnsOverHttps,EncryptedClientHello,TLS13EarlyData'
+);
+app.commandLine.appendSwitch(
   'disable-features',
-  'OutOfBlinkCors,BlockInsecurePrivateNetworkRequests,SameSiteByDefaultCookies,CookiesWithoutSameSiteMustBeSecure,CrossOriginOpenerPolicy'
+  'OutOfBlinkCors,BlockInsecurePrivateNetworkRequests,SameSiteByDefaultCookies,CookiesWithoutSameSiteMustBeSecure,CrossOriginOpenerPolicy,CrossOriginEmbedderPolicy'
 );
 app.commandLine.appendSwitch('ignore-certificate-errors');
+app.commandLine.appendSwitch('ignore-gpu-blocklist');
+app.commandLine.appendSwitch('enable-gpu-rasterization');
 
 const CLEAN_USER_AGENT =
   process.platform === 'darwin'
@@ -50,14 +57,82 @@ const TRUSTED_EXTERNAL_DOMAINS = [
   'buymeacoffee.com',
 ];
 
-// Universal Subframe Player Bridge (matches Android MainActivity.java)
+// Network-level AdBlock & Anti-Popunder filter list for streaming balancers & sports embeds
+const AD_BLOCK_DOMAINS = [
+  'doubleclick.net',
+  'googlesyndication.com',
+  'googleadservices.com',
+  'imasdk.googleapis.com',
+  'exoclick.com',
+  'exosrv.com',
+  'propellerads.com',
+  'propellerclick.com',
+  'popads.net',
+  'popcash.net',
+  'popmyads.com',
+  'adsterra.com',
+  'adsterratech.com',
+  'highperformanceformat.com',
+  'profitablecpmrate.com',
+  'hilltopads.net',
+  'clickadu.com',
+  'juicyads.com',
+  'trafficjunky.net',
+  'trafficstars.com',
+  'adsco.re',
+  'acint.net',
+  'betweendigital.com',
+  'bidgear.com',
+  'mgid.com',
+  'lentainform.com',
+  'an.yandex.ru',
+  'mc.yandex.ru',
+  'yabs.yandex.ru',
+  'adfox.ru',
+  'traforet.com',
+  'franecki.net',
+  'alocdn.com',
+  'cdn4ads.com',
+  'adtng.com',
+  'realsrv.com',
+  'tsyndicate.com',
+  'onclkds.com',
+  'pushame.com',
+  '1xbet',
+  'mostbet',
+  'parimatch',
+  'favbet',
+  'vavada',
+  'pin-up',
+  'slotoking',
+  'cosmolot',
+  'melbet',
+  'betwinner',
+];
+
+const AD_BLOCK_URL_REGEX =
+  /(\/vast(\.xml|\?|$)|\/preroll|\/midroll|\/popunder|\/clickunder|\/adserver|\/adtag|ima3\.js|gpt\.js|adsbygoogle\.js)/i;
+
+// Universal Subframe Player Bridge (matches Android MainActivity.java + AdBlock + Error Failover)
 const SUBFRAME_PLAYER_BRIDGE_JS = `(function(){
   if(window.__cinemaSubframeBridgeInstalled)return;
   window.__cinemaSubframeBridgeInstalled=true;
   var isSubframe=(window!==window.top);
   var audioCtx=null,gainNode=null,hookedVideo=null;
-  var preferUa=true,uaAutoAttempts=0,uaAutoSelected=false;
+  var preferredLang='ua',langAutoAttempts=0,langAutoSelected=false;
+  var fatalReported=false;
   var VOICE_SELECTORS='.b-translators__item, [data-translator_id], .pljs-menu li, [class*="translator"], [class*="voice"], select.pljs-audio option, select[name*="voice"] option, select[name*="audio"] option, [data-voice], .voice-btn, .audio-track-item, [data-audio]';
+
+  // 1. Block popup / tab-under openers & eliminate ugly scrollbars / error borders inside streaming subframes
+  if(isSubframe){
+    try{window.open=function(){return null;};}catch(e){}
+    try{
+      var st=document.createElement('style');
+      st.textContent='html,body{overflow:hidden!important;margin:0!important;padding:0!important;width:100%!important;height:100%!important;max-width:100vw!important;max-height:100vh!important;background:#000!important;border:none!important;outline:none!important;scrollbar-width:none!important;-ms-overflow-style:none!important;}*::-webkit-scrollbar{display:none!important;width:0!important;height:0!important;}[style*="dashed"]{border:none!important;}[id*="ad_"],[id*="ads_"],[class*="ad-banner"],[class*="ads-banner"],[class*="preroll"],[id*="preroll"],.pljs-ads,.vjs-ima-ad-container,.jw-flag-ads .jw-Overlay,a[href*="1xbet"],a[href*="mostbet"],a[href*="melbet"],a[href*="favbet"],a[href*="vavada"],a[href*="pin-up"],a[href*="casino"],iframe[src*="doubleclick"],iframe[src*="exoclick"],iframe[src*="adsterra"]{display:none!important;pointer-events:none!important;opacity:0!important;width:0!important;height:0!important;}';
+      (document.head||document.documentElement).appendChild(st);
+    }catch(e){}
+  }
+
   function getActiveVideo(){
     var vids=document.querySelectorAll('video');
     for(var i=0;i<vids.length;i++){if(vids[i].readyState>0||vids[i].src||vids[i].currentSrc)return vids[i];}
@@ -74,10 +149,10 @@ const SUBFRAME_PLAYER_BRIDGE_JS = `(function(){
     var out=[];
     try{
       var nodes=document.querySelectorAll(VOICE_SELECTORS);
-      for(var i=0;i<nodes.length&&out.length<20;i++){
+      for(var i=0;i<nodes.length&&out.length<24;i++){
         var el=nodes[i];
         var txt=(el.textContent||el.value||'').trim();
-        if(txt&&txt.length>1&&txt.length<50){
+        if(txt&&txt.length>1&&txt.length<55){
           var act=el.classList.contains('active')||el.classList.contains('selected')||el.getAttribute('aria-selected')==='true'||Boolean(el.selected);
           out.push({index:i,label:txt,active:act});
         }
@@ -89,7 +164,7 @@ const SUBFRAME_PLAYER_BRIDGE_JS = `(function(){
   function fireFullTapOnElement(el,cx,cy){
     if(!el)return;
     var now=Date.now();
-    if(now-lastTapTimestamp<400)return;
+    if(now-lastTapTimestamp<350)return;
     lastTapTimestamp=now;
     if(typeof cx!=='number'||typeof cy!=='number'||(cx<=15&&cy<=15)){
       var pt=getElementCenter(el);
@@ -113,16 +188,79 @@ const SUBFRAME_PLAYER_BRIDGE_JS = `(function(){
       }
     }catch(e){}
   }
-  function tryAutoSelectUaVoice(){
-    if(!preferUa||uaAutoSelected||uaAutoAttempts>12)return;
-    uaAutoAttempts++;
+
+  // 2. Auto-skip video pre-rolls & remove transparent click-hijack overlays
+  function sweepAdsAndPreRolls(){
+    if(!isSubframe)return;
     try{
+      var skipBtns=document.querySelectorAll('.pljs-skip, .vjs-skip-button, .jw-skipIcon, .jw-skip, [class*="skip-ad"], [id*="skip-ad"], [class*="ad-skip"]');
+      for(var i=0;i<skipBtns.length;i++){
+        var sb=skipBtns[i];
+        if(sb&&sb.offsetParent!==null){try{sb.click();}catch(e){}}
+      }
+      var allBtns=document.querySelectorAll('button, div, span, a');
+      for(var b=0;b<allBtns.length&&b<180;b++){
+        var txt=(allBtns[b].textContent||'').trim();
+        if(txt.length>=4&&txt.length<=28&&/^(пропустить рекламу|пропустити рекламу|skip ad|skip ads|пропустить|пропустити|закрыть рекламу|закрити рекламу)/i.test(txt)){
+          try{allBtns[b].click();}catch(e){}
+        }
+      }
+      // Remove invisible full-screen click-hijack anchors (<a target="_blank"> covering viewport)
+      var links=document.querySelectorAll('a[target="_blank"]');
+      for(var l=0;l<links.length;l++){
+        var r=links[l].getBoundingClientRect();
+        if(r.width>window.innerWidth*0.6&&r.height>window.innerHeight*0.6&&!links[l].querySelector('video')){
+          links[l].style.display='none';
+          links[l].style.pointerEvents='none';
+        }
+      }
+    }catch(e){}
+  }
+
+  // 3. Detect fatal player errors (themeLoadFailed, Error Code: 233011, 404, video not found)
+  function checkFatalPlayerErrors(){
+    if(!isSubframe||fatalReported)return;
+    try{
+      var v=getActiveVideo();
+      if(v&&v.readyState>=2&&!v.paused&&v.currentTime>0.5)return;
+      var bodyTxt=(document.body&&(document.body.innerText||document.body.textContent)||'').slice(0,2200);
+      if(!bodyTxt)return;
+      var fatalMatch=bodyTxt.match(/themeLoadFailed|не удалось загрузить тему|themeWrongVersion|Error Code:\s*233011|Error Code:\s*232\d+|Error Code:\s*102630|This video file cannot be played|Video not found|File not found|Відео не знайдено|Видео не найдено|Файл не найден|недоступно у вашому регіоні|not available in your country|502 Bad Gateway|503 Service Temporarily Unavailable/i);
+      if(fatalMatch){
+        fatalReported=true;
+        window.__cinemaFatalReason=fatalMatch[0];
+        try{if(document.body){document.body.style.opacity='0';document.body.style.border='none';}}catch(ex){}
+        var msg={
+          __cinemaPlayerBridge:true,
+          type:'subframeFatalError',
+          reason:fatalMatch[0],
+          href:window.location.href
+        };
+        try{window.top.postMessage(msg,'*');}catch(ex){}
+        try{if(window.parent&&window.parent!==window.top)window.parent.postMessage(msg,'*');}catch(ex){}
+      }
+    }catch(e){}
+  }
+
+  function getLangRegex(lang){
+    if(lang==='en')return /(eng|english|original|оригінал|оригинал|🇬🇧|🇺🇸)/i;
+    if(lang==='pl')return /(pol|polski|lektor|napisy|🇵🇱|\bpl\b)/i;
+    if(lang==='es')return /(esp|español|espanol|latino|castellano|🇪🇸|\bes\b)/i;
+    if(lang==='ru')return /(рус|rus|дубляж|lostfilm|hdrezka|red head|jaskier)/i;
+    return /(укр|ukr|ua\b|укра|дубляж|ashdi|дніпро|dnipro|толока|бабай|так треба|постмодерн)/i;
+  }
+
+  function tryAutoSelectPreferredVoice(){
+    if(!preferredLang||langAutoSelected||langAutoAttempts>12)return;
+    langAutoAttempts++;
+    try{
+      var rx=getLangRegex(preferredLang);
       var vList=scanVoices();
       if(vList&&vList.length>0){
-        var activeIsUa=vList.some(function(v){return v.active&&/(укр|ukr|ua\\b|укра|дубляж)/i.test(v.label);});
-        if(activeIsUa){uaAutoSelected=true;return;}
+        var activeMatches=vList.some(function(v){return v.active&&rx.test(v.label);});
+        if(activeMatches){langAutoSelected=true;return;}
         for(var j=0;j<vList.length;j++){
-          if(/(укр|ukr|ua\\b|укра|дубляж)/i.test(vList[j].label)){
+          if(rx.test(vList[j].label)){
             var allNodes=document.querySelectorAll(VOICE_SELECTORS);
             var targetNode=null;
             for(var k=0;k<allNodes.length;k++){
@@ -130,9 +268,11 @@ const SUBFRAME_PLAYER_BRIDGE_JS = `(function(){
             }
             if(!targetNode&&allNodes[vList[j].index])targetNode=allNodes[vList[j].index];
             if(targetNode){
-              uaAutoSelected=true;
+              langAutoSelected=true;
               fireFullTapOnElement(targetNode);
-              try{window.top.postMessage({__cinemaPlayerBridge:true,type:'uaVoiceAutoActivated',label:vList[j].label},'*');}catch(e){}
+              if(preferredLang==='ua'){
+                try{window.top.postMessage({__cinemaPlayerBridge:true,type:'uaVoiceAutoActivated',label:vList[j].label},'*');}catch(e){}
+              }
               return;
             }
           }
@@ -140,6 +280,7 @@ const SUBFRAME_PLAYER_BRIDGE_JS = `(function(){
       }
     }catch(e){}
   }
+
   function scanQualities(){
     var out=[];
     try{
@@ -175,6 +316,8 @@ const SUBFRAME_PLAYER_BRIDGE_JS = `(function(){
   }
   if(isSubframe){
     setInterval(function(){
+      sweepAdsAndPreRolls();
+      checkFatalPlayerErrors();
       var v=getActiveVideo();
       if(v&&!v.__cinemaHooked){
         v.__cinemaHooked=true;
@@ -183,7 +326,7 @@ const SUBFRAME_PLAYER_BRIDGE_JS = `(function(){
         v.addEventListener('play',reportState);
         v.addEventListener('pause',reportState);
       }
-      tryAutoSelectUaVoice();
+      tryAutoSelectPreferredVoice();
       if(v)reportState();
     },650);
   }
@@ -288,7 +431,12 @@ const SUBFRAME_PLAYER_BRIDGE_JS = `(function(){
       }
     }
     else if(cmd==='preferLanguage'){
-      if(d.lang==='ua'){preferUa=true;uaAutoAttempts=0;tryAutoSelectUaVoice();}
+      if(d.lang){
+        preferredLang=String(d.lang).toLowerCase();
+        langAutoAttempts=0;
+        langAutoSelected=false;
+        tryAutoSelectPreferredVoice();
+      }
     }
     else if(cmd==='selectInternalQuality'){
       var qTarget=String(d.quality||'').toLowerCase();
@@ -389,10 +537,58 @@ function setupNetworkInterceptors() {
   const ses = session.defaultSession;
   ses.setUserAgent(CLEAN_USER_AGENT);
 
-  // Clean User-Agent & smart Referer for streaming CDNs and YouTube embeds
+  const requestOrigins = new Map();
+
+  // 1. Network-level AdBlock & Tracker Shield (blocks popunders, casino banners, VAST pre-rolls)
+  ses.webRequest.onBeforeRequest((details, callback) => {
+    try {
+      const urlLower = (details.url || '').toLowerCase();
+      // Never block actual video segments, playlists, subtitles, or localhost
+      if (
+        urlLower.startsWith('http://127.0.0.1') ||
+        urlLower.startsWith('http://localhost') ||
+        urlLower.startsWith('file://') ||
+        urlLower.startsWith('devtools://') ||
+        urlLower.includes('.m3u8') ||
+        urlLower.includes('.mp4') ||
+        urlLower.includes('.m4s') ||
+        urlLower.includes('.ts?') ||
+        urlLower.endsWith('.ts') ||
+        urlLower.includes('.vtt') ||
+        urlLower.includes('.srt')
+      ) {
+        callback({ cancel: false });
+        return;
+      }
+
+      const parsed = new URL(details.url);
+      const host = parsed.hostname.toLowerCase();
+
+      const isBlockedDomain = AD_BLOCK_DOMAINS.some(
+        (domain) => host === domain || host.endsWith(`.${domain}`)
+      );
+      if (isBlockedDomain || AD_BLOCK_URL_REGEX.test(urlLower)) {
+        callback({ cancel: true });
+        return;
+      }
+    } catch (err) {
+      // Ignore URL parse errors
+    }
+    callback({ cancel: false });
+  });
+
+  // 2. Clean User-Agent & smart Referer/Origin for streaming CDNs, sports embeds, and YouTube
   ses.webRequest.onBeforeSendHeaders((details, callback) => {
     const requestHeaders = { ...details.requestHeaders };
     requestHeaders['User-Agent'] = CLEAN_USER_AGENT;
+
+    let incomingOrigin = '';
+    for (const k of Object.keys(requestHeaders)) {
+      if (k.toLowerCase() === 'origin' && requestHeaders[k]) {
+        incomingOrigin = String(requestHeaders[k]);
+        break;
+      }
+    }
 
     try {
       const targetUrl = new URL(details.url);
@@ -400,31 +596,105 @@ function setupNetworkInterceptors() {
       const isLocal = host === '127.0.0.1' || host === 'localhost';
 
       if (!isLocal) {
-        if (host.includes('youtube.com') || host.includes('youtube-nocookie.com') || host.includes('googlevideo.com')) {
+        let existingReferer = '';
+        for (const k of Object.keys(requestHeaders)) {
+          if (k.toLowerCase() === 'referer') {
+            existingReferer = String(requestHeaders[k] || '');
+            break;
+          }
+        }
+        const hasLocalOrEmptyReferer =
+          !existingReferer ||
+          existingReferer.includes('127.0.0.1') ||
+          existingReferer.includes('localhost') ||
+          existingReferer.startsWith('file:');
+
+        const hasLocalOrigin =
+          incomingOrigin.includes('127.0.0.1') ||
+          incomingOrigin.includes('localhost') ||
+          incomingOrigin.startsWith('file:') ||
+          incomingOrigin === 'null';
+
+        if (
+          host.includes('youtube.com') ||
+          host.includes('youtube-nocookie.com') ||
+          host.includes('googlevideo.com')
+        ) {
           requestHeaders['Referer'] = 'https://www.youtube.com/';
-          requestHeaders['Origin'] = 'https://www.youtube.com';
+          if (incomingOrigin) requestHeaders['Origin'] = 'https://www.youtube.com';
+        } else if (host.includes('ashdi')) {
+          if (hasLocalOrEmptyReferer) {
+            requestHeaders['Referer'] = 'https://uakino.best/';
+          }
+          if (hasLocalOrigin) {
+            requestHeaders['Origin'] = 'https://uakino.best';
+          }
+        } else if (host.includes('strmfree')) {
+          requestHeaders['Referer'] = 'https://strmfree.st/';
+          if (incomingOrigin) requestHeaders['Origin'] = 'https://strmfree.st';
         } else if (
-          host.includes('rezka') ||
-          host.includes('rezkify') ||
-          host.includes('hdrezka') ||
-          host.includes('ashdi') ||
-          host.includes('voidboost') ||
-          host.includes('kinobox')
+          host.includes('streamed') ||
+          host.includes('embedme') ||
+          host.includes('embedsports') ||
+          host.includes('vipstreams')
+        ) {
+          if (hasLocalOrEmptyReferer) {
+            requestHeaders['Referer'] = 'https://streamed.su/';
+          }
+          if (hasLocalOrigin) {
+            requestHeaders['Origin'] = 'https://streamed.su';
+          }
+        } else if (
+          hasLocalOrEmptyReferer &&
+          (host.includes('rezka') ||
+            host.includes('rezkify') ||
+            host.includes('hdrezka') ||
+            host.includes('loadbox') ||
+            host.includes('namy') ||
+            host.includes('embess') ||
+            host.includes('voidboost') ||
+            host.includes('kinobox') ||
+            host.includes('kodik') ||
+            host.includes('alloha') ||
+            host.includes('vidsrc') ||
+            host.includes('vidlink') ||
+            host.includes('videasy') ||
+            host.includes('autoembed') ||
+            host.includes('multiembed') ||
+            host.includes('embed.su') ||
+            host.includes('2embed') ||
+            host.includes('vidfast'))
         ) {
           requestHeaders['Referer'] = `${targetUrl.protocol}//${targetUrl.host}/`;
-          requestHeaders['Origin'] = `${targetUrl.protocol}//${targetUrl.host}`;
+          if (hasLocalOrigin) {
+            requestHeaders['Origin'] = `${targetUrl.protocol}//${targetUrl.host}`;
+          }
         }
       }
     } catch (err) {
       // Ignore malformed URLs
     }
 
+    // Track final outgoing Origin for clean CORS reflection in onHeadersReceived
+    for (const k of Object.keys(requestHeaders)) {
+      if (k.toLowerCase() === 'origin' && requestHeaders[k]) {
+        requestOrigins.set(details.id, String(requestHeaders[k]));
+        if (requestOrigins.size > 2000) {
+          const firstKey = requestOrigins.keys().next().value;
+          requestOrigins.delete(firstKey);
+        }
+        break;
+      }
+    }
+
     callback({ requestHeaders });
   });
 
-  // Strip X-Frame-Options / frame-ancestors CSP and inject permissive CORS headers
+  // 3. Strip X-Frame-Options / CSP and deduplicate CORS headers (fixes themeLoadFailed & JWPlayer 233011)
   ses.webRequest.onHeadersReceived((details, callback) => {
     const responseHeaders = { ...(details.responseHeaders || {}) };
+    const reqOrigin = requestOrigins.get(details.id);
+    requestOrigins.delete(details.id);
 
     for (const key of Object.keys(responseHeaders)) {
       const lower = key.toLowerCase();
@@ -434,7 +704,12 @@ function setupNetworkInterceptors() {
         lower === 'content-security-policy-report-only' ||
         lower === 'cross-origin-embedder-policy' ||
         lower === 'cross-origin-opener-policy' ||
-        lower === 'cross-origin-resource-policy'
+        lower === 'cross-origin-resource-policy' ||
+        lower === 'access-control-allow-origin' ||
+        lower === 'access-control-allow-credentials' ||
+        lower === 'access-control-allow-methods' ||
+        lower === 'access-control-allow-headers' ||
+        lower === 'access-control-expose-headers'
       ) {
         delete responseHeaders[key];
       }
@@ -445,10 +720,17 @@ function setupNetworkInterceptors() {
       const host = targetUrl.hostname.toLowerCase();
       const isLocal = host === '127.0.0.1' || host === 'localhost';
       if (!isLocal) {
-        responseHeaders['Access-Control-Allow-Origin'] = ['*'];
-        responseHeaders['Access-Control-Allow-Methods'] = ['GET, POST, PUT, DELETE, OPTIONS, HEAD'];
-        responseHeaders['Access-Control-Allow-Headers'] = ['*'];
-        responseHeaders['Access-Control-Expose-Headers'] = ['*'];
+        if (reqOrigin && reqOrigin !== 'null') {
+          responseHeaders['access-control-allow-origin'] = [reqOrigin];
+          responseHeaders['access-control-allow-credentials'] = ['true'];
+        } else {
+          responseHeaders['access-control-allow-origin'] = ['*'];
+        }
+        responseHeaders['access-control-allow-methods'] = [
+          'GET, POST, PUT, DELETE, OPTIONS, HEAD',
+        ];
+        responseHeaders['access-control-allow-headers'] = ['*'];
+        responseHeaders['access-control-expose-headers'] = ['*'];
       }
     } catch (err) {
       // Ignore
@@ -567,20 +849,51 @@ async function createWindow() {
     }
   });
 
-  // Inject Universal Subframe Player Bridge into main frame and all streaming subframes
-  mainWindow.webContents.on('did-frame-finish-load', () => {
+  const reportedFrameErrors = new Set();
+
+  const injectSubframeBridgeAll = () => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
     try {
-      const allFrames = mainWindow.webContents.mainFrame.framesInSubtree;
+      const mainFrame = mainWindow.webContents.mainFrame;
+      const allFrames = mainFrame.framesInSubtree;
       for (const frame of allFrames) {
         if (frame && !frame.isDestroyed()) {
           frame.executeJavaScript(SUBFRAME_PLAYER_BRIDGE_JS, true).catch(() => {});
+          if (frame !== mainFrame) {
+            frame
+              .executeJavaScript('window.__cinemaFatalReason || ""', true)
+              .then((reason) => {
+                if (reason && typeof reason === 'string' && !mainWindow.isDestroyed()) {
+                  const frameKey = `${frame.routingId}:${frame.url}:${reason}`;
+                  if (!reportedFrameErrors.has(frameKey)) {
+                    reportedFrameErrors.add(frameKey);
+                    const safeReason = JSON.stringify(reason);
+                    mainFrame
+                      .executeJavaScript(
+                        `window.postMessage({ __cinemaPlayerBridge: true, type: 'subframeFatalError', reason: ${safeReason} }, '*');`,
+                        true
+                      )
+                      .catch(() => {});
+                  }
+                }
+              })
+              .catch(() => {});
+          }
         }
       }
     } catch (err) {
       // Ignore frame injection errors on destroyed frames
     }
+  };
+
+  const bridgeWatchdogInterval = setInterval(injectSubframeBridgeAll, 1100);
+  mainWindow.on('closed', () => {
+    clearInterval(bridgeWatchdogInterval);
   });
+
+  // Inject Universal Subframe Player Bridge into main frame and all streaming subframes
+  mainWindow.webContents.on('dom-ready', injectSubframeBridgeAll);
+  mainWindow.webContents.on('did-frame-finish-load', injectSubframeBridgeAll);
 
   // Keyboard shortcuts (F11 fullscreen toggle, Ctrl+Shift+I DevTools in debug)
   mainWindow.webContents.on('before-input-event', (event, input) => {
@@ -660,6 +973,19 @@ if (!gotTheLock) {
   });
 
   app.whenReady().then(async () => {
+    try {
+      app.configureHostResolver({
+        enableBuiltInResolver: true,
+        secureDnsMode: 'automatic',
+        secureDnsServers: [
+          'https://cloudflare-dns.com/dns-query',
+          'https://dns.google/dns-query',
+          'https://dns.quad9.net/dns-query',
+        ],
+      });
+    } catch (err) {
+      // Ignore if host resolver options differ on current OS
+    }
     setupNetworkInterceptors();
     setupIpcHandlers();
     await startLocalStaticServer();

@@ -31,7 +31,14 @@ import {
   Monitor,
 } from 'lucide-react';
 import { MediaItem, AudioTrack, StreamQuality, StreamServer, TorrentItem } from '../types/movie';
-import { buildServers, ensureIds, resolveUaServer, probeServer, ServerHealth } from '../services/servers';
+import {
+  buildServers,
+  ensureIds,
+  resolveUaServer,
+  probeServer,
+  markServerDead,
+  ServerHealth,
+} from '../services/servers';
 import { rememberWorkingServer } from '../services/rezka';
 import { storageService } from '../services/storage';
 import { torrentService } from '../services/torrent';
@@ -180,22 +187,34 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [torrentStreams, setTorrentStreams] = useState<TorrentItem[]>([]);
   const [currentMagnet, setCurrentMagnet] = useState<string>(initialMagnet || '');
 
+  const failedServerIdsRef = useRef<Set<string>>(new Set());
+  const [osdMessage, setOsdMessage] = useState<string | null>(null);
+  const osdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showOsd = useCallback((msg: string) => {
+    if (osdTimerRef.current) clearTimeout(osdTimerRef.current);
+    setOsdMessage(msg);
+    osdTimerRef.current = setTimeout(() => setOsdMessage(null), 1750);
+  }, []);
+
   // Background ensure IDs + UA dubbing lookup for current season
   const [serversVersion, setServersVersion] = useState<number>(0);
   useEffect(() => {
     let active = true;
-    Promise.all([ensureIds(media), resolveUaServer(media, activeSeason)]).then(([_, ua]) => {
-      if (!active) return;
-      setServersVersion((v) => v + 1);
-      if (ua && !userExplicitlySelectedServerRef.current && !selectedServerId.includes('rezka')) {
-        setSelectedServerId(ua.id);
-        showOsd('🇺🇦 Знайдено український дубляж (Ashdi)');
-      }
-    });
+    ensureIds(media)
+      .then(() => resolveUaServer(media, activeSeason))
+      .then((ua) => {
+        if (!active) return;
+        setServersVersion((v) => v + 1);
+        if (ua && !userExplicitlySelectedServerRef.current && !failedServerIdsRef.current.has(ua.id)) {
+          setSelectedServerId(ua.id);
+          showOsd('🇺🇦 Знайдено український дубляж (Ashdi VIP)');
+        }
+      });
     return () => {
       active = false;
     };
-  }, [media, activeSeason]);
+  }, [media, activeSeason, showOsd]);
 
   // Live search torrents for this movie or episode
   useEffect(() => {
@@ -218,7 +237,14 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
     if (initialServers && initialServers.length > 0) {
       initialServers.forEach((s) => {
-        if (!map.has(s.id)) map.set(s.id, s);
+        if (
+          !map.has(s.id) &&
+          s.id !== 'rezka-ag' &&
+          s.id !== 'ua-kino-rezka' &&
+          !String(s.url || '').includes('loadbox.ws')
+        ) {
+          map.set(s.id, s);
+        }
       });
     }
 
@@ -267,7 +293,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       const tr = availableServers.find((s) => s.mode === 'trailer');
       if (tr) return tr.id;
     }
-    if (embedUrl) {
+    const directAshdi = availableServers.find((s) => s.id === 'ua-ashdi');
+    if (directAshdi) return directAshdi.id;
+    if (embedUrl && !embedUrl.includes('loadbox.ws') && !embedUrl.includes('namy.ws')) {
       const matched = availableServers.find(
         (s) => s.url && embedUrl.includes(s.url.split('?')[0])
       );
@@ -277,34 +305,17 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       (s) => s.id.startsWith('ua-') || s.id.includes('ashdi') || s.langs?.includes('UA')
     );
     if (uaServer) return uaServer.id;
-    return availableServers[0]?.id || 'vidlink';
+    return availableServers[0]?.id || 'ua-videasy';
   };
 
   const [selectedServerId, setSelectedServerId] = useState<string>(getInitialServerId);
   const activeServer =
     availableServers.find((s) => s.id === selectedServerId) || availableServers[0];
 
-  // Build effective embed URL with selected quality parameter
+  // Keep clean embed URL without mutating query parameters that break routers
   const effectiveEmbedUrl = useMemo(() => {
-    if (!activeServer?.url) return '';
-    if (activeServer.mode !== 'embed') return activeServer.url;
-    try {
-      const u = new URL(activeServer.url);
-      const qNum =
-        preferredQuality === '4K'
-          ? '2160'
-          : preferredQuality === '1080p'
-            ? '1080'
-            : preferredQuality === '720p'
-              ? '720'
-              : '480';
-      u.searchParams.set('quality', qNum);
-      return u.toString();
-    } catch {
-      const sep = activeServer.url.includes('?') ? '&' : '?';
-      return `${activeServer.url}${sep}quality=${preferredQuality}`;
-    }
-  }, [activeServer?.url, activeServer?.mode, preferredQuality]);
+    return activeServer?.url || '';
+  }, [activeServer?.url]);
 
   const nonEmbedQualities = qualities.filter((q) => !q.isEmbed);
   const [customStreamUrl, setCustomStreamUrl] = useState<string>('');
@@ -329,16 +340,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [showControls, setShowControls] = useState<boolean>(true);
   const [bufferedEnd, setBufferedEnd] = useState<number>(0);
   const [iframeLoading, setIframeLoading] = useState<boolean>(true);
-  const [osdMessage, setOsdMessage] = useState<string | null>(null);
 
   const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const osdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const showOsd = useCallback((msg: string) => {
-    if (osdTimerRef.current) clearTimeout(osdTimerRef.current);
-    setOsdMessage(msg);
-    osdTimerRef.current = setTimeout(() => setOsdMessage(null), 1750);
-  }, []);
 
   const formatTime = (sec: number): string => {
     if (!sec || !isFinite(sec) || sec < 0) return '00:00';
@@ -373,7 +376,34 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
   }, []);
 
-  // Listen for live telemetry from our Universal Subframe Player Bridge inside cross-origin iframes!
+  const switchToNextWorkingServer = useCallback(
+    (customReason?: string) => {
+      const embedServers = availableServers.filter((s) => s.mode === 'embed');
+      if (embedServers.length <= 1) return;
+      const currentIndex = embedServers.findIndex((s) => s.id === activeServer?.id);
+      let picked: StreamServer | undefined;
+      for (let step = 1; step < embedServers.length; step++) {
+        const cand = embedServers[(Math.max(0, currentIndex) + step) % embedServers.length];
+        if (!failedServerIdsRef.current.has(cand.id) && serverHealthMap[cand.id] !== 'dead') {
+          picked = cand;
+          break;
+        }
+      }
+      if (!picked) {
+        picked = embedServers[(Math.max(0, currentIndex) + 1) % embedServers.length];
+      }
+      if (picked && picked.id !== activeServer?.id) {
+        setSelectedServerId(picked.id);
+        setAutoFailoverMsg(
+          customReason || `${t('connectingTo')} ${picked.name}...`
+        );
+        setTimeout(() => setAutoFailoverMsg(null), 3200);
+      }
+    },
+    [availableServers, activeServer?.id, serverHealthMap, t]
+  );
+
+  // Listen for live telemetry and fatal error auto-failover from our Universal Subframe Player Bridge!
   useEffect(() => {
     const handleMessage = (e: MessageEvent) => {
       const data = e.data;
@@ -401,15 +431,31 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         if (Array.isArray(data.qualities) && data.qualities.length > 0) {
           setIframeQualities(data.qualities);
         }
+        if (
+          activeServer &&
+          typeof data.duration === 'number' &&
+          data.duration > 20 &&
+          typeof data.currentTime === 'number' &&
+          data.currentTime > 0.5
+        ) {
+          rememberWorkingServer(activeServer.id);
+        }
         setIframeLoading(false);
       } else if (data.type === 'uaVoiceAutoActivated' && data.label) {
         showOsd(`🇺🇦 Автоматично увімкнено дубляж: ${data.label}`);
+      } else if (data.type === 'subframeFatalError') {
+        if (activeServer && activeServer.mode === 'embed') {
+          markServerDead(activeServer.url);
+          failedServerIdsRef.current.add(activeServer.id);
+          setServerHealthMap((prev) => ({ ...prev, [activeServer.id]: 'dead' }));
+          switchToNextWorkingServer('⚡ Обхід блокування — автоперехід на робоче дзеркало...');
+        }
       }
     };
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [showOsd]);
+  }, [showOsd, activeServer, switchToNextWorkingServer]);
 
   // TV remote autofocus on mount: focus Language/Audio button so user can immediately navigate top bar or press Down to jump into the player!
   useEffect(() => {
@@ -445,13 +491,22 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
   }, [activeMenu]);
 
-  // Probe current active server health on mount or when switching
+  // Probe current active server health on mount or when switching; auto-failover if dead
   useEffect(() => {
     if (!activeServer || activeServer.mode !== 'embed') return;
+    let cancelled = false;
     probeServer(activeServer.url).then((h) => {
+      if (cancelled) return;
       setServerHealthMap((prev) => ({ ...prev, [activeServer.id]: h }));
+      if (h === 'dead') {
+        failedServerIdsRef.current.add(activeServer.id);
+        switchToNextWorkingServer('⚡ Дзеркало недоступне — автоперехід на робочий сервер...');
+      }
     });
-  }, [activeServer]);
+    return () => {
+      cancelled = true;
+    };
+  }, [activeServer, switchToNextWorkingServer]);
 
   // Ensure landscape lock is released when closing player
   useEffect(() => {
@@ -469,13 +524,15 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     setIframeVoices([]);
     setIframeQualities([]);
     if (activeServer) {
-      rememberWorkingServer(activeServer.id);
-      const isUa =
-        activeServer.id.startsWith('ua-') ||
-        activeServer.id.includes('ashdi') ||
-        activeServer.langs?.includes('UA');
-      if (isUa) {
+      const idLow = activeServer.id.toLowerCase();
+      if (idLow.startsWith('ua-') || idLow.includes('ashdi')) {
         sendIframeCommand('preferLanguage', { lang: 'ua' });
+      } else if (idLow.startsWith('pl-')) {
+        sendIframeCommand('preferLanguage', { lang: 'pl' });
+      } else if (idLow.startsWith('es-')) {
+        sendIframeCommand('preferLanguage', { lang: 'es' });
+      } else if (activeServer.langs?.includes('EN') && !activeServer.langs?.includes('UA')) {
+        sendIframeCommand('preferLanguage', { lang: 'en' });
       }
     }
   }, [effectiveEmbedUrl, activeServer?.id, sendIframeCommand]);
@@ -531,16 +588,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   }, [activeServer?.id, activeServer?.mode, activeServer?.magnet, activeServer?.url]);
 
   const switchToNextServer = () => {
-    const embedServers = availableServers.filter((s) => s.mode === 'embed');
-    if (embedServers.length <= 1) return;
-    const currentIndex = embedServers.findIndex((s) => s.id === activeServer?.id);
-    const nextIndex = (currentIndex + 1) % embedServers.length;
-    const nextServer = embedServers[nextIndex];
-    if (nextServer) {
-      setSelectedServerId(nextServer.id);
-      setAutoFailoverMsg(`${t('connectingTo')} ${nextServer.name}...`);
-      setTimeout(() => setAutoFailoverMsg(null), 3000);
-    }
+    switchToNextWorkingServer();
   };
 
   const scrollServersRow = (dir: 'left' | 'right') => {
@@ -1242,6 +1290,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   return (
     <div
       ref={containerRef}
+      data-cinema-player-fullscreen="true"
       onMouseMove={resetControlsTimeout}
       onClick={resetControlsTimeout}
       className="fixed inset-0 z-50 bg-black flex flex-col select-none overflow-hidden"
@@ -1453,15 +1502,20 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 onClick={toggleAndroidLandscape}
                 tabIndex={0}
                 className={`p-1.5 sm:p-2 rounded-xl text-xs font-bold flex items-center gap-1 border shrink-0 transition-all tv-btn-focus focus:outline-none ${
-                  isLandscapeLocked
+                  isLandscapeLocked || isFullscreen
                     ? 'bg-amber-500 text-slate-950 border-amber-400'
                     : 'bg-white/10 text-slate-200 border-white/15 hover:bg-white/20'
                 }`}
-                title={isLandscapeLocked ? t('rotateNormal') : t('rotateLandscape')}
+                title={isLandscapeLocked || isFullscreen ? 'Звичайний екран (F11 / F)' : 'Повний екран (F11 / F)'}
               >
                 <Smartphone
-                  className={`w-4 h-4 ${isLandscapeLocked ? 'rotate-90' : ''} transition-transform`}
+                  className={`w-4 h-4 sm:hidden ${isLandscapeLocked ? 'rotate-90' : ''} transition-transform`}
                 />
+                {isLandscapeLocked || isFullscreen ? (
+                  <Minimize className="w-4 h-4 hidden sm:block" />
+                ) : (
+                  <Maximize className="w-4 h-4 hidden sm:block" />
+                )}
               </button>
             </div>
           </div>
@@ -1721,11 +1775,23 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                       key={lf.id}
                       type="button"
                       onClick={() => {
+                        const isAlive = (s: StreamServer) =>
+                          !failedServerIdsRef.current.has(s.id) && serverHealthMap[s.id] !== 'dead';
+
                         if (lf.id === 'ua') {
                           setAudioLangFilter('ua');
-                          const uaCand = availableServers.find(
-                            (s) => s.id === 'rezka-ag' || s.id === 'ua-ashdi' || s.id.startsWith('ua-') || s.langs?.includes('UA') || s.id.includes('ashdi')
-                          );
+                          const uaCand =
+                            availableServers.find(
+                              (s) =>
+                                isAlive(s) &&
+                                (s.id === 'ua-ashdi' ||
+                                  s.id.startsWith('ua-') ||
+                                  s.id.startsWith('rezka-') ||
+                                  s.langs?.includes('UA'))
+                            ) ||
+                            availableServers.find(
+                              (s) => s.id.startsWith('ua-') || s.langs?.includes('UA')
+                            );
                           if (uaCand) {
                             userExplicitlySelectedServerRef.current = true;
                             setSelectedServerId(uaCand.id);
@@ -1736,37 +1802,67 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                         }
                         if (lf.id === 'en') {
                           setAudioLangFilter('en');
-                          const enCand = availableServers.find(
-                            (s) => s.id.includes('vidlink') || s.id.includes('vidsrc') || s.langs?.includes('EN')
-                          );
+                          const enCand =
+                            availableServers.find(
+                              (s) =>
+                                isAlive(s) &&
+                                (s.id.includes('vidlink') ||
+                                  s.id.includes('vidsrc') ||
+                                  s.id.includes('embed-su') ||
+                                  s.langs?.includes('EN'))
+                            ) || availableServers.find((s) => s.langs?.includes('EN'));
                           if (enCand) {
                             userExplicitlySelectedServerRef.current = true;
                             setSelectedServerId(enCand.id);
+                            sendIframeCommand('preferLanguage', { lang: 'en' });
                             showOsd(`🇬🇧 ${enCand.name}`);
                           }
                           return;
                         }
                         if (lf.id === 'pl') {
                           setAudioLangFilter('pl');
-                          const plCand = availableServers.find(
-                            (s) => s.id.startsWith('pl-') || s.langs?.includes('PL')
-                          );
+                          const plCand =
+                            availableServers.find(
+                              (s) => isAlive(s) && (s.id.startsWith('pl-') || s.langs?.includes('PL'))
+                            ) || availableServers.find((s) => s.id.startsWith('pl-') || s.langs?.includes('PL'));
                           if (plCand) {
                             userExplicitlySelectedServerRef.current = true;
                             setSelectedServerId(plCand.id);
+                            sendIframeCommand('preferLanguage', { lang: 'pl' });
                             showOsd(`🇵🇱 ${plCand.name}`);
                           }
                           return;
                         }
                         if (lf.id === 'es') {
                           setAudioLangFilter('es');
-                          const esCand = availableServers.find(
-                            (s) => s.id.startsWith('es-') || s.langs?.includes('ES')
-                          );
+                          const esCand =
+                            availableServers.find(
+                              (s) => isAlive(s) && (s.id.startsWith('es-') || s.langs?.includes('ES'))
+                            ) || availableServers.find((s) => s.id.startsWith('es-') || s.langs?.includes('ES'));
                           if (esCand) {
                             userExplicitlySelectedServerRef.current = true;
                             setSelectedServerId(esCand.id);
+                            sendIframeCommand('preferLanguage', { lang: 'es' });
                             showOsd(`🇪🇸 ${esCand.name}`);
+                          }
+                          return;
+                        }
+                        if (lf.id === 'multi') {
+                          setAudioLangFilter('multi');
+                          const multiCand =
+                            availableServers.find(
+                              (s) =>
+                                isAlive(s) &&
+                                (s.id.startsWith('rezka-') ||
+                                  s.id === 'videasy' ||
+                                  s.id === 'multiembed-vip' ||
+                                  s.langs?.includes('MULTI'))
+                            ) || availableServers.find((s) => s.langs?.includes('MULTI'));
+                          if (multiCand) {
+                            userExplicitlySelectedServerRef.current = true;
+                            setSelectedServerId(multiCand.id);
+                            sendIframeCommand('preferLanguage', { lang: 'ru' });
+                            showOsd(`🎭 ${multiCand.name}`);
                           }
                           return;
                         }
@@ -2519,6 +2615,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               key={effectiveEmbedUrl}
               src={effectiveEmbedUrl}
               title={title}
+              scrolling="no"
+              style={{ overflow: 'hidden' }}
               onLoad={() => {
                 setIframeLoading(false);
                 const isUa =
@@ -2529,8 +2627,15 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                   sendIframeCommand('preferLanguage', { lang: 'ua' });
                 }
               }}
+              onError={() => {
+                if (activeServer && activeServer.mode === 'embed') {
+                  markServerDead(activeServer.url);
+                  failedServerIdsRef.current.add(activeServer.id);
+                  switchToNextWorkingServer('⚡ Перемикання на доступний сервер...');
+                }
+              }}
               referrerPolicy="origin"
-              className="w-full h-full border-0 bg-black"
+              className="w-full h-full border-0 bg-black overflow-hidden"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
               allowFullScreen
             />

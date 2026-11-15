@@ -25,11 +25,54 @@ import {
   SportScannerStats,
   SportStreamNode,
 } from '../types/sports';
-import { sportsService } from '../services/sports';
+import { sportsService, resolveTeamLogo } from '../services/sports';
 
 interface SportsHubProps {
   onBackHome: () => void;
 }
+
+const TeamLogo: React.FC<{
+  team: NonNullable<SportEvent['homeTeam']>;
+  sport?: SportCategory;
+  size?: 'sm' | 'lg';
+}> = ({ team, sport = 'all', size = 'sm' }) => {
+  const resolvedSrc = resolveTeamLogo(team.name, team.logo, sport);
+  const [imgFailed, setImgFailed] = useState(false);
+
+  useEffect(() => {
+    setImgFailed(false);
+  }, [resolvedSrc, team.name]);
+
+  const abbr = (team.shortName || team.name || 'TM').slice(0, 3).toUpperCase();
+
+  if (!resolvedSrc || imgFailed) {
+    return (
+      <div
+        className={
+          size === 'lg'
+            ? 'w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-emerald-600/30 via-slate-800 to-slate-900 border border-emerald-400/40 flex items-center justify-center font-black text-base sm:text-lg text-emerald-300 shadow-inner shrink-0'
+            : 'w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-600/25 via-slate-800 to-slate-900 border border-white/15 flex items-center justify-center text-xs font-black text-emerald-300 shrink-0'
+        }
+      >
+        {abbr}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={resolvedSrc}
+      alt={team.name}
+      referrerPolicy="no-referrer"
+      onError={() => setImgFailed(true)}
+      className={
+        size === 'lg'
+          ? 'w-14 h-14 sm:w-16 sm:h-16 object-contain drop-shadow-lg shrink-0'
+          : 'w-9 h-9 object-contain drop-shadow shrink-0'
+      }
+    />
+  );
+};
 
 const SPORT_TABS: Array<{ id: SportCategory; label: string; icon: string }> = [
   { id: 'all', label: 'Усі події Live', icon: '🔥' },
@@ -125,33 +168,91 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
     setTimeout(() => setStreamHuntingMsg(null), 3500);
   };
 
-  // Native HLS (.m3u8) stream lifecycle with automatic self-healing recovery
+  // Listen for Subframe Fatal Errors (e.g. JWPlayer Error Code: 233011) and auto-switch stream node!
+  useEffect(() => {
+    if (!activePlayback) return;
+    const handleMessage = (e: MessageEvent) => {
+      const data = e.data;
+      if (!data || typeof data !== 'object' || !data.__cinemaPlayerBridge) return;
+      if (data.type === 'videoState') {
+        setIframeLoading(false);
+      } else if (data.type === 'subframeFatalError') {
+        switchToNextStreamNode('Потік зайнятий або недоступний');
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [activePlayback]);
+
+  // Connection watchdog: if an embed stream hangs on loading for >7.5s, auto-switch to next slot
+  useEffect(() => {
+    if (!activePlayback || !activeNode || !iframeLoading) return;
+    const timer = setTimeout(() => {
+      setIframeLoading(false);
+    }, 6500);
+    return () => clearTimeout(timer);
+  }, [activePlayback?.id, activeNode?.id, iframeLoading]);
+
+  // Native HLS (.m3u8) stream lifecycle with high-resilience buffer & self-healing recovery
   useEffect(() => {
     if (!activeNode || activeNode.mode !== 'hls') return;
     const video = videoRef.current;
     if (!video || !activeNode.url) return;
 
     setIframeLoading(true);
+    let hasStartedPlayback = false;
+    let networkRetryCount = 0;
 
     if (Hls.isSupported()) {
       if (hlsRef.current) hlsRef.current.destroy();
       const hls = new Hls({
         enableWorker: true,
-        lowLatencyMode: true,
-        backBufferLength: 30,
-        maxBufferLength: 30,
+        lowLatencyMode: false,
+        backBufferLength: 60,
+        maxBufferLength: 60,
+        maxMaxBufferLength: 120,
+        liveSyncDurationCount: 3,
+        liveMaxLatencyDurationCount: 10,
+        manifestLoadingTimeOut: 4500,
+        manifestLoadingMaxRetry: 2,
+        levelLoadingTimeOut: 5000,
+        levelLoadingMaxRetry: 3,
+        fragLoadingTimeOut: 8000,
+        fragLoadingMaxRetry: 4,
       });
       hlsRef.current = hls;
       hls.loadSource(activeNode.url);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        hasStartedPlayback = true;
+        networkRetryCount = 0;
         setIframeLoading(false);
         video.play().catch(() => {});
+      });
+      hls.on(Hls.Events.FRAG_BUFFERED, () => {
+        hasStartedPlayback = true;
+        networkRetryCount = 0;
+        setIframeLoading(false);
       });
       hls.on(Hls.Events.ERROR, (_ev, data) => {
         if (data.fatal) {
           if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
             hls.recoverMediaError();
+          } else if (
+            data.type === Hls.ErrorTypes.NETWORK_ERROR &&
+            hasStartedPlayback &&
+            networkRetryCount < 4
+          ) {
+            // Hold live stream without dropping on transient CDN hiccups
+            networkRetryCount += 1;
+            setTimeout(() => {
+              try {
+                hls.startLoad();
+                video.play().catch(() => {});
+              } catch {
+                // Ignore
+              }
+            }, 600);
           } else {
             // Auto-hunt next stream node ("до переможного!")
             switchToNextStreamNode('Потік зайнятий');
@@ -445,17 +546,7 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
               {heroEvent.homeTeam && heroEvent.awayTeam && (
                 <div className="bg-[#0d1424]/95 border border-white/15 rounded-3xl p-4 sm:p-6 shadow-2xl flex items-center justify-around gap-4 sm:gap-6 w-full lg:w-auto sm:min-w-[360px]">
                   <div className="flex flex-col items-center text-center gap-2 flex-1">
-                    {heroEvent.homeTeam.logo ? (
-                      <img
-                        src={heroEvent.homeTeam.logo}
-                        alt={heroEvent.homeTeam.name}
-                        className="w-14 h-14 sm:w-18 sm:h-18 object-contain drop-shadow-lg"
-                      />
-                    ) : (
-                      <div className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center font-black text-lg text-white">
-                        {heroEvent.homeTeam.shortName}
-                      </div>
-                    )}
+                    <TeamLogo team={heroEvent.homeTeam} sport={heroEvent.sport} size="lg" />
                     <span className="text-xs sm:text-sm font-extrabold text-white line-clamp-1">
                       {heroEvent.homeTeam.name}
                     </span>
@@ -476,17 +567,7 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
                   </div>
 
                   <div className="flex flex-col items-center text-center gap-2 flex-1">
-                    {heroEvent.awayTeam.logo ? (
-                      <img
-                        src={heroEvent.awayTeam.logo}
-                        alt={heroEvent.awayTeam.name}
-                        className="w-14 h-14 sm:w-18 sm:h-18 object-contain drop-shadow-lg"
-                      />
-                    ) : (
-                      <div className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center font-black text-lg text-white">
-                        {heroEvent.awayTeam.shortName}
-                      </div>
-                    )}
+                    <TeamLogo team={heroEvent.awayTeam} sport={heroEvent.sport} size="lg" />
                     <span className="text-xs sm:text-sm font-extrabold text-white line-clamp-1">
                       {heroEvent.awayTeam.name}
                     </span>
@@ -731,17 +812,7 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
                   {ev.homeTeam && ev.awayTeam ? (
                     <div className="my-2 py-3 px-3 rounded-xl bg-black/40 border border-white/5 flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                        {ev.homeTeam.logo ? (
-                          <img
-                            src={ev.homeTeam.logo}
-                            alt={ev.homeTeam.name}
-                            className="w-9 h-9 object-contain shrink-0"
-                          />
-                        ) : (
-                          <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center text-xs font-black">
-                            {ev.homeTeam.shortName}
-                          </div>
-                        )}
+                        <TeamLogo team={ev.homeTeam} sport={ev.sport} size="sm" />
                         <span className="text-xs sm:text-sm font-bold text-white truncate">
                           {ev.homeTeam.name}
                         </span>
@@ -757,17 +828,7 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
                         <span className="text-xs sm:text-sm font-bold text-white truncate">
                           {ev.awayTeam.name}
                         </span>
-                        {ev.awayTeam.logo ? (
-                          <img
-                            src={ev.awayTeam.logo}
-                            alt={ev.awayTeam.name}
-                            className="w-9 h-9 object-contain shrink-0"
-                          />
-                        ) : (
-                          <div className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center text-xs font-black">
-                            {ev.awayTeam.shortName}
-                          </div>
-                        )}
+                        <TeamLogo team={ev.awayTeam} sport={ev.sport} size="sm" />
                       </div>
                     </div>
                   ) : (
@@ -854,12 +915,32 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
                     </span>
                   </div>
 
-                  <div>
-                    <h3 className="text-sm sm:text-base font-extrabold text-white group-hover:text-amber-400 transition-colors">
-                      {ev.title}
-                    </h3>
-                    <p className="text-xs text-slate-400 mt-1">{ev.subtitle}</p>
-                  </div>
+                  {ev.homeTeam && ev.awayTeam ? (
+                    <div className="py-2.5 px-3 rounded-xl bg-black/30 border border-white/5 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <TeamLogo team={ev.homeTeam} sport={ev.sport} size="sm" />
+                        <span className="text-xs sm:text-sm font-bold text-white truncate">
+                          {ev.homeTeam.name}
+                        </span>
+                      </div>
+                      <span className="px-2 py-0.5 rounded bg-white/5 text-[11px] font-black text-slate-400 shrink-0">
+                        VS
+                      </span>
+                      <div className="flex items-center justify-end gap-2 min-w-0 flex-1 text-right">
+                        <span className="text-xs sm:text-sm font-bold text-white truncate">
+                          {ev.awayTeam.name}
+                        </span>
+                        <TeamLogo team={ev.awayTeam} sport={ev.sport} size="sm" />
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <h3 className="text-sm sm:text-base font-extrabold text-white group-hover:text-amber-400 transition-colors">
+                        {ev.title}
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-1">{ev.subtitle}</p>
+                    </div>
+                  )}
 
                   <div className="pt-2 border-t border-white/5 flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1 overflow-x-auto scrollbar-none">
@@ -895,7 +976,10 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
           Modeled after vinegret.net/nba-na-vinegret/
           ======================================================== */}
       {activePlayback && activeNode && (
-        <div className="fixed inset-0 z-50 bg-black flex flex-col select-none animate-fadeIn">
+        <div
+          data-cinema-player-fullscreen="true"
+          className="fixed inset-0 z-50 bg-black flex flex-col select-none overflow-hidden animate-fadeIn"
+        >
           {/* Top Control, Quick Match Selector & Stream Switcher Bar */}
           <div className="shrink-0 bg-[#070a12] border-b border-white/15 px-3 sm:px-5 py-2.5 space-y-2 z-30">
             <div
@@ -1057,9 +1141,11 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
                 key={activeNode.url}
                 src={activeNode.url}
                 title={activePlayback.title}
+                scrolling="no"
+                style={{ overflow: 'hidden' }}
                 onLoad={() => setIframeLoading(false)}
                 referrerPolicy="origin"
-                className="w-full h-full border-0 bg-black"
+                className="w-full h-full border-0 bg-black overflow-hidden"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
                 allowFullScreen
               />
