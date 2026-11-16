@@ -567,7 +567,7 @@ export const MediaModal: React.FC<MediaModalProps> = ({
                       return idLow.includes('ua-') || idLow.includes('ashdi') || idLow.includes('rezka') || idLow.includes('videasy');
                     }
                     if (sourceLangFilter === 'en') {
-                      return idLow.includes('vidlink') || idLow.includes('vidsrc') || idLow.includes('vidfast') || idLow.includes('2embed');
+                      return idLow.includes('vidlink') || idLow.includes('vidsrc') || idLow.includes('vidfast');
                     }
                     if (sourceLangFilter === 'pl') {
                       return idLow.includes('pl-') || idLow.includes('videasy') || idLow.includes('multiembed');

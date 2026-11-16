@@ -473,6 +473,12 @@ export function initSpatialNavigation(): () => void {
       (el as HTMLInputElement).readOnly = false;
       el.focus();
       el.click();
+      try {
+        if ((window as any).AndroidCinemaBridge && typeof (window as any).AndroidCinemaBridge.showKeyboard === 'function') {
+          (window as any).AndroidCinemaBridge.showKeyboard();
+        }
+      } catch (e) {}
+      window.dispatchEvent(new CustomEvent('cinema-input-focus', { detail: { target: el } }));
       return;
     }
 
@@ -698,6 +704,12 @@ export function initSpatialNavigation(): () => void {
       (interactive as HTMLInputElement).readOnly = false;
       interactive.focus();
       interactive.click();
+      try {
+        if ((window as any).AndroidCinemaBridge && typeof (window as any).AndroidCinemaBridge.showKeyboard === 'function') {
+          (window as any).AndroidCinemaBridge.showKeyboard();
+        }
+      } catch (e) {}
+      window.dispatchEvent(new CustomEvent('cinema-input-focus', { detail: { target: interactive } }));
       return 'clicked';
     }
 

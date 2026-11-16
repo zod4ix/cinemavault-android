@@ -21,6 +21,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
+import android.view.inputmethod.InputMethodManager;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceRequest;
@@ -1331,6 +1332,31 @@ public class MainActivity extends BridgeActivity {
     }
 
     public class CinemaJsBridge {
+        @JavascriptInterface
+        public void showKeyboard() {
+            runOnUiThread(() -> {
+                if (bridge == null || bridge.getWebView() == null) return;
+                WebView webView = bridge.getWebView();
+                webView.requestFocus();
+                InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+                if (imm != null) {
+                    imm.showSoftInput(webView, InputMethodManager.SHOW_FORCED);
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void hideKeyboard() {
+            runOnUiThread(() -> {
+                if (bridge == null || bridge.getWebView() == null) return;
+                WebView webView = bridge.getWebView();
+                InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+                if (imm != null) {
+                    imm.hideSoftInputFromWindow(webView.getWindowToken(), 0);
+                }
+            });
+        }
+
         @JavascriptInterface
         public void setPlayerFullscreen(boolean fullscreen) {
             if (fullscreen) {

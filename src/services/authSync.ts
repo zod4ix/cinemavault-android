@@ -162,13 +162,20 @@ class AuthSyncService {
     token: string,
     deviceName = 'Мій Пристрій'
   ): Promise<boolean> {
-    const rawClean = token.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    let extracted = token.trim();
+    if (extracted.includes('token=')) {
+      extracted = extracted.split('token=')[1].split('&')[0];
+    } else if (extracted.includes('/')) {
+      extracted = extracted.split('/').pop() || extracted;
+      extracted = extracted.replace('cinemavault_vault_sync_', '');
+    }
+    const rawClean = extracted.toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (!rawClean) return false;
     const cleanToken = rawClean.startsWith('CV')
-      ? `CV-${rawClean.slice(2)}`
+      ? `CV-${rawClean.slice(2, 8)}`
       : rawClean.length === 6
         ? `CV-${rawClean}`
-        : token.trim().toUpperCase();
+        : `CV-${rawClean.slice(0, 6)}`;
 
     try {
       const cloudData = await this.fetchCloudPayloadByToken(cleanToken);

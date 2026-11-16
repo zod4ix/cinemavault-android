@@ -633,19 +633,6 @@ const PROVIDERS: ProviderDef[] = [
     },
   },
   {
-    id: 'vidsrc-me',
-    name: '🌐 VidSrc ME (Global Backup)',
-    badge: 'HD',
-    langs: ['EN', 'MULTI', 'SUB'],
-    build: (c) => {
-      const q = c.imdb ? `imdb=${c.imdb}` : c.tmdb ? `tmdb=${c.tmdb}` : '';
-      if (!q) return null;
-      return c.series
-        ? `https://vidsrc.me/embed/tv?${q}&season=${c.s}&episode=${c.e}`
-        : `https://vidsrc.me/embed/movie?${q}`;
-    },
-  },
-  {
     id: 'vidsrc-su',
     name: '🌐 VidSrc SU (Fast CDN)',
     badge: 'HD',
@@ -655,18 +642,6 @@ const PROVIDERS: ProviderDef[] = [
         ? c.series
           ? `https://vidsrc.su/embed/tv/${c.tmdb}/${c.s}/${c.e}`
           : `https://vidsrc.su/embed/movie/${c.tmdb}`
-        : null,
-  },
-  {
-    id: '2embed',
-    name: '🌐 2Embed International',
-    badge: 'Backup HD',
-    langs: ['EN', 'MULTI'],
-    build: (c) =>
-      c.tmdb
-        ? c.series
-          ? `https://www.2embed.cc/embedtv/${c.tmdb}&s=${c.s}&e=${c.e}`
-          : `https://www.2embed.cc/embed/${c.tmdb}`
         : null,
   },
   {

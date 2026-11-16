@@ -15,6 +15,7 @@ import {
   Tv,
   Heart,
   History,
+  Keyboard,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { authSyncService, UserProfile } from '../services/authSync';
@@ -25,6 +26,131 @@ interface AuthModalProps {
   onClose: () => void;
   onDataSync?: () => void;
 }
+
+const TvVirtualKeyboard: React.FC<{
+  onKeyPress: (char: string) => void;
+  onBackspace: () => void;
+  onClear: () => void;
+  onClose: () => void;
+  onPreset: (text: string) => void;
+  activeInputName: string;
+}> = ({ onKeyPress, onBackspace, onClear, onClose, onPreset, activeInputName }) => {
+  const [caps, setCaps] = useState<boolean>(false);
+  const rows = [
+    ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '_'],
+    ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
+    ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
+    ['z', 'x', 'c', 'v', 'b', 'n', 'm', '.', '@', '/'],
+  ];
+
+  return (
+    <div
+      data-nav-row="virtual-keyboard"
+      className="p-3 sm:p-4 rounded-2xl bg-[#070b16] border border-blue-500/40 space-y-2 shadow-2xl animate-fadeIn select-none"
+    >
+      <div className="flex items-center justify-between gap-2 pb-2 border-b border-white/10 text-xs">
+        <span className="font-extrabold text-blue-400 flex items-center gap-1.5 truncate">
+          <Keyboard className="w-4 h-4 shrink-0" />
+          <span>Екранна клавіатура для пульта ТВ ({activeInputName})</span>
+        </span>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => setCaps(!caps)}
+            tabIndex={0}
+            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors tv-btn-focus focus:outline-none ${
+              caps ? 'bg-blue-600 text-white border-blue-400' : 'bg-white/10 text-slate-300 border-white/10'
+            }`}
+          >
+            {caps ? '🔠 ВЕЛИКІ' : '🔡 малі'}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            tabIndex={0}
+            className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-red-600 text-slate-300 hover:text-white text-[11px] font-bold border border-white/10 transition-colors tv-btn-focus focus:outline-none"
+          >
+            ✕ Закрити
+          </button>
+        </div>
+      </div>
+
+      {/* Quick Smart Presets */}
+      <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+        <span className="text-[10px] text-slate-400 uppercase font-mono mr-1">Швидкі пресети:</span>
+        {['@gmail.com', 'CV-', '.com', '.ua', '.net'].map((p) => (
+          <button
+            key={p}
+            type="button"
+            onClick={() => onPreset(p)}
+            tabIndex={0}
+            className="px-2 py-1 rounded-lg bg-white/5 hover:bg-blue-600/40 text-[11px] font-mono font-bold text-blue-300 border border-white/10 hover:border-blue-400/50 transition-colors tv-btn-focus focus:outline-none"
+          >
+            {p}
+          </button>
+        ))}
+      </div>
+
+      {/* Keyboard Keys Rows */}
+      <div className="space-y-1 pt-1">
+        {rows.map((row, rIdx) => (
+          <div key={rIdx} className="flex items-center justify-center gap-1 sm:gap-1.5 flex-wrap">
+            {row.map((ch) => {
+              const displayChar = caps ? ch.toUpperCase() : ch;
+              return (
+                <button
+                  key={ch}
+                  type="button"
+                  onClick={() => onKeyPress(displayChar)}
+                  tabIndex={0}
+                  className="min-w-[26px] sm:min-w-[34px] h-9 px-1.5 rounded-lg bg-[#11192e] hover:bg-blue-600 active:bg-blue-600 text-white text-xs sm:text-sm font-bold border border-white/10 hover:border-blue-400 transition-all active:scale-95 tv-btn-focus focus:outline-none flex items-center justify-center"
+                >
+                  {displayChar}
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+
+      {/* Action Row */}
+      <div className="flex items-center justify-between gap-2 pt-1 border-t border-white/10">
+        <button
+          type="button"
+          onClick={onClear}
+          tabIndex={0}
+          className="px-3 py-1.5 rounded-xl bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white text-xs font-bold border border-red-500/30 transition-colors tv-btn-focus focus:outline-none"
+        >
+          Очистити
+        </button>
+        <button
+          type="button"
+          onClick={() => onKeyPress(' ')}
+          tabIndex={0}
+          className="flex-1 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/10 transition-colors tv-btn-focus focus:outline-none text-center"
+        >
+          ␣ Пробіл (Space)
+        </button>
+        <button
+          type="button"
+          onClick={onBackspace}
+          tabIndex={0}
+          className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-600 text-amber-300 hover:text-white text-xs font-bold border border-amber-500/30 transition-colors tv-btn-focus focus:outline-none"
+        >
+          ⌫ Стерти
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          tabIndex={0}
+          className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold border border-emerald-400 shadow transition-colors tv-btn-focus focus:outline-none"
+        >
+          ✓ Готово
+        </button>
+      </div>
+    </div>
+  );
+};
 
 export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onDataSync }) => {
   const [profile, setProfile] = useState<UserProfile | null>(authSyncService.getProfile());
@@ -42,7 +168,79 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onDataSyn
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  // Smart TV & Projector Remote Virtual Keyboard State
+  const [showTvKeyboard, setShowTvKeyboard] = useState<boolean>(false);
+  const [activeField, setActiveField] = useState<'email' | 'name' | 'pin' | 'token' | 'backup'>('email');
+
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const triggerFieldFocus = (field: 'email' | 'name' | 'pin' | 'token' | 'backup') => {
+    setActiveField(field);
+    try {
+      if ((window as any).AndroidCinemaBridge && typeof (window as any).AndroidCinemaBridge.showKeyboard === 'function') {
+        (window as any).AndroidCinemaBridge.showKeyboard();
+      }
+    } catch {}
+  };
+
+  const handleVirtualKeyPress = (char: string) => {
+    if (activeField === 'email') setGoogleEmail((prev) => prev + char);
+    else if (activeField === 'name') setGoogleName((prev) => prev + char);
+    else if (activeField === 'pin') setGooglePin((prev) => prev + char);
+    else if (activeField === 'token') setInputSyncToken((prev) => (prev + char).toUpperCase());
+    else if (activeField === 'backup') setImportJsonText((prev) => prev + char);
+  };
+
+  const handleVirtualBackspace = () => {
+    if (activeField === 'email') setGoogleEmail((prev) => prev.slice(0, -1));
+    else if (activeField === 'name') setGoogleName((prev) => prev.slice(0, -1));
+    else if (activeField === 'pin') setGooglePin((prev) => prev.slice(0, -1));
+    else if (activeField === 'token') setInputSyncToken((prev) => prev.slice(0, -1));
+    else if (activeField === 'backup') setImportJsonText((prev) => prev.slice(0, -1));
+  };
+
+  const handleVirtualClear = () => {
+    if (activeField === 'email') setGoogleEmail('');
+    else if (activeField === 'name') setGoogleName('');
+    else if (activeField === 'pin') setGooglePin('');
+    else if (activeField === 'token') setInputSyncToken('');
+    else if (activeField === 'backup') setImportJsonText('');
+  };
+
+  const handleVirtualPreset = (preset: string) => {
+    if (activeField === 'email') {
+      if (preset.startsWith('@') && googleEmail.includes('@')) {
+        const username = googleEmail.split('@')[0];
+        setGoogleEmail(username + preset);
+      } else {
+        setGoogleEmail((prev) => prev + preset);
+      }
+    } else if (activeField === 'token') {
+      if (preset === 'CV-') {
+        setInputSyncToken((prev) => (prev.startsWith('CV-') ? prev : 'CV-' + prev.replace(/^CV-?/i, '')));
+      } else {
+        setInputSyncToken((prev) => (prev + preset).toUpperCase());
+      }
+    } else {
+      handleVirtualKeyPress(preset);
+    }
+  };
+
+  useEffect(() => {
+    const handleCinemaInputFocus = (e: any) => {
+      const target = e.detail?.target as HTMLElement | undefined;
+      if (!target) return;
+      if (target.getAttribute('type') === 'email' || target.getAttribute('placeholder')?.includes('email')) {
+        setActiveField('email');
+      } else if (target.getAttribute('placeholder')?.includes('CV-')) {
+        setActiveField('token');
+      } else if (target.getAttribute('type') === 'password') {
+        setActiveField('pin');
+      }
+    };
+    window.addEventListener('cinema-input-focus', handleCinemaInputFocus);
+    return () => window.removeEventListener('cinema-input-focus', handleCinemaInputFocus);
+  }, []);
 
   useEffect(() => {
     return authSyncService.subscribe((p) => {
@@ -405,6 +603,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onDataSyn
                       <input
                         type="email"
                         value={googleEmail}
+                        onFocus={() => triggerFieldFocus('email')}
+                        onClick={() => triggerFieldFocus('email')}
                         onChange={(e) => setGoogleEmail(e.target.value)}
                         placeholder="vash.email@gmail.com"
                         className="w-full px-4 py-3 rounded-xl bg-black/50 border border-white/15 focus:border-blue-500 focus:outline-none text-sm text-white placeholder-slate-500"
@@ -415,6 +615,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onDataSyn
                       <input
                         type="text"
                         value={googleName}
+                        onFocus={() => triggerFieldFocus('name')}
+                        onClick={() => triggerFieldFocus('name')}
                         onChange={(e) => setGoogleName(e.target.value)}
                         placeholder="Ваше ім'я (необов'язково)"
                         className="w-full px-3.5 py-2.5 rounded-xl bg-black/40 border border-white/10 focus:border-blue-500 focus:outline-none text-xs text-white placeholder-slate-500"
@@ -422,6 +624,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onDataSyn
                       <input
                         type="password"
                         value={googlePin}
+                        onFocus={() => triggerFieldFocus('pin')}
+                        onClick={() => triggerFieldFocus('pin')}
                         onChange={(e) => setGooglePin(e.target.value)}
                         placeholder="Секретний PIN (необов'язково)"
                         className="w-full px-3.5 py-2.5 rounded-xl bg-black/40 border border-white/10 focus:border-blue-500 focus:outline-none text-xs text-white placeholder-slate-500"
@@ -443,6 +647,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onDataSyn
                         </>
                       )}
                     </button>
+
+                    {/* Smart TV & Projector Remote Virtual Keyboard Toggle */}
+                    <button
+                      type="button"
+                      onClick={() => setShowTvKeyboard(!showTvKeyboard)}
+                      tabIndex={0}
+                      className="w-full py-2.5 px-3 rounded-xl bg-white/5 hover:bg-blue-600/30 border border-white/10 hover:border-blue-400 text-xs font-bold text-slate-300 hover:text-white flex items-center justify-center gap-2 transition-all tv-btn-focus focus:outline-none"
+                    >
+                      <Keyboard className="w-4 h-4 text-blue-400" />
+                      <span>{showTvKeyboard ? 'Приховати екранну клавіатуру' : '⌨️ Екранна клавіатура для пульта ТВ / Проєктора'}</span>
+                    </button>
+
+                    {showTvKeyboard && (
+                      <TvVirtualKeyboard
+                        activeInputName={activeField === 'email' ? 'Email' : activeField === 'name' ? "Ім'я" : 'PIN'}
+                        onKeyPress={handleVirtualKeyPress}
+                        onBackspace={handleVirtualBackspace}
+                        onClear={handleVirtualClear}
+                        onPreset={handleVirtualPreset}
+                        onClose={() => setShowTvKeyboard(false)}
+                      />
+                    )}
                   </form>
                 </div>
               )}
@@ -490,12 +716,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onDataSyn
                   Підключити цей пристрій за кодом з іншого девайса:
                 </label>
                 <p className="text-xs text-slate-400">
-                  Введіть код формату <span className="font-mono text-amber-300">CV-XXXXXX</span>, щоб миттєво завантажити обране та історію переглядів:
+                  Введіть код або адресу синхронізації формату <span className="font-mono text-amber-300">CV-XXXXXX</span>, щоб миттєво об’єднати пристрої:
                 </p>
                 <div className="flex gap-2">
                   <input
                     type="text"
                     value={inputSyncToken}
+                    onFocus={() => triggerFieldFocus('token')}
+                    onClick={() => triggerFieldFocus('token')}
                     onChange={(e) => setInputSyncToken(e.target.value.toUpperCase())}
                     placeholder="CV-XXXXXX"
                     className="flex-1 px-4 py-3 rounded-xl bg-black/50 border border-white/15 focus:border-amber-400 focus:outline-none text-sm text-center font-mono font-black tracking-widest text-amber-300 placeholder-slate-600"
@@ -509,6 +737,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onDataSyn
                     Підключити
                   </button>
                 </div>
+
+                {/* Smart TV & Projector Remote Virtual Keyboard Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setShowTvKeyboard(!showTvKeyboard)}
+                  tabIndex={0}
+                  className="w-full py-2.5 px-3 rounded-xl bg-white/5 hover:bg-amber-500/30 border border-white/10 hover:border-amber-400 text-xs font-bold text-slate-300 hover:text-white flex items-center justify-center gap-2 transition-all tv-btn-focus focus:outline-none"
+                >
+                  <Keyboard className="w-4 h-4 text-amber-400" />
+                  <span>{showTvKeyboard ? 'Приховати екранну клавіатуру' : '⌨️ Екранна клавіатура для пульта ТВ / Проєктора'}</span>
+                </button>
+
+                {showTvKeyboard && (
+                  <TvVirtualKeyboard
+                    activeInputName="Код / Адреса синхронізації"
+                    onKeyPress={handleVirtualKeyPress}
+                    onBackspace={handleVirtualBackspace}
+                    onClear={handleVirtualClear}
+                    onPreset={handleVirtualPreset}
+                    onClose={() => setShowTvKeyboard(false)}
+                  />
+                )}
               </form>
             </div>
           )}
@@ -582,6 +832,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onDataSyn
                   <div className="space-y-2 pt-2">
                     <textarea
                       value={importJsonText}
+                      onFocus={() => triggerFieldFocus('backup')}
+                      onClick={() => triggerFieldFocus('backup')}
                       onChange={(e) => setImportJsonText(e.target.value)}
                       rows={4}
                       placeholder='Вставте сюди скопійований JSON резервної копії {"app": "CinemaVault PRO"...}'

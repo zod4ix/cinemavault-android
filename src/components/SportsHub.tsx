@@ -118,12 +118,13 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   const channelsRowRef = useRef<HTMLDivElement>(null);
   const tabsRowRef = useRef<HTMLDivElement>(null);
 
-  // Load & auto-refresh live events every 60 seconds
-  const loadSportsData = async (force = false) => {
-    if (force) setIsRefreshing(true);
+  // Load & auto-refresh live events every 60 seconds (localized silent updates)
+  const loadSportsData = async (force = false, isSilent = false) => {
+    if (force && !isSilent) setIsRefreshing(true);
     setScanStageText('Сканування безкоштовних live-потоків (1080p FHD / HLS / Повні матчі)...');
     try {
       const list = await sportsService.getEvents(force);
@@ -135,16 +136,33 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
       setScanStageText(
         `Сканер активний: ${stats.totalFreeStreams} безкоштовних потоків • ${stats.liveMatchesCount} LIVE матчів • 100% Free`
       );
+
+      // Localized background update: silently sync metadata on active playback WITHOUT interrupting stream
+      setActivePlayback((prev) => {
+        if (!prev) return null;
+        const fresh = list.find((e) => e.id === prev.id);
+        if (fresh) {
+          return {
+            ...prev,
+            homeTeam: fresh.homeTeam || prev.homeTeam,
+            awayTeam: fresh.awayTeam || prev.awayTeam,
+            statusText: fresh.statusText || prev.statusText,
+            viewers: fresh.viewers !== undefined ? fresh.viewers : prev.viewers,
+          };
+        }
+        return prev;
+      });
     } finally {
       setIsLoading(false);
-      setIsRefreshing(false);
+      if (!isSilent) setIsRefreshing(false);
     }
   };
 
   useEffect(() => {
-    loadSportsData(false);
+    loadSportsData(false, false);
     const interval = setInterval(() => {
-      loadSportsData(true);
+      // Localized background updates without blinking or stream interruptions!
+      loadSportsData(true, true);
     }, 60000);
     return () => clearInterval(interval);
   }, []);
@@ -152,6 +170,24 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
   const activeNode = activePlayback
     ? activePlayback.streams[activePlayback.activeIndex] || activePlayback.streams[0]
     : null;
+
+  const isHls = activeNode?.mode === 'hls';
+
+  // Smooth iframe stream switching without DOM unmounting or page reloads!
+  useEffect(() => {
+    if (!activeNode) return;
+    if (activeNode.mode === 'embed') {
+      if (videoRef.current) {
+        try {
+          videoRef.current.pause();
+        } catch {}
+      }
+      if (iframeRef.current && iframeRef.current.src !== activeNode.url) {
+        setIframeLoading(true);
+        iframeRef.current.src = activeNode.url;
+      }
+    }
+  }, [activeNode?.url, activeNode?.mode]);
 
   // Trigger failover to the next working stream ("до переможного!")
   const switchToNextStreamNode = (reason?: string) => {
@@ -682,6 +718,7 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
           <div
             ref={channelsRowRef}
             data-nav-row="sports-channels"
+            style={{ overflowAnchor: 'none' }}
             onWheel={(e) => {
               if (channelsRowRef.current && Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
                 channelsRowRef.current.scrollLeft += e.deltaY;
@@ -765,7 +802,11 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
           </div>
 
           {isLoading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div
+              data-nav-row="sports-live-events"
+              style={{ overflowAnchor: 'none' }}
+              className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
+            >
               {[1, 2, 3, 4, 5, 6].map((n) => (
                 <div
                   key={n}
@@ -774,7 +815,11 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div
+              data-nav-row="sports-live-events"
+              style={{ overflowAnchor: 'none' }}
+              className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
+            >
               {liveEvents.map((ev) => (
                 <div
                   key={ev.id}
@@ -890,7 +935,11 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
               </h2>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div
+              data-nav-row="sports-upcoming-events"
+              style={{ overflowAnchor: 'none' }}
+              className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
+            >
               {upcomingAndOtherEvents.map((ev) => (
                 <div
                   key={ev.id}
@@ -1128,28 +1177,29 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
               </div>
             )}
 
-            {activeNode.mode === 'hls' ? (
-              <video
-                ref={videoRef}
-                controls
-                autoPlay
-                playsInline
-                className="w-full h-full object-contain bg-black"
-              />
-            ) : (
-              <iframe
-                key={activeNode.url}
-                src={activeNode.url}
-                title={activePlayback.title}
-                scrolling="no"
-                style={{ overflow: 'hidden' }}
-                onLoad={() => setIframeLoading(false)}
-                referrerPolicy="origin"
-                className="w-full h-full border-0 bg-black overflow-hidden"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
-                allowFullScreen
-              />
-            )}
+            {/* Native HLS Video: permanently mounted, toggled by display to eliminate DOM teardown */}
+            <video
+              ref={videoRef}
+              controls
+              autoPlay
+              playsInline
+              style={{ display: isHls ? 'block' : 'none' }}
+              className="w-full h-full object-contain bg-black"
+            />
+
+            {/* Seamless Embed Stream Frame: permanently mounted, NO key to prevent DOM unmounts/blinking! */}
+            <iframe
+              ref={iframeRef}
+              src={!isHls && activeNode ? activeNode.url : undefined}
+              title={activePlayback.title}
+              scrolling="no"
+              style={{ display: !isHls ? 'block' : 'none', overflow: 'hidden' }}
+              onLoad={() => setIframeLoading(false)}
+              referrerPolicy="origin"
+              className="w-full h-full border-0 bg-black overflow-hidden"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
+              allowFullScreen
+            />
           </div>
         </div>
       )}
