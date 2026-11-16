@@ -188,7 +188,7 @@ export async function resolveUaServer(
         for (const p of list) {
           if (!p?.iframeUrl || typeof p.iframeUrl !== 'string') continue;
           const rawUrl = p.iframeUrl.startsWith('//') ? `https:${p.iframeUrl}` : String(p.iframeUrl);
-          const srcLower = `${String(p.source || '')} ${rawUrl}`.toLowerCase();
+          const srcLower = `${String(p.type || p.source || '')} ${rawUrl}`.toLowerCase();
 
           if (!result && srcLower.includes('ashdi')) {
             result = {
@@ -210,6 +210,24 @@ export async function resolveUaServer(
               url: rawUrl,
               mode: 'embed',
               langs: ['UA', 'MULTI', 'EN', 'RU', 'SUB'],
+            });
+          } else if (srcLower.includes('veoveo')) {
+            extraLiveServers.push({
+              id: 'ua-veoveo-live',
+              name: '🎬 Veoveo Direct HD (Багатозвучка)',
+              badge: 'Veoveo HD',
+              url: rawUrl,
+              mode: 'embed',
+              langs: ['UA', 'MULTI', 'EN', 'RU'],
+            });
+          } else if (srcLower.includes('collaps') || srcLower.includes('nextembed')) {
+            extraLiveServers.push({
+              id: 'ua-collaps-live',
+              name: '🎬 Collaps Direct HD (Дубляж та Оригінал)',
+              badge: 'Collaps HD',
+              url: rawUrl,
+              mode: 'embed',
+              langs: ['UA', 'MULTI', 'EN', 'RU'],
             });
           } else if (srcLower.includes('alloha')) {
             extraLiveServers.push({
@@ -774,7 +792,7 @@ export function buildServers(
 // ───────────────────────────── Health probing ─────────────────────────────
 
 const BLOCK_PAGE =
-  /themeloadfailed|не удалось загрузить тему|змініть країну|недоступн|not available in your country|geo-?block|video not found|file not found|access denied|error code:\s*233011|this video file cannot be played/i;
+  /themeloadfailed|не удалось загрузить тему|запрашиваемый контент не найден|змініть країну|недоступн|not available in your country|geo-?block|video not found|file not found|access denied|error code:\s*233011|this video file cannot be played/i;
 
 const healthCache = new Map<string, { status: ServerHealth; at: number }>();
 const HEALTH_TTL = 6 * 60 * 1000;
@@ -790,7 +808,7 @@ export function markServerDead(url: string): void {
   healthCache.set(url, { status: 'dead', at: Date.now() });
 }
 
-export async function probeServer(url: string, timeoutMs: number = 4500): Promise<ServerHealth> {
+export async function probeServer(url: string, timeoutMs: number = 2800): Promise<ServerHealth> {
   if (!url) return 'unknown';
   const cached = healthCache.get(url);
   if (cached && Date.now() - cached.at < HEALTH_TTL) return cached.status;
@@ -817,7 +835,6 @@ export async function probeServer(url: string, timeoutMs: number = 4500): Promis
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), timeoutMs);
       try {
-        // In Electron desktop, CORS headers are normalized so we can inspect actual status & body
         const res = await fetch(url, { signal: ctrl.signal });
         if (res.status === 404 || res.status === 410 || res.status >= 500) {
           status = 'dead';
@@ -825,26 +842,18 @@ export async function probeServer(url: string, timeoutMs: number = 4500): Promis
           const text = await res.text().catch(() => '');
           status = BLOCK_PAGE.test(text.slice(0, 2000)) && text.length < 3500 ? 'dead' : 'ok';
         } else {
+          // 403/429 Cloudflare or bot check may still load fine in an actual iframe
           status = 'unknown';
         }
       } catch {
-        // Fallback no-cors connectivity check if browser environment restricts CORS
-        const ctrl2 = new AbortController();
-        const timer2 = setTimeout(() => ctrl2.abort(), 3000);
-        try {
-          await fetch(url, { mode: 'no-cors', signal: ctrl2.signal });
-          status = 'ok';
-        } catch {
-          status = 'dead';
-        } finally {
-          clearTimeout(timer2);
-        }
+        // Timeouts or CORS restrictions on fetch shouldn't falsely blacklist an iframe server
+        status = 'unknown';
       } finally {
         clearTimeout(timer);
       }
     }
   } catch {
-    status = 'dead';
+    status = 'unknown';
   }
   healthCache.set(url, { status, at: Date.now() });
   return status;

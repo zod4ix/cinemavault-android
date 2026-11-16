@@ -130,9 +130,7 @@
           var valid = list.filter(function (p) {
             if (!p || !p.iframeUrl || typeof p.iframeUrl !== 'string') return false;
             var u = p.iframeUrl.toLowerCase();
-            var s = String(p.source || '').toLowerCase();
-            // Skip broken Collaps/Loadbox theme servers if alternatives exist
-            if (u.indexOf('loadbox') !== -1 || u.indexOf('namy.ws') !== -1 || s.indexOf('collaps') !== -1) return false;
+            if (u.indexOf('loadbox') !== -1 || u.indexOf('namy.ws') !== -1) return false;
             return true;
           });
           if (valid.length === 0) {
@@ -140,24 +138,42 @@
           }
           if (valid.length > 0) {
             clearTimeout(timeout);
-            var priority = ['ashdi', 'voidboost', 'alloha', 'kodik', 'cdnmovies', 'veoveo', 'vibix'];
-            var best = null;
-            for (var i = 0; i < priority.length; i++) {
-              var key = priority[i];
-              best = valid.find(function (p) {
-                return String(p.source || '').toLowerCase().indexOf(key) !== -1 ||
-                       String(p.iframeUrl || '').toLowerCase().indexOf(key) !== -1;
-              });
-              if (best) break;
-            }
-            if (!best) best = valid[0];
-            var targetUrl = best.iframeUrl.indexOf('//') === 0 ? 'https:' + best.iframeUrl : best.iframeUrl;
-            if (season && episode) {
-              var sep = targetUrl.indexOf('?') === -1 ? '?' : '&';
-              targetUrl += sep + 'season=' + encodeURIComponent(season) + '&episode=' + encodeURIComponent(episode);
-            }
+            var priority = ['ashdi', 'voidboost', 'veoveo', 'collaps', 'nextembed', 'alloha', 'videoseed', 'kodik', 'cdnmovies', 'vibix'];
+            var rankOf = function (p) {
+              var key = (String(p.type || p.source || '') + ' ' + String(p.iframeUrl || '')).toLowerCase();
+              for (var i = 0; i < priority.length; i++) {
+                if (key.indexOf(priority[i]) !== -1) return i;
+              }
+              return priority.length;
+            };
+            var candidates = valid.slice().sort(function (a, b) { return rankOf(a) - rankOf(b); });
+            var curIdx = 0;
             var container = document.querySelector('.kinobox_player');
-            container.innerHTML = '<iframe id="direct-iframe" scrolling="no" style="overflow:hidden;width:100%;height:100%;border:0;" src="' + targetUrl + '" allowfullscreen allow="autoplay; fullscreen; encrypted-media"></iframe>';
+
+            function loadCandidate(idx) {
+              if (idx >= candidates.length) {
+                notifyFatal('kinoboxAllFailed');
+                return;
+              }
+              curIdx = idx;
+              var targetUrl = candidates[idx].iframeUrl.indexOf('//') === 0
+                ? 'https:' + candidates[idx].iframeUrl
+                : candidates[idx].iframeUrl;
+              if (season && episode) {
+                var sep = targetUrl.indexOf('?') === -1 ? '?' : '&';
+                targetUrl += sep + 'season=' + encodeURIComponent(season) + '&episode=' + encodeURIComponent(episode);
+              }
+              container.innerHTML = '<iframe id="direct-iframe" scrolling="no" style="overflow:hidden;width:100%;height:100%;border:0;" src="' + targetUrl + '" allowfullscreen allow="autoplay; fullscreen; encrypted-media"></iframe>';
+            }
+
+            window.addEventListener('message', function (ev) {
+              var d = ev && ev.data;
+              if (d && typeof d === 'object' && d.__cinemaPlayerBridge && d.type === 'subframeFatalError') {
+                loadCandidate(curIdx + 1);
+              }
+            });
+
+            loadCandidate(0);
           } else {
             bootKinoboxScript();
           }

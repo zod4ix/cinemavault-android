@@ -68,16 +68,27 @@ export const MediaModal: React.FC<MediaModalProps> = ({
 
   useEffect(() => {
     if (!media) return;
+    let active = true;
     setBackdropSrc(media.backdropPath || media.posterPath || createPosterFallback(media.title, media.year, media.rating));
 
-    // Resolve sources with health probing
+    // Instantly populate synchronous sources so "Watch Now" & "Online Servers" work in 0ms
+    setSources(rezkaService.buildSourcesSync(media, 1, 1));
+    setServerHealth({});
+
+    // Resolve UA dubbing + server health in background
     rezkaService.resolveSources(media, 1, 1, {
       withHealth: true,
-      onHealth: (id, h) => setServerHealth((prev) => ({ ...prev, [id]: h })),
-    }).then(setSources);
+      onHealth: (id, h) => {
+        if (active) setServerHealth((prev) => (prev[id] === h ? prev : { ...prev, [id]: h }));
+      },
+    }).then((resolved) => {
+      if (active && resolved.length > 0) setSources(resolved);
+    });
 
     // Live search torrents
-    torrentService.searchTorrents(media).then(setTorrents);
+    torrentService.searchTorrents(media).then((tList) => {
+      if (active) setTorrents(tList);
+    });
 
     // Load real seasons & episodes: first try Cinemeta (if IMDb id is available), else TVMaze / tmdbService
     if (media.mediaType === 'tv' || media.mediaType === 'anime') {
@@ -96,6 +107,7 @@ export const MediaModal: React.FC<MediaModalProps> = ({
         if (loaded.length === 0) {
           loaded = await tmdbService.getSeasonsLive(media);
         }
+        if (!active) return;
         setSeasons(loaded);
         if (loaded.length > 0) {
           setSelectedSeason(loaded[0].seasonNumber);
@@ -110,15 +122,28 @@ export const MediaModal: React.FC<MediaModalProps> = ({
       setSelectedEpisode(undefined);
       setActiveTab('online');
     }
+
+    return () => {
+      active = false;
+    };
   }, [media]);
 
   // Update sources when selected episode changes
   useEffect(() => {
     if (!media || !selectedEpisode) return;
+    let active = true;
+    setSources(rezkaService.buildSourcesSync(media, selectedEpisode.seasonNumber, selectedEpisode.episodeNumber));
     rezkaService.resolveSources(media, selectedEpisode.seasonNumber, selectedEpisode.episodeNumber, {
       withHealth: true,
-      onHealth: (id, h) => setServerHealth((prev) => ({ ...prev, [id]: h })),
-    }).then(setSources);
+      onHealth: (id, h) => {
+        if (active) setServerHealth((prev) => (prev[id] === h ? prev : { ...prev, [id]: h }));
+      },
+    }).then((resolved) => {
+      if (active && resolved.length > 0) setSources(resolved);
+    });
+    return () => {
+      active = false;
+    };
   }, [media, selectedEpisode]);
 
   // Handle remote control Escape / Back key inside Modal

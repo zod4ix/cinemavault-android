@@ -1,6 +1,8 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 const bridgeApi = {
+  isDesktop: true,
+  platform: process.platform,
   setPlayerFullscreen: (fullscreen) => {
     ipcRenderer.send('cinema-set-fullscreen', Boolean(fullscreen));
   },

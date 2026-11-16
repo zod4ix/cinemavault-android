@@ -172,10 +172,20 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
     : null;
 
   const isHls = activeNode?.mode === 'hls';
+  const failedIndicesRef = useRef<Set<number>>(new Set());
+
+  useEffect(() => {
+    failedIndicesRef.current.clear();
+  }, [activePlayback?.id]);
 
   // Smooth iframe stream switching without DOM unmounting or page reloads!
   useEffect(() => {
-    if (!activeNode) return;
+    if (!activeNode) {
+      if (iframeRef.current && iframeRef.current.src !== 'about:blank') {
+        iframeRef.current.src = 'about:blank';
+      }
+      return;
+    }
     if (activeNode.mode === 'embed') {
       if (videoRef.current) {
         try {
@@ -186,13 +196,31 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
         setIframeLoading(true);
         iframeRef.current.src = activeNode.url;
       }
+    } else if (iframeRef.current && iframeRef.current.src !== 'about:blank') {
+      // Silence previous embed when switching to native HLS
+      iframeRef.current.src = 'about:blank';
     }
   }, [activeNode?.url, activeNode?.mode]);
 
-  // Trigger failover to the next working stream ("до переможного!")
-  const switchToNextStreamNode = (reason?: string) => {
+  // Trigger failover to the next working stream ("до переможного!") without infinite loops
+  const switchToNextStreamNode = (reason?: string, isManual: boolean = false) => {
     if (!activePlayback || activePlayback.streams.length <= 1) return;
-    const nextIdx = (activePlayback.activeIndex + 1) % activePlayback.streams.length;
+    if (!isManual) {
+      failedIndicesRef.current.add(activePlayback.activeIndex);
+    } else {
+      failedIndicesRef.current.clear();
+    }
+
+    let nextIdx = -1;
+    for (let step = 1; step < activePlayback.streams.length; step++) {
+      const candIdx = (activePlayback.activeIndex + step) % activePlayback.streams.length;
+      if (isManual || !failedIndicesRef.current.has(candIdx)) {
+        nextIdx = candIdx;
+        break;
+      }
+    }
+    if (nextIdx === -1) return;
+
     const nextNode = activePlayback.streams[nextIdx];
     setIframeLoading(true);
     setActivePlayback((prev) => (prev ? { ...prev, activeIndex: nextIdx } : null));
@@ -213,7 +241,7 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
       if (data.type === 'videoState') {
         setIframeLoading(false);
       } else if (data.type === 'subframeFatalError') {
-        switchToNextStreamNode('Потік зайнятий або недоступний');
+        switchToNextStreamNode('Потік зайнятий або недоступний', false);
       }
     };
     window.addEventListener('message', handleMessage);
@@ -1101,7 +1129,7 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
 
                 {/* Auto-Hunt Next Stream Button ("До переможного!") */}
                 <button
-                  onClick={() => switchToNextStreamNode()}
+                  onClick={() => switchToNextStreamNode(undefined, true)}
                   tabIndex={0}
                   className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-lg shadow-emerald-600/30 active:scale-95 transition-all tv-btn-focus focus:outline-none shrink-0"
                   title="Знайти наступний стабільний безкоштовний потік"
@@ -1128,6 +1156,7 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
                   <button
                     key={node.id}
                     onClick={() => {
+                      failedIndicesRef.current.clear();
                       setIframeLoading(true);
                       setActivePlayback((prev) => (prev ? { ...prev, activeIndex: idx } : null));
                     }}
@@ -1169,7 +1198,7 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
                 <button
                   type="button"
                   tabIndex={0}
-                  onClick={() => switchToNextStreamNode('Швидке перемикання')}
+                  onClick={() => switchToNextStreamNode('Швидке перемикання', true)}
                   className="px-4 py-2 rounded-xl bg-white/10 hover:bg-emerald-600 text-white text-xs font-bold border border-white/15 transition-all tv-btn-focus focus:outline-none"
                 >
                   Увімкнути наступний потік (Потік B / C / D)
@@ -1190,7 +1219,6 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
             {/* Seamless Embed Stream Frame: permanently mounted, NO key to prevent DOM unmounts/blinking! */}
             <iframe
               ref={iframeRef}
-              src={!isHls && activeNode ? activeNode.url : undefined}
               title={activePlayback.title}
               scrolling="no"
               style={{ display: !isHls ? 'block' : 'none', overflow: 'hidden' }}

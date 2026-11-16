@@ -60,6 +60,20 @@ const toSource = (
 
 export const rezkaService = {
   /**
+   * Synchronously builds available sources from cached IDs so playback & modals open in 0ms.
+   */
+  buildSourcesSync(
+    media: MediaItem,
+    seasonNumber?: number,
+    episodeNumber?: number
+  ): MediaSource[] {
+    const s = seasonNumber || 1;
+    const e = episodeNumber || 1;
+    const servers = buildServers(media, s, e);
+    return servers.map((srv) => toSource(media, srv, servers, s, e, 'checking'));
+  },
+
+  /**
    * Resolves ids, looks for a Ukrainian dub, builds every server and returns them as sources.
    * If `withHealth` is true the servers are probed first and returned best-first.
    */
@@ -73,9 +87,8 @@ export const rezkaService = {
     const e = episodeNumber || 1;
 
     // Resolve IDs first so Kinobox & UAKino lookups always have IMDb + TMDB IDs
-    await ensureIds(media);
     await Promise.race([
-      resolveUaServer(media, s),
+      ensureIds(media).then(() => resolveUaServer(media, s)),
       new Promise((r) => setTimeout(() => r(null), 4200)),
     ]);
 

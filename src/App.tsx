@@ -356,35 +356,33 @@ const MainAppContent: React.FC = () => {
     setFavorites(storageService.getFavorites());
   };
 
-  const handlePlayMedia = async (media: MediaItem, episode?: Episode) => {
-    const sources = await rezkaService.resolveSources(
+  const handlePlayMedia = (media: MediaItem, episode?: Episode) => {
+    const syncSources = rezkaService.buildSourcesSync(
       media,
       episode?.seasonNumber,
-      episode?.episodeNumber,
-      { withHealth: true }
+      episode?.episodeNumber
     );
-    if (sources.length > 0) {
+    if (syncSources.length > 0) {
       setActivePlayback({
         media,
-        source: sources[0],
+        source: syncSources[0],
         episode,
       });
     }
   };
 
-  const handleResumePlayback = async (prog: PlaybackProgress) => {
+  const handleResumePlayback = (prog: PlaybackProgress) => {
     const media = tmdbService.getItemById(prog.mediaId) || prog.mediaSnapshot;
     if (media) {
-      const sources = await rezkaService.resolveSources(
+      const syncSources = rezkaService.buildSourcesSync(
         media,
         prog.seasonNumber,
-        prog.episodeNumber,
-        { withHealth: true }
+        prog.episodeNumber
       );
-      if (sources.length > 0) {
+      if (syncSources.length > 0) {
         setActivePlayback({
           media,
-          source: sources[0],
+          source: syncSources[0],
           episode: prog.episodeNumber
             ? {
                 id:

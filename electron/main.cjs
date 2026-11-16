@@ -23,6 +23,8 @@ const CLEAN_USER_AGENT =
     ? 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
     : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
+app.userAgentFallback = CLEAN_USER_AGENT;
+
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'application/javascript; charset=utf-8',
@@ -108,10 +110,17 @@ const AD_BLOCK_DOMAINS = [
   'cosmolot',
   'melbet',
   'betwinner',
+  'stuins.com',
+  'wnouncillorswhowish.com',
+  'hola.org',
+  'ndcertainlywhen.com',
+  'portablica.com',
+  'grainergamasidnotioned.forum',
+  'realintelligence360.com',
 ];
 
 const AD_BLOCK_URL_REGEX =
-  /(\/vast(\.xml|\?|$)|\/preroll|\/midroll|\/popunder|\/clickunder|\/adserver|\/adtag|ima3\.js|gpt\.js|adsbygoogle\.js)/i;
+  /(\/vast(\.xml|\?|$)|\/preroll|\/midroll|\/popunder|\/clickunder|\/adserver|\/adtag|ima3\.js|gpt\.js|adsbygoogle\.js|subid=backfilter|click\?key=|download-free-real)/i;
 
 // Universal Subframe Player Bridge (matches Android MainActivity.java + AdBlock + Error Failover)
 const SUBFRAME_PLAYER_BRIDGE_JS = `(function(){
@@ -217,15 +226,15 @@ const SUBFRAME_PLAYER_BRIDGE_JS = `(function(){
     }catch(e){}
   }
 
-  // 3. Detect fatal player errors (themeLoadFailed, Error Code: 233011, 404, video not found)
+  // 3. Detect fatal player errors (themeLoadFailed, Error Code: 233011, 404, video not found, Violation, YT 152)
   function checkFatalPlayerErrors(){
     if(!isSubframe||fatalReported)return;
     try{
       var v=getActiveVideo();
-      if(v&&v.readyState>=2&&!v.paused&&v.currentTime>0.5)return;
+      if(v&&(v.readyState>=2||v.currentTime>0.5||(v.currentSrc&&v.duration>0)))return;
       var bodyTxt=(document.body&&(document.body.innerText||document.body.textContent)||'').slice(0,2200);
       if(!bodyTxt)return;
-      var fatalMatch=bodyTxt.match(/themeLoadFailed|не удалось загрузить тему|themeWrongVersion|Error Code:\s*233011|Error Code:\s*232\d+|Error Code:\s*102630|This video file cannot be played|Video not found|File not found|Відео не знайдено|Видео не найдено|Файл не найден|недоступно у вашому регіоні|not available in your country|502 Bad Gateway|503 Service Temporarily Unavailable/i);
+      var fatalMatch=bodyTxt.match(/themeLoadFailed|не удалось загрузить тему|themeWrongVersion|Error Code:\s*233011|Error Code:\s*232\d+|Error Code:\s*102630|This video file cannot be played|Video not found|File not found|Відео не знайдено|Видео не найдено|Файл не найден|запрашиваемый контент не найден|контент не найден|приносим свои извинения|недоступно у вашому регіоні|not available in your country|"detail"\s*:\s*"Violation|Код помилки:\s*15\d|Video unavailable|502 Bad Gateway|503 Service Temporarily Unavailable/i);
       if(fatalMatch){
         fatalReported=true;
         window.__cinemaFatalReason=fatalMatch[0];
@@ -238,6 +247,23 @@ const SUBFRAME_PLAYER_BRIDGE_JS = `(function(){
         };
         try{window.top.postMessage(msg,'*');}catch(ex){}
         try{if(window.parent&&window.parent!==window.top)window.parent.postMessage(msg,'*');}catch(ex){}
+      }
+    }catch(e){}
+  }
+
+  var autoPlayAttempts=0;
+  function tryAutoStartVideo(){
+    if(!isSubframe||fatalReported||autoPlayAttempts>=5)return;
+    autoPlayAttempts++;
+    try{
+      var v=getActiveVideo();
+      if(v){
+        if(!v.paused&&v.currentTime>0.2){autoPlayAttempts=99;return;}
+        if(v.paused&&v.currentTime<0.5){
+          v.play().catch(function(){});
+          var bigPlay=document.querySelector('.vjs-big-play-button, .pljs-play, .jw-icon-display, [class*="big-play"], button[aria-label="Play" i]');
+          if(bigPlay&&bigPlay.offsetParent!==null){try{bigPlay.click();}catch(ex){}}
+        }
       }
     }catch(e){}
   }
@@ -326,6 +352,7 @@ const SUBFRAME_PLAYER_BRIDGE_JS = `(function(){
         v.addEventListener('play',reportState);
         v.addEventListener('pause',reportState);
       }
+      tryAutoStartVideo();
       tryAutoSelectPreferredVoice();
       if(v)reportState();
     },650);
@@ -620,8 +647,14 @@ function setupNetworkInterceptors() {
           host.includes('youtube-nocookie.com') ||
           host.includes('googlevideo.com')
         ) {
-          requestHeaders['Referer'] = 'https://www.youtube.com/';
-          if (incomingOrigin) requestHeaders['Origin'] = 'https://www.youtube.com';
+          if (hasLocalOrEmptyReferer) {
+            requestHeaders['Referer'] = 'https://vinegret.net/';
+          }
+          if (hasLocalOrigin) {
+            for (const k of Object.keys(requestHeaders)) {
+              if (k.toLowerCase() === 'origin') delete requestHeaders[k];
+            }
+          }
         } else if (host.includes('ashdi')) {
           if (hasLocalOrEmptyReferer) {
             requestHeaders['Referer'] = 'https://uakino.best/';
@@ -630,8 +663,11 @@ function setupNetworkInterceptors() {
             requestHeaders['Origin'] = 'https://uakino.best';
           }
         } else if (host.includes('strmfree')) {
-          requestHeaders['Referer'] = 'https://strmfree.st/';
-          if (incomingOrigin) requestHeaders['Origin'] = 'https://strmfree.st';
+          // strmfree.st returns 403 Violation when Referer/Origin is strmfree.st itself; use external embedder referer
+          requestHeaders['Referer'] = 'https://vinegret.net/';
+          for (const k of Object.keys(requestHeaders)) {
+            if (k.toLowerCase() === 'origin') delete requestHeaders[k];
+          }
         } else if (
           host.includes('streamed') ||
           host.includes('embedme') ||
@@ -775,12 +811,12 @@ function setupIpcHandlers() {
     let targetUrl = url.trim();
     // On desktop, map .apk download links to the corresponding desktop installer on GitHub Releases
     if (targetUrl.toLowerCase().endsWith('.apk')) {
+      const verMatch = targetUrl.match(/v?(\d+\.\d+\.\d+)/i);
+      const ver = verMatch ? verMatch[1] : '3.7.1';
       if (process.platform === 'darwin') {
-        targetUrl =
-          'https://github.com/zod4ix/cinemavault-android/releases/download/v3.7.0/CinemaVault-PRO-v3.7.0-macOS.dmg';
+        targetUrl = `https://github.com/zod4ix/cinemavault-android/releases/download/v${ver}/CinemaVault-PRO-v${ver}-macOS.dmg`;
       } else {
-        targetUrl =
-          'https://github.com/zod4ix/cinemavault-android/releases/download/v3.7.0/CinemaVault-PRO-v3.7.0-Windows.exe';
+        targetUrl = `https://github.com/zod4ix/cinemavault-android/releases/download/v${ver}/CinemaVault-PRO-v${ver}-Windows.exe`;
       }
     }
     shell.openExternal(targetUrl).catch(() => {});
@@ -808,7 +844,7 @@ async function createWindow() {
     minHeight: 600,
     show: !isVerifyMode,
     backgroundColor: '#07090e',
-    title: 'CinemaVault PRO v3.7.0',
+    title: 'CinemaVault PRO v3.7.1',
     icon: path.join(__dirname, 'icon.png'),
     autoHideMenuBar: true,
     fullscreenable: true,
@@ -857,29 +893,28 @@ async function createWindow() {
       const mainFrame = mainWindow.webContents.mainFrame;
       const allFrames = mainFrame.framesInSubtree;
       for (const frame of allFrames) {
-        if (frame && !frame.isDestroyed()) {
-          frame.executeJavaScript(SUBFRAME_PLAYER_BRIDGE_JS, true).catch(() => {});
-          if (frame !== mainFrame) {
-            frame
-              .executeJavaScript('window.__cinemaFatalReason || ""', true)
-              .then((reason) => {
-                if (reason && typeof reason === 'string' && !mainWindow.isDestroyed()) {
-                  const frameKey = `${frame.routingId}:${frame.url}:${reason}`;
-                  if (!reportedFrameErrors.has(frameKey)) {
-                    reportedFrameErrors.add(frameKey);
-                    const safeReason = JSON.stringify(reason);
-                    mainFrame
-                      .executeJavaScript(
-                        `window.postMessage({ __cinemaPlayerBridge: true, type: 'subframeFatalError', reason: ${safeReason} }, '*');`,
-                        true
-                      )
-                      .catch(() => {});
-                  }
-                }
-              })
-              .catch(() => {});
-          }
-        }
+        if (!frame || frame.isDestroyed() || frame === mainFrame) continue;
+        const fUrl = frame.url || '';
+        if (!fUrl.startsWith('http://') && !fUrl.startsWith('https://')) continue;
+        frame.executeJavaScript(SUBFRAME_PLAYER_BRIDGE_JS, true).catch(() => {});
+        frame
+          .executeJavaScript('window.__cinemaFatalReason || ""', true)
+          .then((reason) => {
+            if (reason && typeof reason === 'string' && !mainWindow.isDestroyed()) {
+              const frameKey = `${frame.routingId}:${fUrl}:${reason}`;
+              if (!reportedFrameErrors.has(frameKey)) {
+                reportedFrameErrors.add(frameKey);
+                const safeReason = JSON.stringify(reason);
+                mainFrame
+                  .executeJavaScript(
+                    `window.postMessage({ __cinemaPlayerBridge: true, type: 'subframeFatalError', reason: ${safeReason} }, '*');`,
+                    true
+                  )
+                  .catch(() => {});
+              }
+            }
+          })
+          .catch(() => {});
       }
     } catch (err) {
       // Ignore frame injection errors on destroyed frames
@@ -894,6 +929,30 @@ async function createWindow() {
   // Inject Universal Subframe Player Bridge into main frame and all streaming subframes
   mainWindow.webContents.on('dom-ready', injectSubframeBridgeAll);
   mainWindow.webContents.on('did-frame-finish-load', injectSubframeBridgeAll);
+
+  // Auto-failover when a streaming iframe fails to load (timeout, DNS/TLS error, connection refused)
+  mainWindow.webContents.on(
+    'did-fail-load',
+    (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+      if (isMainFrame || errorCode === -3 || !mainWindow || mainWindow.isDestroyed()) return;
+      if (
+        typeof validatedURL === 'string' &&
+        (validatedURL.startsWith('http://') || validatedURL.startsWith('https://'))
+      ) {
+        const failKey = `fail:${validatedURL}:${errorCode}`;
+        if (!reportedFrameErrors.has(failKey)) {
+          reportedFrameErrors.add(failKey);
+          const safeReason = JSON.stringify(errorDescription || `ERR_${errorCode}`);
+          mainWindow.webContents.mainFrame
+            .executeJavaScript(
+              `window.postMessage({ __cinemaPlayerBridge: true, type: 'subframeFatalError', reason: ${safeReason} }, '*');`,
+              true
+            )
+            .catch(() => {});
+        }
+      }
+    }
+  );
 
   // Keyboard shortcuts (F11 fullscreen toggle, Ctrl+Shift+I DevTools in debug)
   mainWindow.webContents.on('before-input-event', (event, input) => {

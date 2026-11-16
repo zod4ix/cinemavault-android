@@ -2,8 +2,9 @@
 
 > **Автономний мультиплатформний онлайн-кінотеатр та спортивний хаб «для своїх»**: оптимізований під **Smart TV (Android TV / Google TV / TV-бокси / проєктори)**, пульти дистанційного керування (2D Spatial D-Pad), **пульти-указки (Air Mouse / гіроскоп)**, планшети, смартфони, комп'ютерні миші та клавіатури. Без реклами, з прямим **P2P-програванням торрентів онлайн (Torrentio + TPB + YTS + EZTV)**, наскрізним керуванням усіма внутрішніми елементами плеєрів (HDRezka, Ashdi, Videasy, VidLink, HLS), окремим потужним комбайном **🔴 Спорт Live 24/7 (NBA, Футбол, Ліга Чемпіонів, NHL, Формула 1, Бокс/UFC, Теніс)**, **15+ каналами (HDRezka rezka.ag #1 на чолі списку + усі мови додатку)**, нескінченною бібліотекою контенту (від золотої класики до новинок 2026), самовідновленням (`Self-Healing Engine`), GitHub Auto-Updater та крос-девайс хмарною синхронізацією.
 
-## 📲 Завантажити актуальний Android `.apk`
-- **[Завантажити CinemaVault-PRO-v3.7.1.apk (Пряме посилання)](https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.7.1.apk)** *(Найновіша актуальна версія v3.7.1 для планшетів, смартфонів, Smart TV, проєкторів та TV Box)*
+## 📲 Завантажити актуальну версію v3.7.1 (Android & Windows)
+- **[Завантажити CinemaVault-PRO-v3.7.1-Windows.exe (Windows 10/11 Інсталятор)](https://github.com/zod4ix/cinemavault-android/releases/download/v3.7.1/CinemaVault-PRO-v3.7.1-Windows.exe)** *(Офіційна збірка v3.7.1 для Windows із миттєвим перемиканням потоків, AdBlock та апаратним відтворенням 4K/HLS)*
+- **[Завантажити CinemaVault-PRO-v3.7.1.apk (Android / Smart TV)](https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.7.1.apk)** *(Найновіша актуальна версія v3.7.1 для планшетів, смартфонів, Smart TV, проєкторів та TV Box)*
 - **[Офіційний каталог програм Vinegret.net](https://vinegret.net/prostye-poleznye-programmy-dlja-windows/)** *(Корисні програми та утиліти для Windows та Android)*
 - **[Сторінка релізу на GitHub](https://github.com/zod4ix/cinemavault-android/releases/latest)**
 

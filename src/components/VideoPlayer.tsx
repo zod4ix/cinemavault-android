@@ -113,6 +113,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [activeEpisode, setActiveEpisode] = useState<number>(initialEpisode || 1);
   const [isLandscapeLocked, setIsLandscapeLocked] = useState<boolean>(false);
   const [serverHealthMap, setServerHealthMap] = useState<Record<string, ServerHealth>>({});
+  const serverHealthMapRef = useRef<Record<string, ServerHealth>>({});
+  serverHealthMapRef.current = serverHealthMap;
   const [autoFailoverMsg, setAutoFailoverMsg] = useState<string | null>(null);
 
   // Active Menu: 'none' | 'audio' | 'quality' | 'settings' | 'torrents' | 'episodes'
@@ -376,31 +378,60 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
   }, []);
 
+  const autoFailoverTriedRef = useRef<Set<string>>(new Set());
+  const autoFailoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const switchToNextWorkingServer = useCallback(
-    (customReason?: string) => {
+    (customReason?: string, isManual: boolean = false) => {
       const embedServers = availableServers.filter((s) => s.mode === 'embed');
       if (embedServers.length <= 1) return;
-      const currentIndex = embedServers.findIndex((s) => s.id === activeServer?.id);
+      const currentId = activeServer?.id;
+      if (currentId && !isManual) {
+        autoFailoverTriedRef.current.add(currentId);
+      }
+      const currentIndex = embedServers.findIndex((s) => s.id === currentId);
+      const healthSnapshot = serverHealthMapRef.current;
       let picked: StreamServer | undefined;
+
       for (let step = 1; step < embedServers.length; step++) {
         const cand = embedServers[(Math.max(0, currentIndex) + step) % embedServers.length];
-        if (!failedServerIdsRef.current.has(cand.id) && serverHealthMap[cand.id] !== 'dead') {
+        if (
+          !failedServerIdsRef.current.has(cand.id) &&
+          healthSnapshot[cand.id] !== 'dead' &&
+          (isManual || !autoFailoverTriedRef.current.has(cand.id))
+        ) {
           picked = cand;
           break;
         }
       }
-      if (!picked) {
+      if (!picked && isManual) {
         picked = embedServers[(Math.max(0, currentIndex) + 1) % embedServers.length];
       }
-      if (picked && picked.id !== activeServer?.id) {
+      if (!picked && !isManual) {
+        for (let step = 1; step < embedServers.length; step++) {
+          const cand = embedServers[(Math.max(0, currentIndex) + step) % embedServers.length];
+          if (!autoFailoverTriedRef.current.has(cand.id)) {
+            picked = cand;
+            break;
+          }
+        }
+      }
+      if (picked && picked.id !== currentId) {
+        if (!isManual) {
+          autoFailoverTriedRef.current.add(picked.id);
+        } else {
+          userExplicitlySelectedServerRef.current = true;
+          autoFailoverTriedRef.current.clear();
+        }
         setSelectedServerId(picked.id);
         setAutoFailoverMsg(
           customReason || `${t('connectingTo')} ${picked.name}...`
         );
-        setTimeout(() => setAutoFailoverMsg(null), 3200);
+        if (autoFailoverTimerRef.current) clearTimeout(autoFailoverTimerRef.current);
+        autoFailoverTimerRef.current = setTimeout(() => setAutoFailoverMsg(null), 3200);
       }
     },
-    [availableServers, activeServer?.id, serverHealthMap, t]
+    [availableServers, activeServer?.id, t]
   );
 
   // Listen for live telemetry and fatal error auto-failover from our Universal Subframe Player Bridge!
@@ -447,8 +478,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         if (activeServer && activeServer.mode === 'embed') {
           markServerDead(activeServer.url);
           failedServerIdsRef.current.add(activeServer.id);
-          setServerHealthMap((prev) => ({ ...prev, [activeServer.id]: 'dead' }));
-          switchToNextWorkingServer('⚡ Обхід блокування — автоперехід на робоче дзеркало...');
+          setServerHealthMap((prev) =>
+            prev[activeServer.id] === 'dead' ? prev : { ...prev, [activeServer.id]: 'dead' }
+          );
+          switchToNextWorkingServer('⚡ Обхід блокування — автоперехід на робоче дзеркало...', false);
         }
       }
     };
@@ -491,22 +524,37 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
   }, [activeMenu]);
 
-  // Probe current active server health on mount or when switching; auto-failover if dead
+  // Probe current active server health on mount or when switching; auto-failover if dead (never loops or overrides manual selection)
+  const switchToNextWorkingServerRef = useRef(switchToNextWorkingServer);
+  switchToNextWorkingServerRef.current = switchToNextWorkingServer;
+
   useEffect(() => {
     if (!activeServer || activeServer.mode !== 'embed') return;
+    const srvId = activeServer.id;
+    const srvUrl = activeServer.url;
     let cancelled = false;
-    probeServer(activeServer.url).then((h) => {
+    probeServer(srvUrl).then((h) => {
       if (cancelled) return;
-      setServerHealthMap((prev) => ({ ...prev, [activeServer.id]: h }));
-      if (h === 'dead') {
-        failedServerIdsRef.current.add(activeServer.id);
-        switchToNextWorkingServer('⚡ Дзеркало недоступне — автоперехід на робочий сервер...');
+      setServerHealthMap((prev) => (prev[srvId] === h ? prev : { ...prev, [srvId]: h }));
+      if (h === 'dead' && !userExplicitlySelectedServerRef.current) {
+        failedServerIdsRef.current.add(srvId);
+        switchToNextWorkingServerRef.current(
+          '⚡ Дзеркало недоступне — автоперехід на робочий сервер...',
+          false
+        );
       }
     });
     return () => {
       cancelled = true;
     };
-  }, [activeServer, switchToNextWorkingServer]);
+  }, [activeServer?.id, activeServer?.url, activeServer?.mode]);
+
+  // Watchdog: never leave the loading overlay stuck forever if an embed doesn't fire onLoad/videoState
+  useEffect(() => {
+    if (!iframeLoading) return;
+    const timer = setTimeout(() => setIframeLoading(false), 8500);
+    return () => clearTimeout(timer);
+  }, [iframeLoading, effectiveEmbedUrl]);
 
   // Ensure landscape lock is released when closing player
   useEffect(() => {
@@ -588,7 +636,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   }, [activeServer?.id, activeServer?.mode, activeServer?.magnet, activeServer?.url]);
 
   const switchToNextServer = () => {
-    switchToNextWorkingServer();
+    switchToNextWorkingServer(undefined, true);
   };
 
   const scrollServersRow = (dir: 'left' | 'right') => {
@@ -1567,6 +1615,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                       type="button"
                       onClick={() => {
                         userExplicitlySelectedServerRef.current = true;
+                        autoFailoverTriedRef.current.clear();
                         setSelectedServerId(srv.id);
                         if (srv.mode === 'torrent' && srv.magnet) {
                           setCurrentMagnet(srv.magnet);
@@ -1961,12 +2010,14 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                           data-menu-initial-focus={isCur ? 'true' : undefined}
                           onClick={() => {
                             userExplicitlySelectedServerRef.current = true;
+                            autoFailoverTriedRef.current.clear();
                             setSelectedServerId(srv.id);
                             if (isTorrent && srv.magnet) setCurrentMagnet(srv.magnet);
                             if (srv.id.startsWith('ua-') || srv.langs?.includes('UA')) {
                               sendIframeCommand('preferLanguage', { lang: 'ua' });
                             }
                             showOsd(`🔊 ${srv.name}`);
+                            setTimeout(() => setActiveMenu('none'), 160);
                           }}
                           tabIndex={0}
                           className={`w-full p-3 rounded-xl border text-left flex items-center justify-between transition-all tv-btn-focus focus:outline-none ${
@@ -2124,6 +2175,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                             type="button"
                             onClick={() => {
                               userExplicitlySelectedServerRef.current = true;
+                              autoFailoverTriedRef.current.clear();
                               setSelectedServerId(srv.id);
                               if (srv.badge.includes('4K')) setPreferredQuality('4K');
                               else setPreferredQuality('1080p');
@@ -2131,6 +2183,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                                 sendIframeCommand('preferLanguage', { lang: 'ua' });
                               }
                               showOsd(`📺 Сервер: ${srv.name}`);
+                              setTimeout(() => setActiveMenu('none'), 160);
                             }}
                             tabIndex={0}
                             className={`w-full p-2.5 rounded-xl border text-left flex items-center justify-between transition-all tv-btn-focus focus:outline-none ${
@@ -2631,7 +2684,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 if (activeServer && activeServer.mode === 'embed') {
                   markServerDead(activeServer.url);
                   failedServerIdsRef.current.add(activeServer.id);
-                  switchToNextWorkingServer('⚡ Перемикання на доступний сервер...');
+                  switchToNextWorkingServer('⚡ Перемикання на доступний сервер...', false);
                 }
               }}
               referrerPolicy="origin"

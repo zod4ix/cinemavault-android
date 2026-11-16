@@ -170,9 +170,13 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-300">
-                {hasUpdate
-                  ? 'Натисніть кнопку нижче, щоб завантажити та встановити свіжий .APK файл напряму.'
-                  : 'Ви також можете завантажити .APK за прямим посиланням або через QR-код для Smart TV.'}
+                {(window as any).AndroidCinemaBridge?.isDesktop
+                  ? hasUpdate
+                    ? 'Натисніть кнопку нижче, щоб завантажити свіжий інсталятор для Windows/macOS.'
+                    : 'Ви також можете переглянути реліз на GitHub або відкрити мобільне посилання через QR-код.'
+                  : hasUpdate
+                    ? 'Натисніть кнопку нижче, щоб завантажити та встановити свіжий .APK файл напряму.'
+                    : 'Ви також можете завантажити .APK за прямим посиланням або через QR-код для Smart TV.'}
               </p>
             </div>
 
@@ -200,7 +204,9 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
               <span>
                 {apkProgress.status === 'downloading'
                   ? `Завантаження... ${apkProgress.percent}%`
-                  : `Встановити оновлення .APK (v${latestVer})`}
+                  : (window as any).AndroidCinemaBridge?.isDesktop
+                    ? `Завантажити оновлення (v${latestVer})`
+                    : `Встановити оновлення .APK (v${latestVer})`}
               </span>
             </button>
 
