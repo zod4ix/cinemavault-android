@@ -25,6 +25,7 @@ import android.view.inputmethod.InputMethodManager;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.widget.FrameLayout;
@@ -44,6 +45,7 @@ import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.BridgeWebChromeClient;
 import com.getcapacitor.BridgeWebViewClient;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -55,6 +57,34 @@ import java.util.List;
 import java.util.Locale;
 
 public class MainActivity extends BridgeActivity {
+
+    private static final String[] AD_BLOCK_DOMAINS = new String[] {
+        "distribrey.com", "myangular.life", "getsdk.online", "stiven-king.com", "a-stiven-king.com",
+        "doubleclick.net", "googleads.g.doubleclick.net", "adservice.google.com",
+        "pagead2.googlesyndication.com", "an.yandex.ru", "mc.yandex.ru", "adfox.ru",
+        "propellerads.com", "adsterra.com", "monetag.com", "exoclick.com", "popads.net",
+        "popcash.net", "hilltopads.com", "clickadu.com", "juicyads.com", "betweendigital.com",
+        "mgid.com", "realsrv.com", "tsyndicate.com", "onclkds.com", "stuins.com",
+        "wnouncillorswhowish.com", "ndcertainlywhen.com", "portablica.com",
+        "1xbet", "mostbet", "parimatch", "favbet", "vavada", "pin-up", "melbet", "betwinner"
+    };
+
+    private static boolean isAdRequest(String urlStr) {
+        if (urlStr == null || urlStr.isEmpty()) return false;
+        String lower = urlStr.toLowerCase(Locale.US);
+        for (String domain : AD_BLOCK_DOMAINS) {
+            if (lower.contains(domain)) return true;
+        }
+        return lower.contains("/load-xml/") ||
+               lower.contains("/vast") ||
+               lower.contains("/preroll") ||
+               lower.contains("/midroll") ||
+               lower.contains("/popunder") ||
+               lower.contains("/clickunder") ||
+               lower.contains("ima3.js") ||
+               lower.contains("gpt.js") ||
+               lower.contains("adsbygoogle");
+    }
 
     private View customFullscreenView = null;
     private BridgeWebChromeClient.CustomViewCallback customViewCallback = null;
@@ -187,7 +217,19 @@ public class MainActivity extends BridgeActivity {
             }
 
             // Subclass BridgeWebViewClient so iframe video players load inside the app instead of launching external Chrome
+            // and intercept & block network ad requests, VAST XMLs, and tracker beacons
             webView.setWebViewClient(new BridgeWebViewClient(this.bridge) {
+                @Override
+                public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                    if (request != null && request.getUrl() != null) {
+                        String urlStr = request.getUrl().toString();
+                        if (isAdRequest(urlStr)) {
+                            return new WebResourceResponse("text/plain", "UTF-8", new ByteArrayInputStream(new byte[0]));
+                        }
+                    }
+                    return super.shouldInterceptRequest(view, request);
+                }
+
                 @Override
                 public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                     Uri url = request.getUrl();
@@ -286,6 +328,9 @@ public class MainActivity extends BridgeActivity {
         return "(function(){" +
             "if(window.__cinemaSubframeBridgeInstalled)return;" +
             "window.__cinemaSubframeBridgeInstalled=true;" +
+            "try{window.adsConfig=null;Object.defineProperty(window,'adsConfig',{get:function(){return null;},set:function(){},configurable:true});}catch(e){}" +
+            "try{if(window.VenomPlayer){var _vm=window.VenomPlayer.make;window.VenomPlayer.make=function(s,o){if(o&&o.ads)delete o.ads;if(o&&o.preroll)delete o.preroll;return _vm?_vm.apply(this,arguments):null;};}}catch(e){}" +
+            "try{window.open=function(){return null;};}catch(e){}" +
             "var isSubframe=(window!==window.top);" +
             "var audioCtx=null,gainNode=null,hookedVideo=null;" +
             "var preferUa=true,uaAutoAttempts=0,uaAutoSelected=false;" +

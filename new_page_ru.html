@@ -103,6 +103,49 @@
   transform: translateY(-2px);
   box-shadow: 0 6px 16px rgba(0,0,0,0.4);
 }
+.vng-spoiler {
+  margin: 10px 0 14px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+.vng-spoiler[open] {
+  border-color: rgba(56, 189, 248, 0.5);
+  background: rgba(15, 23, 42, 0.95);
+}
+.vng-spoiler-summary {
+  cursor: pointer;
+  padding: 10px 14px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #38bdf8;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  user-select: none;
+  outline: none;
+  list-style: none;
+}
+.vng-spoiler-summary::-webkit-details-marker {
+  display: none;
+}
+.vng-spoiler-summary:hover {
+  color: #7dd3fc;
+  background: rgba(56, 189, 248, 0.08);
+}
+.vng-spoiler-arrow {
+  transition: transform 0.25s ease;
+  font-size: 11px;
+}
+.vng-spoiler[open] .vng-spoiler-arrow {
+  transform: rotate(180deg);
+}
+.vng-spoiler-content {
+  padding: 10px 14px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
 .vng-btn-primary {
   transition: all 0.2s ease;
 }
@@ -130,7 +173,7 @@
 <h1 style="margin:0 0 14px;font-size:clamp(24px, 4vw, 38px);font-weight:900;letter-spacing:-0.5px;color:#ffffff;line-height:1.2;text-shadow:0 2px 10px rgba(0,0,0,0.8);">Полезные программы, боты и цифровые инструменты от Vinegret</h1>
 <p style="margin:0;font-size:clamp(14px, 1.8vw, 16px);color:#cbd5e1;max-width:920px;line-height:1.65;text-shadow:0 1px 4px rgba(0,0,0,0.8);">Эксклюзивные авторские разработки, проверенный софт и быстрые боты для Android, проекторов, Smart TV, Telegram, Windows и веб. 100% бесплатно, без назойливой рекламы и скрытых подписок. Скачивайте безопасно на максимальной скорости.</p>
 <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:24px;">
-<a href="#cinemavault-app" class="vng-pill" style="background:#0f172a;color:#00d2ff;border:1px solid rgba(0,210,255,0.4);padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">🍿 CinemaVault PRO v3.7.1 (Android • Windows • Mac)</a>
+<a href="#cinemavault-app" class="vng-pill" style="background:#0f172a;color:#00d2ff;border:1px solid rgba(0,210,255,0.4);padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">🍿 CinemaVault PRO v3.7.2 (Android • Windows • Mac)</a>
 <a href="#fly-tickets-bot" class="vng-pill" style="background:#0f172a;color:#10b981;border:1px solid rgba(16,185,129,0.4);padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">✈️ Telegram Авиа-Бот</a>
 <a href="#shutdown-timer" class="vng-pill" style="background:#0f172a;color:#f8fafc;border:1px solid #334155;padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">⏱️ Shutdown Timer</a>
 <a href="#support-section" class="vng-pill" style="background:#0f172a;color:#f59e0b;border:1px solid rgba(245,158,11,0.4);padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">💖 Поддержать автора</a>
@@ -144,45 +187,54 @@
 <div>
 <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(229,9,20,0.15);border:1px solid rgba(229,9,20,0.35);padding:4px 12px;border-radius:20px;margin-bottom:14px;">
 <span style="width:6px;height:6px;border-radius:50%;background:#e50914;box-shadow:0 0 8px #e50914;"></span>
-<span style="color:#f87171;font-size:10px;font-weight:800;letter-spacing:1px;text-transform:uppercase;">ОБНОВЛЕНО • МЕДИА-КОМБАЙН v3.7.1 PRO (Android • Windows • macOS)</span>
+<span style="color:#f87171;font-size:10px;font-weight:800;letter-spacing:1px;text-transform:uppercase;">ОБНОВЛЕНО • МЕДИА-КОМБАЙН v3.7.2 PRO (Android • Windows • macOS)</span>
 </div>
-<h2 style="margin:0 0 8px;font-size:23px;font-weight:900;color:#ffffff;display:flex;align-items:center;gap:8px;"><span>🎬</span> CinemaVault PRO v3.7.1</h2>
+<h2 style="margin:0 0 8px;font-size:23px;font-weight:900;color:#ffffff;display:flex;align-items:center;gap:8px;"><span>🎬</span> CinemaVault PRO v3.7.2</h2>
 <p style="margin:0 0 16px;font-size:13.5px;color:#94a3b8;line-height:1.5;">Флагманский мультиплатформенный онлайн-кинотеатр и спортивный хаб 4K HDR для Windows (ПК, ноутбуки), macOS, Android (планшеты, смартфоны), проекторов и Smart TV / ТВ-боксов (мышка, пульт, клавиатура, тач)</p>
 <div style="margin-bottom:20px;">
-<div class="vng-feature-item"><strong style="color:#00d2ff;">• 24/7 Спортивный Live Хаб и ликвидация битых ссылок (v3.7.1):</strong><span style="color:#cbd5e1;"> Полный перезапуск спортивного раздела для всех видов спорта (футбол, NBA, NHL, F1, бокс/UFC, теннис). Гарантированные потоки 24/7, многоуровневый выбор FHD 1080p, резервный HD, облегченный 540p для слабого интернета, прямой HLS и полные записи/хайлайты. Полностью удалены нерабочие vidsrc.me и 2embed.cc, мгновенная выдача за ~0.3с и переключение кортов без морганий и сбоев.</span></div>
-<div class="vng-feature-item"><strong style="color:#00d2ff;">• Экранная клавиатура для ТВ и Проекторов (v3.7.1):</strong><span style="color:#cbd5e1;"> Специальная встроенная виртуальная клавиатура под пульт (D-Pad) в окне облачной синхронизации устройств для быстрого и удобного ввода токенов, адресов и почты на проекторах без системного IME.</span></div>
-<div class="vng-feature-item"><strong style="color:#00d2ff;">• Официальные нативные приложения для Windows и macOS:</strong><span style="color:#cbd5e1;"> Полноценная десктопная версия для ноутбуков и компьютеров. Аппаратное GPU-ускорение видео, быстрый мгновенный поиск, горячие клавиши, F11 полный экран, отсутствие рекламы и обход браузерных ограничений.</span></div>
-<div class="vng-feature-item"><strong style="color:#00d2ff;">• Интеллектуальный подбор «Похожих картин»:</strong><span style="color:#cbd5e1;"> Автоматические рекомендации в карточке каждого фильма по общему режиссёру, актёрскому составу, сюжету, франшизе и жанру со значками-подсказками. Чистый и стабильный плеер с плавным автоскрытием панелей.</span></div>
-<div class="vng-feature-item"><strong style="color:#00d2ff;">• Полный экран для планшетов и смартфонов:</strong><span style="color:#cbd5e1;"> Устранена блокировка ориентации на планшетах при выходе из полноэкранного режима. Возврат в портретный режим теперь происходит мгновенно и без сбоев. Кнопка полного экрана плавно разворачивает и сворачивает плеер.</span></div>
-<div class="vng-feature-item"><strong style="color:#eab308;">• Народный рейтинг и градации (Все время / Год / Месяц / Неделя):</strong><span style="color:#cbd5e1;"> Интерактивные лайки и дизлайки со счетчиками под каждым фильмом (один голос на пользователя, защита от накруток, сохранность в IndexedDB). Новый премиальный ряд рейтинга на главном экране.</span></div>
+<div class="vng-feature-item"><strong style="color:#00d2ff;">• HDRezka на первом месте (#1) и украинский дубляж (v3.7.2):</strong><span style="color:#cbd5e1;"> Самые стабильные зеркала Rezka возглавляют иерархию с автовыбором украинской озвучки, мгновенным стартом и устранением ошибок 404.</span></div>
+<div class="vng-feature-item"><strong style="color:#f43f5e;">• Тотальный двухуровневый AdBlock (v3.7.2):</strong><span style="color:#cbd5e1;"> Полная блокировка рекламы на уровне сети и скриптов. Никаких баннеров, VAST pre-rolls или рекламных переходов при нажатии Play.</span></div>
+<div class="vng-feature-item"><strong style="color:#10b981;">• 24/7 Спортивный Хаб: Сканер, Live и история 48ч (v3.7.2):</strong><span style="color:#cbd5e1;"> Завершившиеся матчи больше не висят как живые. Рабочая кнопка сканирования потоков с телеметрией, сохранение результатов до 48 часов, анонсы строго после live-эфиров, точные лиги и команды заглавными буквами.</span></div>
+<div class="vng-feature-item"><strong style="color:#38bdf8;">• Автономные приложения для Windows и macOS (v3.7.2):</strong><span style="color:#cbd5e1;"> Полноценная десктопная версия для ПК и ноутбуков с аппаратным GPU-декодированием, F11 полным экраном, поддержкой мыши/клавиатуры и без браузерных ограничений.</span></div>
+<div class="vng-feature-item"><strong style="color:#eab308;">• Экранная клавиатура для ТВ и Проекторов:</strong><span style="color:#cbd5e1;"> Специальная встроенная виртуальная клавиатура под пульт (D-Pad) в окне облачной синхронизации устройств для быстрого ввода токенов, адресов и почты.</span></div>
+
+<details class="vng-spoiler">
+<summary class="vng-spoiler-summary">
+<span>✨ Показать все возможности (еще 7 функций)</span>
+<span class="vng-spoiler-arrow">▼</span>
+</summary>
+<div class="vng-spoiler-content">
+<div class="vng-feature-item"><strong style="color:#00d2ff;">• Интеллектуальный подбор «Похожих картин»:</strong><span style="color:#cbd5e1;"> Автоматические рекомендации в карточке каждого фильма по общему режиссёру, актёрскому составу, сюжету, франшизе и жанру со значками-подсказками.</span></div>
+<div class="vng-feature-item"><strong style="color:#00d2ff;">• Полный экран для планшетов и смартфонов:</strong><span style="color:#cbd5e1;"> Безупречное переключение между портретным и альбомным режимами, мгновенное сворачивание кнопкой «Назад».</span></div>
+<div class="vng-feature-item"><strong style="color:#eab308;">• Народный рейтинг: Лайки и дизлайки с градациями:</strong><span style="color:#cbd5e1;"> Интерактивные оценки со счетчиками (За все время / Год / Месяц / Неделя) и премиальный ряд рейтинга на главном экране.</span></div>
 <div class="vng-feature-item"><strong style="color:#38bdf8;">• Чистый киноэкран и перемотка пультом +10/-10с:</strong><span style="color:#cbd5e1;"> Автоскрытие панелей во время просмотра, перемотка стрелками пульта Влево/Вправо с накоплением времени, жесты двойного тапа.</span></div>
-<div class="vng-feature-item"><strong style="color:#f43f5e;">• Интеграция библиотеки HDRezka (rezka.ag #1) и стабильные меню:</strong><span style="color:#cbd5e1;"> Сервер HDRezka установлен главным сервером №1 с доступом ко всем студиям озвучки и 1080p. Меню настроек не закрывается самопроизвольно при кликах.</span></div>
-<div class="vng-feature-item"><strong style="color:#38bdf8;">• Сквозное управление внутри плеера и выбор дубляжа:</strong><span style="color:#cbd5e1;"> Универсальная нижняя док-панель со шкалой SeekBar и прямой мост выбора украинского дубляжа, озвучки и качества (4K / 1080p / 720p / 480p) пультом или мышкой.</span></div>
-<div class="vng-feature-item"><strong style="color:#f59e0b;">• PRO-начинка для проекторов (Звук 300% & Кинозум):</strong><span style="color:#cbd5e1;"> Усилитель звука до 300% для тихих динамиков проекторов, обрезка черных полос (16:9 / Crop / Stretch / Кинозум 115%), пресеты яркости, скорость 0.5x–2.0x и 14+ серверов (4 украинских во главе).</span></div>
-<div class="vng-feature-item"><strong style="color:#10b981;">• Спорт Live Scanner Hub + Торренты онлайн:</strong><span style="color:#cbd5e1;"> Живые трансляции NBA, Лиги Чемпионов, Формулы 1, Бокса/UFC и Тенниса (5 каскадных потоков A–E + 12 каналов 24/7) и прямое воспроизведение торрентов без рекламы.</span></div>
-<div class="vng-feature-item"><strong style="color:#c084fc;">• Бесконечная библиотека, Облако и Автообновлятор:</strong><span style="color:#cbd5e1;"> Каталог «Золотая классика» + «Новинки 2024–2026», 5 языков (UK, EN, PL, ES, RU), синхронизация CV-XXXXXX и автообновление APK в один клик прямо с проектора.</span></div>
+<div class="vng-feature-item"><strong style="color:#f59e0b;">• PRO-начинка для проекторов (Звук 300% & Кинозум):</strong><span style="color:#cbd5e1;"> Усилитель звука до 300% для тихих динамиков проекторов, обрезка черных полос (Кинозум 115%), скорость 0.5x–2.0x и 14+ серверов.</span></div>
+<div class="vng-feature-item"><strong style="color:#10b981;">• P2P Торренты онлайн без рекламы:</strong><span style="color:#cbd5e1;"> Прямое воспроизведение торрентов через встроенный движок без ожидания полной загрузки файла.</span></div>
+<div class="vng-feature-item"><strong style="color:#c084fc;">• Бесконечная библиотека и Облачная синхронизация:</strong><span style="color:#cbd5e1;"> Золотая классика и свежие новинки 2026 года, 5 языков интерфейса, синхронизация профиля CV-XXXXXX и автообновление в один клик.</span></div>
+</div>
+</details>
 </div>
 </div>
 <div>
 <div style="display:flex;flex-wrap:wrap;gap:8px;padding:12px 14px;background:#060911;border:1px solid #1e293b;border-radius:12px;margin-bottom:16px;font-size:11px;color:#94a3b8;">
-<div><span style="color:#64748b;">Версия:</span> <strong style="color:#f1f5f9;">v3.7.1 PRO</strong></div>
+<div><span style="color:#64748b;">Версия:</span> <strong style="color:#f1f5f9;">v3.7.2 PRO</strong></div>
 <div>•</div>
 <div><span style="color:#64748b;">Платформы:</span> <strong style="color:#38bdf8;">Windows 10/11 • macOS • Android 8.0+ / Smart TV</strong></div>
 <div>•</div>
-<div><span style="color:#64748b;">Розмір:</span> <strong style="color:#f1f5f9;">3.7 MB (APK) / 141 MB (Win EXE)</strong></div>
+<div><span style="color:#64748b;">Размер:</span> <strong style="color:#f1f5f9;">3.8 MB (APK) / 141 MB (Win EXE)</strong></div>
 </div>
 <div style="display:flex;flex-direction:column;gap:10px;">
-<a href="https://github.com/zod4ix/cinemavault-android/releases/download/v3.7.1/CinemaVault-PRO-v3.7.1-Windows.exe" target="_blank" rel="noopener noreferrer" class="vng-btn-primary" style="background:linear-gradient(90deg, #0284c7, #0369a1);color:#ffffff;padding:14px 20px;border-radius:12px;font-size:14px;font-weight:800;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 8px 24px rgba(2,132,199,0.35);">
+<a href="https://github.com/zod4ix/cinemavault-android/releases/download/v3.7.2/CinemaVault-PRO-v3.7.2-Windows.exe" target="_blank" rel="noopener noreferrer" class="vng-btn-primary" style="background:linear-gradient(90deg, #0284c7, #0369a1);color:#ffffff;padding:14px 20px;border-radius:12px;font-size:14px;font-weight:800;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 8px 24px rgba(2,132,199,0.35);">
 <span>💻</span> Скачать для Windows 10/11 (.exe инсталлятор, 141MB)
 </a>
-<a href="https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.7.1.apk" target="_blank" rel="noopener noreferrer" class="vng-btn-primary" style="background:linear-gradient(90deg, #e50914, #b91c1c);color:#ffffff;padding:13px 20px;border-radius:12px;font-size:14px;font-weight:800;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 8px 24px rgba(229,9,20,0.35);">
-<span>📱</span> Скачать для Android / Smart TV (.apk, 3.7MB)
+<a href="https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.7.2.apk" target="_blank" rel="noopener noreferrer" class="vng-btn-primary" style="background:linear-gradient(90deg, #e50914, #b91c1c);color:#ffffff;padding:13px 20px;border-radius:12px;font-size:14px;font-weight:800;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 8px 24px rgba(229,9,20,0.35);">
+<span>📱</span> Скачать для Android / Smart TV (.apk, 3.8MB)
 </a>
-<a href="https://github.com/zod4ix/cinemavault-android/releases/download/v3.7.1/CinemaVault-PRO-v3.7.1-macOS.dmg" target="_blank" rel="noopener noreferrer" class="vng-btn-secondary" style="background:#131d2e;color:#cbd5e1;border:1px solid #334155;padding:12px 18px;border-radius:12px;font-size:13.5px;font-weight:700;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:8px;">
+<a href="https://github.com/zod4ix/cinemavault-android/releases/download/v3.7.0/CinemaVault-PRO-v3.7.0-macOS.dmg" target="_blank" rel="noopener noreferrer" class="vng-btn-secondary" style="background:#131d2e;color:#cbd5e1;border:1px solid #334155;padding:12px 18px;border-radius:12px;font-size:13.5px;font-weight:700;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:8px;">
 <span>🍏</span> Скачать для Apple macOS (.dmg)
 </a>
-<a href="https://github.com/zod4ix/cinemavault-android/releases/tag/v3.7.1" target="_blank" rel="noopener noreferrer" class="vng-btn-secondary" style="background:#0b111e;color:#94a3b8;border:1px dashed #334155;padding:10px 16px;border-radius:12px;font-size:12.5px;font-weight:600;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:6px;">
-<span>🐙</span> Страница релиза v3.7.1 и исходный код на GitHub
+<a href="https://github.com/zod4ix/cinemavault-android/releases/tag/v3.7.2" target="_blank" rel="noopener noreferrer" class="vng-btn-secondary" style="background:#0b111e;color:#94a3b8;border:1px dashed #334155;padding:10px 16px;border-radius:12px;font-size:12.5px;font-weight:600;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:6px;">
+<span>🐙</span> Страница релиза v3.7.2 и исходный код на GitHub
 </a>
 </div>
 </div>

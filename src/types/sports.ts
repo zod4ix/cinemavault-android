@@ -42,6 +42,7 @@ export interface SportEvent {
   statusText: string;
   startTime: string;
   timestamp: number;
+  finishedAt?: number;
   venue?: string;
   viewers?: number;
   poster: string;
@@ -64,6 +65,8 @@ export interface SportChannel {
 export interface SportScannerStats {
   totalFreeStreams: number;
   liveMatchesCount: number;
+  upcomingMatchesCount: number;
+  finishedMatchesCount: number;
   streamFreeNodes: number;
   directHlsNodes: number;
   replayNodes: number;

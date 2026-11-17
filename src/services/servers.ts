@@ -126,7 +126,7 @@ const slugify = (s: string) =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
 
-async function httpText(url: string, timeout = 5500): Promise<{ status: number; text: string }> {
+async function httpText(url: string, timeout = 4500): Promise<{ status: number; text: string }> {
   try {
     if (Capacitor.isNativePlatform()) {
       const r = await CapacitorHttp.get({
@@ -177,7 +177,7 @@ export async function resolveUaServer(
       const q: string[] = [];
       if (ids.imdb) q.push(`imdb=${encodeURIComponent(ids.imdb)}`);
       if (ids.tmdb) q.push(`tmdb=${encodeURIComponent(String(ids.tmdb))}`);
-      const kb = await httpText(`https://api.kinobox.tv/api/players?${q.join('&')}`, 3800);
+      const kb = await httpText(`https://api.kinobox.tv/api/players?${q.join('&')}`, 2500);
       if (kb.status === 200 && kb.text) {
         const parsed = JSON.parse(kb.text);
         const list: any[] = Array.isArray(parsed)
@@ -194,7 +194,7 @@ export async function resolveUaServer(
             result = {
               id: 'ua-ashdi',
               name: '🇺🇦 UA • Ashdi VIP (UAKino Український дубляж)',
-              badge: '🇺🇦 UA #1',
+              badge: '🇺🇦 UA VIP',
               url: rawUrl,
               mode: 'embed',
               langs: ['UA', 'UK'],
@@ -204,9 +204,9 @@ export async function resolveUaServer(
             srcLower.includes('rezka')
           ) {
             extraLiveServers.push({
-              id: 'ua-voidboost-live',
-              name: '🎬 HDRezka Direct VIP (Живе дзеркало • Усі озвучки)',
-              badge: 'VIP Multi',
+              id: 'rezka-voidboost-live',
+              name: '🎬 HDRezka Direct VIP (Живе дзеркало • Укр та всі студії)',
+              badge: '🇺🇦 HDRezka VIP',
               url: rawUrl,
               mode: 'embed',
               langs: ['UA', 'MULTI', 'EN', 'RU', 'SUB'],
@@ -214,17 +214,8 @@ export async function resolveUaServer(
           } else if (srcLower.includes('veoveo')) {
             extraLiveServers.push({
               id: 'ua-veoveo-live',
-              name: '🎬 Veoveo Direct HD (Багатозвучка)',
+              name: '🇺🇦 UA / Multi • Veoveo Direct HD (Багатозвучка)',
               badge: 'Veoveo HD',
-              url: rawUrl,
-              mode: 'embed',
-              langs: ['UA', 'MULTI', 'EN', 'RU'],
-            });
-          } else if (srcLower.includes('collaps') || srcLower.includes('nextembed')) {
-            extraLiveServers.push({
-              id: 'ua-collaps-live',
-              name: '🎬 Collaps Direct HD (Дубляж та Оригінал)',
-              badge: 'Collaps HD',
               url: rawUrl,
               mode: 'embed',
               langs: ['UA', 'MULTI', 'EN', 'RU'],
@@ -268,7 +259,7 @@ export async function resolveUaServer(
       try {
         const search = await httpText(
           `${mirrorBase}/index.php?do=search&subaction=search&story=${encodeURIComponent(query)}`,
-          3400
+          2800
         );
         if (search.status === 200 && search.text) {
           const urls = Array.from(
@@ -301,7 +292,7 @@ export async function resolveUaServer(
 
           if (pick && (pick.score > 20 || candidates.length === 1)) {
             const pageUrl = pick.url.replace(/^https?:\/\/uakino\.[a-z]+/i, mirrorBase);
-            const page = await httpText(pageUrl, 3400);
+            const page = await httpText(pageUrl, 2800);
             const m =
               page.text.match(/https:\/\/(?:ashdi\.vip|uakino\.[a-z]+)\/(?:vod|serial|embed)?\/\d+/i) ||
               page.text.match(/iframe[^>]+src=["'](https?:\/\/[^"']*(?:ashdi|uakino)[^"']*)["']/i);
@@ -310,14 +301,14 @@ export async function resolveUaServer(
               result = {
                 id: 'ua-ashdi',
                 name: '🇺🇦 UA • Ashdi VIP (UAKino Український дубляж)',
-                badge: '🇺🇦 UA #1',
+                badge: '🇺🇦 UA VIP',
                 url: embedUrl.startsWith('//') ? `https:${embedUrl}` : embedUrl,
                 mode: 'embed',
                 langs: ['UA', 'UK'],
               };
             }
           }
-          if (urls.length > 0) break; // Mirror responded cleanly
+          if (urls.length > 0) break;
         }
       } catch {
         // Try next UAKino mirror
@@ -349,6 +340,7 @@ interface Ctx {
   imdb?: string;
   tmdb?: number;
   title?: string;
+  year?: number;
   series: boolean;
   s: number;
   e: number;
@@ -364,39 +356,78 @@ interface ProviderDef {
 
 const anyId = (c: Ctx) => (c.tmdb ? String(c.tmdb) : c.imdb || '');
 
+function buildRezkaMirrorUrl(host: string, mirrorName: string, c: Ctx): string | null {
+  if (c.imdb) {
+    return c.series
+      ? `https://${host}/embed/imdb/${c.imdb}?season=${c.s}&episode=${c.e}`
+      : `https://${host}/embed/imdb/${c.imdb}`;
+  }
+  if (c.tmdb || c.title) {
+    const q: string[] = [`mirror=${mirrorName}`];
+    if (c.tmdb) q.push(`tmdb=${encodeURIComponent(String(c.tmdb))}`);
+    if (c.title) q.push(`title=${encodeURIComponent(c.title)}`);
+    if (c.year) q.push(`year=${encodeURIComponent(String(c.year))}`);
+    if (c.series) {
+      q.push(`season=${c.s}`);
+      q.push(`episode=${c.e}`);
+    }
+    return `/kinobox-player.html?${q.join('&')}`;
+  }
+  return null;
+}
+
 /**
- * Ordered Multi-Language Provider Catalogue with ISP-block bypass mirrors:
- * 1) Ukrainian (🇺🇦 UA) & Multi-Audio 4K channels (Videasy 4K, Ashdi, HDRezka + Namy + Embess mirrors, AutoEmbed, Kinobox)
- * 2) English (🇬🇧 EN) 4K HDR & 1080p channels (VidLink 4K, VidSrc PRO, Embed.su, VidFast, VidSrc XYZ)
- * 3) Polski (🇵🇱 PL) channels (Videasy PL, VidLink PL, SuperEmbed PL, AutoEmbed PL)
- * 4) Español (🇪🇸 ES) channels (Videasy ES, VidLink ES, SuperEmbed ES, AutoEmbed ES)
- * 5) Multi-Audio / Studio (🌐 MULTI / RU) channels & global failovers
+ * Strict Hierarchy Provider Catalogue (v3.7.2):
+ * 1) HDRezka Primary Mirrors (#1 embess.ws, #2 namy.ws, #3 kinogram.best, #4 delivembd.ws) — Ukrainian priority + all voiceover studios
+ * 2) Ukrainian (🇺🇦 UA) & Multi-Audio Balancers
+ * 3) English (🇬🇧 EN) 4K HDR & 1080p Verified Fast CDNs (VidLink 4K, VidSrc SU, VidSrc TO, VidZee, 2Embed VIP)
+ * 4) Polski (🇵🇱 PL) Verified Channels
+ * 5) Español (🇪🇸 ES) Verified Channels
  */
 const PROVIDERS: ProviderDef[] = [
-  // ──────── 1. UKRAINIAN (🇺🇦 UA) & MULTI-AUDIO PRIMARY BALANCERS ────────
+  // ──────── 1. HDREZKA PRIMARY SERVERS (#1 IN HIERARCHY • UKRAINIAN PRIORITY) ────────
   {
-    id: 'ua-videasy',
-    name: '🇺🇦 UA • Videasy 4K Українська (Без блокувань)',
-    badge: '🇺🇦 4K UA',
-    langs: ['UA', 'UK', 'MULTI', 'EN', 'SUB'],
-    build: (c) =>
-      c.tmdb
-        ? c.series
-          ? `https://player.videasy.net/tv/${c.tmdb}/${c.s}/${c.e}?color=e50914&lang=uk`
-          : `https://player.videasy.net/movie/${c.tmdb}?color=e50914&lang=uk`
-        : null,
+    id: 'rezka-embess',
+    name: '🎬 HDRezka #1 • Українська та всі студії (1080p FHD)',
+    badge: '🇺🇦 HDRezka #1',
+    langs: ['UA', 'UK', 'MULTI', 'EN', 'RU', 'SUB'],
+    build: (c) => buildRezkaMirrorUrl('api.embess.ws', 'embess', c),
   },
   {
+    id: 'rezka-namy',
+    name: '🎬 HDRezka #2 • Пряме дзеркало (Укр / Дубляж / Студії)',
+    badge: '🇺🇦 HDRezka #2',
+    langs: ['UA', 'UK', 'MULTI', 'EN', 'RU', 'SUB'],
+    build: (c) => buildRezkaMirrorUrl('api.namy.ws', 'namy', c),
+  },
+  {
+    id: 'rezka-kinogram',
+    name: '🎬 HDRezka #3 • Kinogram VIP (Укр / Багатозвучка 1080p)',
+    badge: '🇺🇦 HDRezka #3',
+    langs: ['UA', 'UK', 'MULTI', 'EN', 'RU'],
+    build: (c) => buildRezkaMirrorUrl('api.kinogram.best', 'kinogram', c),
+  },
+  {
+    id: 'rezka-delivembd',
+    name: '🎬 HDRezka #4 • DelivEmbed CDN (Укр / Multi 1080p)',
+    badge: 'HDRezka #4',
+    langs: ['UA', 'UK', 'MULTI', 'EN', 'RU'],
+    build: (c) => buildRezkaMirrorUrl('api.delivembd.ws', 'delivembd', c),
+  },
+
+  // ──────── 2. UKRAINIAN (🇺🇦 UA) & MULTI-BALANCER AGGREGATOR ────────
+  {
     id: 'kinobox-multi',
-    name: '🇺🇦 UA / Multi • Kinobox Aggregator (Ashdi • Voidboost • Alloha)',
-    badge: '7-in-1 UA',
-    langs: ['UA', 'MULTI', 'RU', 'EN'],
+    name: '🇺🇦 UA / Multi • Універсальний Балансер (HDRezka • Ashdi • VidLink)',
+    badge: '🇺🇦 7-in-1 UA',
+    langs: ['UA', 'UK', 'MULTI', 'EN', 'RU'],
     build: (c) => {
-      if (!c.imdb && !c.tmdb) return null;
+      if (!c.imdb && !c.tmdb && !c.title) return null;
       const q: string[] = [];
       if (c.imdb) q.push(`imdb=${encodeURIComponent(c.imdb)}`);
       if (c.tmdb) q.push(`tmdb=${encodeURIComponent(String(c.tmdb))}`);
       if (c.title) q.push(`title=${encodeURIComponent(c.title)}`);
+      if (c.year) q.push(`year=${encodeURIComponent(String(c.year))}`);
       if (c.series) {
         q.push(`season=${c.s}`);
         q.push(`episode=${c.e}`);
@@ -404,45 +435,13 @@ const PROVIDERS: ProviderDef[] = [
       return `/kinobox-player.html?${q.join('&')}`;
     },
   },
-  {
-    id: 'ua-autoembed',
-    name: '🇺🇦 UA • AutoEmbed Pro Українська',
-    badge: '🇺🇦 UA HD',
-    langs: ['UA', 'MULTI', 'EN'],
-    build: (c) => {
-      const id = c.tmdb ? String(c.tmdb) : c.imdb || '';
-      if (!id) return null;
-      return c.series
-        ? `https://player.autoembed.cc/embed/tv/${id}/${c.s}/${c.e}?lang=uk`
-        : `https://player.autoembed.cc/embed/movie/${id}?lang=uk`;
-    },
-  },
-  {
-    id: 'multiembed-vip',
-    name: '🇺🇦/🌐 SuperEmbed VIP Direct (Multi-Audio)',
-    badge: 'VIP Multi',
-    langs: ['UA', 'MULTI', 'EN', 'PL', 'ES', 'RU'],
-    build: (c) => {
-      if (c.tmdb) {
-        return c.series
-          ? `https://multiembed.mov/directstream.php?video_id=${c.tmdb}&tmdb=1&s=${c.s}&e=${c.e}`
-          : `https://multiembed.mov/directstream.php?video_id=${c.tmdb}&tmdb=1`;
-      }
-      if (c.imdb) {
-        return c.series
-          ? `https://multiembed.mov/directstream.php?video_id=${c.imdb}&s=${c.s}&e=${c.e}`
-          : `https://multiembed.mov/directstream.php?video_id=${c.imdb}`;
-      }
-      return null;
-    },
-  },
 
-  // ──────── 2. ENGLISH CHANNELS (🇬🇧 EN) ────────
+  // ──────── 3. VERIFIED 4K & 1080P GLOBAL / ENGLISH CHANNELS (🇬🇧 EN / MULTI) ────────
   {
     id: 'vidlink',
-    name: '🇬🇧 EN • VidLink 4K HDR (Ultra Fast)',
+    name: '🇬🇧 EN / Multi • VidLink 4K HDR (Ultra Fast)',
     badge: '4K HDR',
-    langs: ['EN', 'SUB', 'MULTI'],
+    langs: ['EN', 'UA', 'SUB', 'MULTI'],
     build: (c) => {
       const id = anyId(c);
       if (!id) return null;
@@ -453,73 +452,60 @@ const PROVIDERS: ProviderDef[] = [
     },
   },
   {
-    id: 'vidsrc-cc',
-    name: '🇬🇧 EN • VidSrc PRO 1080p',
+    id: 'vidsrc-su',
+    name: '🇬🇧 EN • VidSrc SU 1080p (Fast Cloud CDN)',
     badge: '🇬🇧 1080p',
-    langs: ['EN', 'SUB'],
-    build: (c) => {
-      const id = c.imdb || (c.tmdb ? String(c.tmdb) : '');
-      if (!id) return null;
-      return c.series
-        ? `https://vidsrc.cc/v2/embed/tv/${id}/${c.s}/${c.e}?autoPlay=true`
-        : `https://vidsrc.cc/v2/embed/movie/${id}?autoPlay=true`;
-    },
-  },
-  {
-    id: 'embed-su',
-    name: '🇬🇧 EN • Embed.su 4K Ultra',
-    badge: '🇬🇧 4K CDN',
-    langs: ['EN', 'MULTI', 'SUB'],
-    build: (c) => {
-      const id = c.tmdb ? String(c.tmdb) : c.imdb || '';
-      if (!id) return null;
-      return c.series
-        ? `https://embed.su/embed/tv/${id}/${c.s}/${c.e}`
-        : `https://embed.su/embed/movie/${id}`;
-    },
-  },
-  {
-    id: 'vidfast',
-    name: '🇬🇧 EN • VidFast Ultra',
-    badge: '🇬🇧 Fast HD',
-    langs: ['EN', 'SUB'],
+    langs: ['EN', 'SUB', 'MULTI'],
     build: (c) =>
       c.tmdb
         ? c.series
-          ? `https://vidfast.pro/tv/${c.tmdb}/${c.s}/${c.e}`
-          : `https://vidfast.pro/movie/${c.tmdb}`
+          ? `https://vidsrc.su/embed/tv/${c.tmdb}/${c.s}/${c.e}`
+          : `https://vidsrc.su/embed/movie/${c.tmdb}`
         : null,
   },
   {
-    id: 'vidsrc-xyz',
-    name: '🇬🇧 EN • VidSrc XYZ Mirror',
-    badge: '🇬🇧 Mirror',
+    id: 'vidsrc-to',
+    name: '🇬🇧 EN • VidSrc TO PRO (1080p + Subtitles)',
+    badge: '🇬🇧 PRO HD',
     langs: ['EN', 'SUB'],
     build: (c) => {
       const id = c.imdb || (c.tmdb ? String(c.tmdb) : '');
       if (!id) return null;
       return c.series
-        ? `https://vidsrc.xyz/embed/tv?imdb=${id}&season=${c.s}&episode=${c.e}`
-        : `https://vidsrc.xyz/embed/movie?imdb=${id}`;
+        ? `https://vidsrc.to/embed/tv/${id}/${c.s}/${c.e}`
+        : `https://vidsrc.to/embed/movie/${id}`;
+    },
+  },
+  {
+    id: 'vidzee',
+    name: '🇬🇧 EN • VidZee 4K Ultra CDN',
+    badge: '🇬🇧 4K CDN',
+    langs: ['EN', 'MULTI', 'SUB'],
+    build: (c) =>
+      c.tmdb
+        ? c.series
+          ? `https://player.vidzee.wtf/embed/tv/${c.tmdb}/${c.s}/${c.e}`
+          : `https://player.vidzee.wtf/embed/movie/${c.tmdb}`
+        : null,
+  },
+  {
+    id: '2embed-vip',
+    name: '🌐 Multi / EN • 2Embed Global Stream',
+    badge: 'Global HD',
+    langs: ['EN', 'MULTI', 'SUB'],
+    build: (c) => {
+      const id = c.imdb || (c.tmdb ? String(c.tmdb) : '');
+      if (!id) return null;
+      return c.series
+        ? `https://www.2embed.cc/embedtv/${id}&s=${c.s}&e=${c.e}`
+        : `https://www.2embed.cc/embed/${id}`;
     },
   },
 
-  // ──────── 3. POLISH CHANNELS (🇵🇱 PL) ────────
-  {
-    id: 'pl-videasy',
-    name: '🇵🇱 PL • Videasy Polska 4K',
-    badge: '🇵🇱 Lektor/Sub',
-    langs: ['PL', 'EN'],
-    build: (c) =>
-      c.tmdb
-        ? c.series
-          ? `https://player.videasy.net/tv/${c.tmdb}/${c.s}/${c.e}?color=e50914&lang=pl`
-          : `https://player.videasy.net/movie/${c.tmdb}?color=e50914&lang=pl`
-        : null,
-  },
+  // ──────── 4. POLISH CHANNELS (🇵🇱 PL) ────────
   {
     id: 'pl-vidlink',
-    name: '🇵🇱 PL • VidLink Polska HD',
+    name: '🇵🇱 PL • VidLink Polska 4K (Lektor / Napisy)',
     badge: '🇵🇱 PL 4K',
     langs: ['PL', 'EN'],
     build: (c) => {
@@ -532,55 +518,36 @@ const PROVIDERS: ProviderDef[] = [
     },
   },
   {
-    id: 'pl-multiembed',
-    name: '🇵🇱 PL • SuperEmbed Polska',
+    id: 'pl-vidsrc-su',
+    name: '🇵🇱 PL • VidSrc Polska HD',
     badge: '🇵🇱 PL HD',
     langs: ['PL', 'MULTI'],
-    build: (c) => {
-      if (c.tmdb) {
-        return c.series
-          ? `https://multiembed.mov/?video_id=${c.tmdb}&tmdb=1&s=${c.s}&e=${c.e}&lang=pl`
-          : `https://multiembed.mov/?video_id=${c.tmdb}&tmdb=1&lang=pl`;
-      }
-      if (c.imdb) {
-        return c.series
-          ? `https://multiembed.mov/?video_id=${c.imdb}&s=${c.s}&e=${c.e}&lang=pl`
-          : `https://multiembed.mov/?video_id=${c.imdb}&lang=pl`;
-      }
-      return null;
-    },
-  },
-  {
-    id: 'pl-autoembed',
-    name: '🇵🇱 PL • AutoEmbed Polska',
-    badge: '🇵🇱 PL Mirror',
-    langs: ['PL', 'MULTI'],
-    build: (c) => {
-      const id = c.tmdb ? String(c.tmdb) : c.imdb || '';
-      if (!id) return null;
-      return c.series
-        ? `https://player.autoembed.cc/embed/tv/${id}/${c.s}/${c.e}?lang=pl`
-        : `https://player.autoembed.cc/embed/movie/${id}?lang=pl`;
-    },
-  },
-
-  // ──────── 4. SPANISH CHANNELS (🇪🇸 ES) ────────
-  {
-    id: 'es-videasy',
-    name: '🇪🇸 ES • Videasy Español 4K',
-    badge: '🇪🇸 ES 4K',
-    langs: ['ES', 'SUB'],
     build: (c) =>
       c.tmdb
         ? c.series
-          ? `https://player.videasy.net/tv/${c.tmdb}/${c.s}/${c.e}?color=e50914&lang=es`
-          : `https://player.videasy.net/movie/${c.tmdb}?color=e50914&lang=es`
+          ? `https://vidsrc.su/embed/tv/${c.tmdb}/${c.s}/${c.e}?lang=pl`
+          : `https://vidsrc.su/embed/movie/${c.tmdb}?lang=pl`
         : null,
   },
   {
+    id: 'pl-vidsrc-to',
+    name: '🇵🇱 PL • VidSrc TO Polska (Napisy PL)',
+    badge: '🇵🇱 Napisy',
+    langs: ['PL', 'EN'],
+    build: (c) => {
+      const id = c.imdb || (c.tmdb ? String(c.tmdb) : '');
+      if (!id) return null;
+      return c.series
+        ? `https://vidsrc.to/embed/tv/${id}/${c.s}/${c.e}?sub.lang=pl`
+        : `https://vidsrc.to/embed/movie/${id}?sub.lang=pl`;
+    },
+  },
+
+  // ──────── 5. SPANISH CHANNELS (🇪🇸 ES) ────────
+  {
     id: 'es-vidlink',
-    name: '🇪🇸 ES • VidLink Español',
-    badge: '🇪🇸 Latino/ES',
+    name: '🇪🇸 ES • VidLink Español 4K (Latino / Castellano)',
+    badge: '🇪🇸 ES 4K',
     langs: ['ES', 'EN'],
     build: (c) => {
       const id = anyId(c);
@@ -592,112 +559,28 @@ const PROVIDERS: ProviderDef[] = [
     },
   },
   {
-    id: 'es-multiembed',
-    name: '🇪🇸 ES • SuperEmbed Español',
+    id: 'es-vidsrc-su',
+    name: '🇪🇸 ES • VidSrc Español HD',
     badge: '🇪🇸 ES HD',
     langs: ['ES', 'MULTI'],
-    build: (c) => {
-      if (c.tmdb) {
-        return c.series
-          ? `https://multiembed.mov/?video_id=${c.tmdb}&tmdb=1&s=${c.s}&e=${c.e}&lang=es`
-          : `https://multiembed.mov/?video_id=${c.tmdb}&tmdb=1&lang=es`;
-      }
-      if (c.imdb) {
-        return c.series
-          ? `https://multiembed.mov/?video_id=${c.imdb}&s=${c.s}&e=${c.e}&lang=es`
-          : `https://multiembed.mov/?video_id=${c.imdb}&lang=es`;
-      }
-      return null;
-    },
+    build: (c) =>
+      c.tmdb
+        ? c.series
+          ? `https://vidsrc.su/embed/tv/${c.tmdb}/${c.s}/${c.e}?lang=es`
+          : `https://vidsrc.su/embed/movie/${c.tmdb}?lang=es`
+        : null,
   },
   {
-    id: 'es-autoembed',
-    name: '🇪🇸 ES • AutoEmbed Español',
-    badge: '🇪🇸 ES Mirror',
-    langs: ['ES', 'MULTI'],
+    id: 'es-vidsrc-to',
+    name: '🇪🇸 ES • VidSrc TO Español',
+    badge: '🇪🇸 Sub ES',
+    langs: ['ES', 'EN'],
     build: (c) => {
-      const id = c.tmdb ? String(c.tmdb) : c.imdb || '';
+      const id = c.imdb || (c.tmdb ? String(c.tmdb) : '');
       if (!id) return null;
       return c.series
-        ? `https://player.autoembed.cc/embed/tv/${id}/${c.s}/${c.e}?lang=es`
-        : `https://player.autoembed.cc/embed/movie/${id}?lang=es`;
-    },
-  },
-
-  // ──────── 5. MULTI-AUDIO & STUDIO CHANNELS (🌐 MULTI / RU) ────────
-  {
-    id: 'videasy',
-    name: '🌐 Videasy Global 4K (All Langs)',
-    badge: '4K Multi',
-    langs: ['MULTI', 'UA', 'EN', 'PL', 'ES', 'RU'],
-    build: (c) =>
-      c.tmdb
-        ? c.series
-          ? `https://player.videasy.net/tv/${c.tmdb}/${c.s}/${c.e}?color=e50914`
-          : `https://player.videasy.net/movie/${c.tmdb}?color=e50914`
-        : null,
-  },
-  {
-    id: 'vidsrc-pm',
-    name: '🌐 VidSrc PM (Multi Mirror)',
-    badge: 'HD',
-    langs: ['EN', 'MULTI', 'SUB'],
-    build: (c) => {
-      const q = c.imdb ? `imdb=${c.imdb}` : c.tmdb ? `tmdb=${c.tmdb}` : '';
-      if (!q) return null;
-      return c.series
-        ? `https://vidsrc.pm/embed/tv?${q}&season=${c.s}&episode=${c.e}`
-        : `https://vidsrc.pm/embed/movie?${q}`;
-    },
-  },
-  {
-    id: 'vidsrc-su',
-    name: '🌐 VidSrc SU (Fast CDN)',
-    badge: 'HD',
-    langs: ['EN', 'SUB'],
-    build: (c) =>
-      c.tmdb
-        ? c.series
-          ? `https://vidsrc.su/embed/tv/${c.tmdb}/${c.s}/${c.e}`
-          : `https://vidsrc.su/embed/movie/${c.tmdb}`
-        : null,
-  },
-  {
-    id: 'rezka-embess',
-    name: '🎬 HDRezka Mirror (embess.ws • Резерв)',
-    badge: 'Mirror #1',
-    langs: ['MULTI', 'UA', 'UK', 'RU', 'EN'],
-    build: (c) => {
-      if (c.imdb) {
-        return c.series
-          ? `https://api.embess.ws/embed/imdb/${c.imdb}?season=${c.s}&episode=${c.e}`
-          : `https://api.embess.ws/embed/imdb/${c.imdb}`;
-      }
-      if (c.tmdb) {
-        return c.series
-          ? `https://api.embess.ws/embed/tmdb/${c.tmdb}?season=${c.s}&episode=${c.e}`
-          : `https://api.embess.ws/embed/tmdb/${c.tmdb}`;
-      }
-      return null;
-    },
-  },
-  {
-    id: 'rezka-namy',
-    name: '🎬 HDRezka Mirror (namy.ws • Резерв)',
-    badge: 'Mirror #2',
-    langs: ['MULTI', 'UA', 'UK', 'RU', 'EN'],
-    build: (c) => {
-      if (c.imdb) {
-        return c.series
-          ? `https://api.namy.ws/embed/imdb/${c.imdb}?season=${c.s}&episode=${c.e}`
-          : `https://api.namy.ws/embed/imdb/${c.imdb}`;
-      }
-      if (c.tmdb) {
-        return c.series
-          ? `https://api.namy.ws/embed/tmdb/${c.tmdb}?season=${c.s}&episode=${c.e}`
-          : `https://api.namy.ws/embed/tmdb/${c.tmdb}`;
-      }
-      return null;
+        ? `https://vidsrc.to/embed/tv/${id}/${c.s}/${c.e}?sub.lang=es`
+        : `https://vidsrc.to/embed/movie/${id}?sub.lang=es`;
     },
   },
 ];
@@ -712,6 +595,7 @@ export function buildServers(
     imdb: ids.imdb,
     tmdb: ids.tmdb,
     title: media.originalTitle || media.title,
+    year: media.year,
     series: isSeriesLike(media),
     s: season || 1,
     e: episode || 1,
@@ -719,13 +603,31 @@ export function buildServers(
 
   const servers: StreamServer[] = [];
 
-  // 1. Direct UAKino / Kinobox -> Ashdi VIP Ukrainian Dubbing (if already resolved)
+  // 1. Always place primary HDRezka mirrors FIRST (#1 & #2)
+  const rezkaPrimaryIds = ['rezka-embess', 'rezka-namy', 'rezka-kinogram'];
+  for (const rId of rezkaPrimaryIds) {
+    const def = PROVIDERS.find((p) => p.id === rId);
+    if (!def) continue;
+    const url = def.build(ctx);
+    if (url) {
+      servers.push({
+        id: def.id,
+        name: def.name,
+        badge: def.badge,
+        url,
+        mode: 'embed',
+        langs: def.langs,
+      });
+    }
+  }
+
+  // 2. Direct UAKino / Kinobox -> Ashdi VIP Ukrainian Dubbing (right after HDRezka)
   const ua = getCachedUaServer(media, ctx.s);
   if (ua && !servers.some((s) => s.id === ua.id)) {
     servers.push(ua);
   }
 
-  // 1b. Direct live Voidboost / Alloha / Kodik URLs resolved from Kinobox API
+  // 2b. Direct live Voidboost / Alloha / Kodik URLs resolved from Kinobox API
   const primaryTitle = media.title || media.originalTitle || '';
   const origTitle = media.originalTitle || '';
   const slug = slugify(primaryTitle);
@@ -740,7 +642,7 @@ export function buildServers(
     }
   }
 
-  // 2. Build all configured multi-language providers in priority order
+  // 3. Build remaining configured multi-language providers in strict hierarchy order
   for (const p of PROVIDERS) {
     if (servers.some((s) => s.id === p.id)) continue;
     const url = p.build(ctx);
@@ -756,7 +658,7 @@ export function buildServers(
     }
   }
 
-  // 3. Trailer channel
+  // 4. Trailer channel
   servers.push(
     media.trailerYoutubeId
       ? {
@@ -792,7 +694,7 @@ export function buildServers(
 // ───────────────────────────── Health probing ─────────────────────────────
 
 const BLOCK_PAGE =
-  /themeloadfailed|не удалось загрузить тему|запрашиваемый контент не найден|змініть країну|недоступн|not available in your country|geo-?block|video not found|file not found|access denied|error code:\s*233011|this video file cannot be played/i;
+  /themeloadfailed|не удалось загрузить тему|запрашиваемый контент не найден|змініть країну|недоступн|not available in your country|geo-?block|video not found|file not found|404 page not found|access denied|error code:\s*233011|this video file cannot be played/i;
 
 const healthCache = new Map<string, { status: ServerHealth; at: number }>();
 const HEALTH_TTL = 6 * 60 * 1000;
@@ -810,6 +712,7 @@ export function markServerDead(url: string): void {
 
 export async function probeServer(url: string, timeoutMs: number = 2800): Promise<ServerHealth> {
   if (!url) return 'unknown';
+  if (url.startsWith('/')) return 'ok';
   const cached = healthCache.get(url);
   if (cached && Date.now() - cached.at < HEALTH_TTL) return cached.status;
 
@@ -842,11 +745,9 @@ export async function probeServer(url: string, timeoutMs: number = 2800): Promis
           const text = await res.text().catch(() => '');
           status = BLOCK_PAGE.test(text.slice(0, 2000)) && text.length < 3500 ? 'dead' : 'ok';
         } else {
-          // 403/429 Cloudflare or bot check may still load fine in an actual iframe
           status = 'unknown';
         }
       } catch {
-        // Timeouts or CORS restrictions on fetch shouldn't falsely blacklist an iframe server
         status = 'unknown';
       } finally {
         clearTimeout(timer);
@@ -882,11 +783,20 @@ export async function probeServers(
 const rank = (h: ServerHealth | undefined) =>
   h === 'ok' ? 0 : h === 'unknown' || h === 'checking' || !h ? 1 : 2;
 
+const hierarchyTier = (s: StreamServer): number => {
+  if (s.id === 'rezka-embess') return 0;
+  if (s.id.startsWith('rezka-')) return 1;
+  if (s.id === 'ua-ashdi' || s.id.startsWith('ua-')) return 2;
+  if (s.langs?.includes('UA')) return 3;
+  return 4;
+};
+
 /**
- * Stable sort:
- * - Working Ukrainian (🇺🇦 UA) servers ALWAYS come first!
- * - Followed by other working embed servers in language order (EN, PL, ES, MULTI)
- * - Unknown next, dead last, and trailer/custom at the end.
+ * Stable hierarchy sort:
+ * 1) Working HDRezka servers ALWAYS come first (#1 in hierarchy)!
+ * 2) Followed by Ukrainian (🇺🇦 UA) servers
+ * 3) Followed by other working embed servers in language order (EN, PL, ES, MULTI)
+ * 4) Dead servers last, and trailer/custom at the end.
  */
 export function orderByHealth(
   servers: StreamServer[],
@@ -900,13 +810,15 @@ export function orderByHealth(
       const be = b.s.mode === 'embed' ? 0 : 1;
       if (ae !== be) return ae - be;
 
+      const aDead = rank(get(a.s.id)) === 2 ? 1 : 0;
+      const bDead = rank(get(b.s.id)) === 2 ? 1 : 0;
+      if (aDead !== bDead) return aDead - bDead;
+
+      const tDiff = hierarchyTier(a.s) - hierarchyTier(b.s);
+      if (tDiff !== 0) return tDiff;
+
       const d = rank(get(a.s.id)) - rank(get(b.s.id));
       if (d !== 0) return d;
-
-      // Within the same health tier, keep Ukrainian channels first
-      const aUa = a.s.id.startsWith('ua-') || a.s.langs?.includes('UA') ? 0 : 1;
-      const bUa = b.s.id.startsWith('ua-') || b.s.langs?.includes('UA') ? 0 : 1;
-      if (aUa !== bUa) return aUa - bUa;
 
       return a.i - b.i;
     })

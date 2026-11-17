@@ -204,11 +204,19 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   useEffect(() => {
     let active = true;
     ensureIds(media)
-      .then(() => resolveUaServer(media, activeSeason))
+      .then(() => {
+        if (active) setServersVersion((v) => v + 1);
+        return resolveUaServer(media, activeSeason);
+      })
       .then((ua) => {
         if (!active) return;
         setServersVersion((v) => v + 1);
-        if (ua && !userExplicitlySelectedServerRef.current && !failedServerIdsRef.current.has(ua.id)) {
+        if (
+          ua &&
+          !userExplicitlySelectedServerRef.current &&
+          !failedServerIdsRef.current.has(ua.id) &&
+          failedServerIdsRef.current.has('rezka-embess')
+        ) {
           setSelectedServerId(ua.id);
           showOsd('🇺🇦 Знайдено український дубляж (Ashdi VIP)');
         }
@@ -295,19 +303,19 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       const tr = availableServers.find((s) => s.mode === 'trailer');
       if (tr) return tr.id;
     }
-    const directAshdi = availableServers.find((s) => s.id === 'ua-ashdi');
-    if (directAshdi) return directAshdi.id;
-    if (embedUrl && !embedUrl.includes('loadbox.ws') && !embedUrl.includes('namy.ws')) {
+    if (embedUrl && !embedUrl.includes('loadbox.ws')) {
+      const exact = availableServers.find((s) => s.url === embedUrl);
+      if (exact) return exact.id;
       const matched = availableServers.find(
-        (s) => s.url && embedUrl.includes(s.url.split('?')[0])
+        (s) => s.url && embedUrl.split('?')[0] === s.url.split('?')[0]
       );
       if (matched) return matched.id;
     }
-    const uaServer = availableServers.find(
-      (s) => s.id.startsWith('ua-') || s.id.includes('ashdi') || s.langs?.includes('UA')
-    );
-    if (uaServer) return uaServer.id;
-    return availableServers[0]?.id || 'ua-videasy';
+    const rezkaPrimary = availableServers.find((s) => s.id === 'rezka-embess' || s.id.startsWith('rezka-'));
+    if (rezkaPrimary) return rezkaPrimary.id;
+    const directAshdi = availableServers.find((s) => s.id === 'ua-ashdi');
+    if (directAshdi) return directAshdi.id;
+    return availableServers[0]?.id || 'rezka-embess';
   };
 
   const [selectedServerId, setSelectedServerId] = useState<string>(getInitialServerId);
@@ -573,7 +581,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     setIframeQualities([]);
     if (activeServer) {
       const idLow = activeServer.id.toLowerCase();
-      if (idLow.startsWith('ua-') || idLow.includes('ashdi')) {
+      if (idLow.startsWith('rezka-') || idLow.startsWith('ua-') || idLow.includes('ashdi') || idLow.includes('kinobox')) {
         sendIframeCommand('preferLanguage', { lang: 'ua' });
       } else if (idLow.startsWith('pl-')) {
         sendIframeCommand('preferLanguage', { lang: 'pl' });
@@ -1291,12 +1299,17 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   ]);
 
   const getCurrentAudioLabel = () => {
+    const activeVoice = iframeVoices.find((v) => v.active);
+    if (activeVoice?.label) {
+      return activeVoice.label.length > 18
+        ? activeVoice.label.slice(0, 18) + '…'
+        : activeVoice.label;
+    }
     const idLow = (activeServer?.id || '').toLowerCase();
-    if (idLow.includes('rezka-ag')) return '🎬 HDRezka.ag';
+    if (idLow === 'rezka-embess') return '🇺🇦 HDRezka #1';
+    if (idLow.startsWith('rezka-')) return '🎬 HDRezka UA';
     if (idLow.includes('ashdi')) return '🇺🇦 Ashdi UA';
-    if (idLow.includes('ua-kino-rezka')) return '🇺🇦 HDRezka UA';
-    if (idLow.includes('ua-videasy')) return '🇺🇦 Videasy UA';
-    if (idLow.includes('ua-autoembed')) return '🇺🇦 AutoEmbed UA';
+    if (idLow.includes('kinobox')) return '🇺🇦 Multi UA';
     if (idLow.startsWith('pl-')) return '🇵🇱 Polski';
     if (idLow.startsWith('es-')) return '🇪🇸 Español';
     if (activeServer?.mode === 'torrent') return '⚡ P2P Торрент';
@@ -1787,11 +1800,18 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                           key={`${v.index}-${v.label}`}
                           type="button"
                           onClick={() => {
+                            setIframeVoices((prev) =>
+                              prev.map((item) => ({
+                                ...item,
+                                active: item.index === v.index && item.label === v.label,
+                              }))
+                            );
                             sendIframeCommand('selectInternalVoice', {
                               index: v.index,
                               label: v.label,
                             });
                             showOsd(`🎙️ Озвучка: ${v.label}`);
+                            setTimeout(() => setActiveMenu('none'), 160);
                           }}
                           tabIndex={0}
                           className={`p-2.5 rounded-xl border text-left text-xs font-bold flex items-center justify-between transition-all tv-btn-focus focus:outline-none ${
@@ -1833,15 +1853,16 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                             availableServers.find(
                               (s) =>
                                 isAlive(s) &&
-                                (s.id === 'ua-ashdi' ||
-                                  s.id.startsWith('ua-') ||
+                                (s.id === 'rezka-embess' ||
                                   s.id.startsWith('rezka-') ||
+                                  s.id === 'ua-ashdi' ||
+                                  s.id.startsWith('ua-') ||
                                   s.langs?.includes('UA'))
                             ) ||
                             availableServers.find(
-                              (s) => s.id.startsWith('ua-') || s.langs?.includes('UA')
+                              (s) => s.id.startsWith('rezka-') || s.id.startsWith('ua-') || s.langs?.includes('UA')
                             );
-                          if (uaCand) {
+                          if (uaCand && activeServer && !activeServer.langs?.includes('UA')) {
                             userExplicitlySelectedServerRef.current = true;
                             setSelectedServerId(uaCand.id);
                           }
@@ -1984,16 +2005,16 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                       const isTorrent = srv.mode === 'torrent';
 
                       const getDesc = () => {
-                        if (idLow.includes('rezka-ag'))
-                          return '🎬 Офіційна бібліотека HDRezka (rezka.ag): повний вибір мовних доріжок, дубляж та студії';
-                        if (idLow.includes('ua-kino-rezka'))
-                          return '🇺🇦 HDRezka (rezka.ag) • Український професійний дубляж';
+                        if (idLow.includes('rezka-embess'))
+                          return '🇺🇦 HDRezka #1 (Головний сервер): Українська озвучка в пріоритеті + усі студії та оригінал 1080p';
+                        if (idLow.includes('rezka-namy'))
+                          return '🇺🇦 HDRezka #2 (Пряме дзеркало): Український переклад, дубляж та студії 1080p';
+                        if (idLow.includes('rezka-kinogram'))
+                          return '🇺🇦 HDRezka #3 (Kinogram VIP): Український дубляж та багатозвучка 1080p';
                         if (idLow.includes('ashdi'))
                           return '🇺🇦 Повний професійний український дубляж (UAKino / Ashdi)';
-                        if (idLow.includes('ua-videasy'))
-                          return '🇺🇦 Український потік 4K HDR + субтитри';
-                        if (idLow.includes('ua-autoembed'))
-                          return '🇺🇦 Український дубляж та багатоголосий переклад';
+                        if (idLow.includes('kinobox'))
+                          return '🇺🇦 Каскадний балансер: HDRezka • Ashdi • VidLink (Українська / Multi)';
                         if (isPl) return '🇵🇱 Polski Lektor / Dubbing / Napisy PL';
                         if (isEs) return '🇪🇸 Español Latino / Castellano + Subtítulos';
                         if (isRezka)

@@ -362,7 +362,7 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
     setIframeLoading(true);
     setActivePlayback({
       id: ev.id,
-      title: ev.title,
+      title: ev.title.toUpperCase(),
       subtitle: `${ev.league}${ev.venue ? ` • ${ev.venue}` : ''}`,
       badge: ev.leagueBadge,
       homeTeam: ev.homeTeam,
@@ -451,9 +451,35 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
             (selectedSport === 'ucl' && c.sport === 'football')
         );
 
+  // Strict 3-Way Partition:
+  // 1. LIVE matches currently underway
+  // 2. UPCOMING announcements (scheduled for later)
+  // 3. FINISHED match results (retained up to 48h)
   const liveEvents = filteredEvents.filter((e) => e.status === 'live');
-  const upcomingAndOtherEvents = filteredEvents.filter((e) => e.status !== 'live');
-  const heroEvent = liveEvents[0] || filteredEvents[0] || events[0];
+  const upcomingEvents = filteredEvents.filter((e) => e.status === 'upcoming');
+  const finishedEvents = filteredEvents.filter((e) => e.status === 'finished');
+  const heroEvent = liveEvents[0] || upcomingEvents[0] || filteredEvents[0] || events[0];
+
+  const handleScanStreams = async () => {
+    setIsRefreshing(true);
+    setScanStageText('Глибоке live-сканування потоків (ESPN • StreamFree FHD • Direct HLS)...');
+    try {
+      const freshEvents = await sportsService.scanAllSourcesLive((stage) => {
+        setScanStageText(stage);
+      });
+      const stats = sportsService.getScannerStats();
+      setEvents(freshEvents);
+      setChannels([...sportsService.getChannels('all')]);
+      setScannerStats(stats);
+      setScanStageText(
+        `Сканер оновлено: ${stats.liveMatchesCount} LIVE • ${stats.upcomingMatchesCount ?? freshEvents.filter((ev: SportEvent) => ev.status === 'upcoming').length} анонсів • ${stats.finishedMatchesCount ?? freshEvents.filter((ev: SportEvent) => ev.status === 'finished').length} завершених (48г) • ${stats.totalFreeStreams} потоків`
+      );
+    } catch {
+      setScanStageText('Помилка оновлення потоків. Спробуйте ще раз.');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   return (
     <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-[#07090e] text-slate-100 pb-16">
@@ -495,7 +521,7 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
             </div>
 
             <button
-              onClick={() => loadSportsData(true)}
+              onClick={handleScanStreams}
               disabled={isRefreshing}
               tabIndex={0}
               className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-lg shadow-emerald-600/25 active:scale-95 transition-all tv-btn-focus focus:outline-none"
@@ -507,7 +533,7 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
         </div>
       </div>
 
-      {/* Live Free Stream Scanner Telemetry Strip (Vinegret NBA style) */}
+      {/* Live Free Stream Scanner Telemetry Strip */}
       <div className="bg-[#090e1a] border-b border-white/10 px-4 sm:px-6 lg:px-8 py-2.5">
         <div className="max-w-[1700px] mx-auto flex flex-wrap items-center justify-between gap-2 text-xs">
           <div className="flex flex-wrap items-center gap-2 sm:gap-4">
@@ -515,20 +541,23 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
               <Activity className="w-4 h-4" />
               <span>СКАНЕР ВІЛЬНИХ ПОТОКІВ:</span>
             </span>
-            <span className="px-2.5 py-0.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold">
-              ⚡ Потоків A/B/C/D/E: {scannerStats.totalFreeStreams}
-            </span>
             <span className="px-2.5 py-0.5 rounded-lg bg-red-500/15 border border-red-500/30 text-red-300 font-bold">
-              🔴 Live матчів: {scannerStats.liveMatchesCount}
+              🔴 LIVE: {scannerStats.liveMatchesCount}
+            </span>
+            <span className="px-2.5 py-0.5 rounded-lg bg-blue-500/15 border border-blue-500/30 text-blue-300 font-bold">
+              📅 Анонси: {scannerStats.upcomingMatchesCount ?? upcomingEvents.length}
+            </span>
+            <span className="px-2.5 py-0.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold">
+              🏁 Завершені (&lt;48г): {scannerStats.finishedMatchesCount ?? finishedEvents.length}
+            </span>
+            <span className="px-2.5 py-0.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold">
+              ⚡ Всі потоки: {scannerStats.totalFreeStreams}
             </span>
             <span className="hidden md:inline-block px-2.5 py-0.5 rounded-lg bg-blue-500/15 border border-blue-500/30 text-blue-300 font-bold">
               📡 StreamFree 1080p: {scannerStats.streamFreeNodes}
             </span>
             <span className="hidden lg:inline-block px-2.5 py-0.5 rounded-lg bg-purple-500/15 border border-purple-500/30 text-purple-300 font-bold">
               📺 Direct HLS (.m3u8): {scannerStats.directHlsNodes}
-            </span>
-            <span className="hidden xl:inline-block px-2.5 py-0.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 font-bold">
-              🎬 Повні записи & Хайлайти: {scannerStats.replayNodes}
             </span>
           </div>
           <span className="text-[11px] text-slate-400 font-mono">
@@ -571,7 +600,7 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
                   ) : null}
                 </div>
 
-                <h2 className="text-2xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-tight">
+                <h2 className="text-2xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-tight uppercase">
                   {heroEvent.title}
                 </h2>
 
@@ -611,8 +640,8 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
                 <div className="bg-[#0d1424]/95 border border-white/15 rounded-3xl p-4 sm:p-6 shadow-2xl flex items-center justify-around gap-4 sm:gap-6 w-full lg:w-auto sm:min-w-[360px]">
                   <div className="flex flex-col items-center text-center gap-2 flex-1">
                     <TeamLogo team={heroEvent.homeTeam} sport={heroEvent.sport} size="lg" />
-                    <span className="text-xs sm:text-sm font-extrabold text-white line-clamp-1">
-                      {heroEvent.homeTeam.name}
+                    <span className="text-xs sm:text-sm font-black text-white line-clamp-1 uppercase tracking-wider">
+                      {heroEvent.homeTeam.name.toUpperCase()}
                     </span>
                   </div>
 
@@ -625,15 +654,15 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
                     ) : (
                       <div className="text-xl sm:text-2xl font-black text-slate-400">VS</div>
                     )}
-                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-red-600/20 text-red-400 border border-red-500/30">
-                      LIVE ARENA
+                    <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-red-600/20 text-red-400 border border-red-500/30 uppercase">
+                      {heroEvent.status === 'live' ? 'LIVE ARENA' : heroEvent.status === 'finished' ? 'FINAL' : 'UPCOMING'}
                     </span>
                   </div>
 
                   <div className="flex flex-col items-center text-center gap-2 flex-1">
                     <TeamLogo team={heroEvent.awayTeam} sport={heroEvent.sport} size="lg" />
-                    <span className="text-xs sm:text-sm font-extrabold text-white line-clamp-1">
-                      {heroEvent.awayTeam.name}
+                    <span className="text-xs sm:text-sm font-black text-white line-clamp-1 uppercase tracking-wider">
+                      {heroEvent.awayTeam.name.toUpperCase()}
                     </span>
                   </div>
                 </div>
@@ -821,11 +850,11 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
             <div className="flex items-center gap-2.5">
               <span className="w-3 h-3 rounded-full bg-red-600 animate-ping" />
               <h2 className="text-lg sm:text-2xl font-black text-white">
-                🔴 Live-трансляції спортивних подій ({liveEvents.length})
+                🔴 Зараз у прямому ефірі ({liveEvents.length})
               </h2>
             </div>
             <span className="text-xs text-slate-400 hidden sm:inline">
-              Автономний сканер StreamFree + Vinegret + ESPN • Оновлення кожні 60 сек
+              Прямі трансляції • Оновлення статусу в реальному часі
             </span>
           </div>
 
@@ -835,12 +864,33 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
               style={{ overflowAnchor: 'none' }}
               className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
             >
-              {[1, 2, 3, 4, 5, 6].map((n) => (
+              {[1, 2, 3].map((n) => (
                 <div
                   key={n}
                   className="h-48 rounded-2xl bg-white/5 border border-white/10 animate-pulse p-5"
                 />
               ))}
+            </div>
+          ) : liveEvents.length === 0 ? (
+            <div className="p-6 rounded-2xl bg-[#0c1220]/70 border border-white/10 flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center shrink-0">
+                <Radio className="w-6 h-6 text-emerald-400" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm sm:text-base font-bold text-white">
+                  Наразі немає активних прямих матчів у вибраній категорії
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Матчі, які вже завершилися, переміщено до розділу результатів нижче. Перегляньте анонси найближчих трансляцій або скористайтесь 24/7 спортивними каналами вгорі.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleScanStreams}
+                className="px-4 py-2 rounded-xl bg-white/10 hover:bg-emerald-600 text-white text-xs font-bold border border-white/15 transition-all shrink-0"
+              >
+                Оновити розклад
+              </button>
             </div>
           ) : (
             <div
@@ -886,8 +936,8 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
                     <div className="my-2 py-3 px-3 rounded-xl bg-black/40 border border-white/5 flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2.5 min-w-0 flex-1">
                         <TeamLogo team={ev.homeTeam} sport={ev.sport} size="sm" />
-                        <span className="text-xs sm:text-sm font-bold text-white truncate">
-                          {ev.homeTeam.name}
+                        <span className="text-xs sm:text-sm font-black text-white truncate uppercase tracking-wide">
+                          {ev.homeTeam.name.toUpperCase()}
                         </span>
                       </div>
 
@@ -898,16 +948,16 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
                       </div>
 
                       <div className="flex items-center justify-end gap-2.5 min-w-0 flex-1 text-right">
-                        <span className="text-xs sm:text-sm font-bold text-white truncate">
-                          {ev.awayTeam.name}
+                        <span className="text-xs sm:text-sm font-black text-white truncate uppercase tracking-wide">
+                          {ev.awayTeam.name.toUpperCase()}
                         </span>
                         <TeamLogo team={ev.awayTeam} sport={ev.sport} size="sm" />
                       </div>
                     </div>
                   ) : (
                     <div className="my-2">
-                      <h3 className="text-base sm:text-lg font-extrabold text-white line-clamp-2">
-                        {ev.title}
+                      <h3 className="text-base sm:text-lg font-black text-white line-clamp-2 uppercase tracking-wide">
+                        {ev.title.toUpperCase()}
                       </h3>
                       <p className="text-xs text-slate-400 mt-1">{ev.subtitle}</p>
                     </div>
@@ -952,15 +1002,20 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
         </section>
 
         {/* ========================================================
-            3. UPCOMING SCHEDULE, ANNOUNCEMENTS & FULL MATCH REPLAYS
+            3. UPCOMING SCHEDULE & ANNOUNCEMENTS (STRICTLY AFTER LIVE)
             ======================================================== */}
-        {upcomingAndOtherEvents.length > 0 && (
+        {upcomingEvents.length > 0 && (
           <section className="space-y-4 pt-2">
-            <div className="flex items-center gap-2.5">
-              <Calendar className="w-5 h-5 text-amber-400" />
-              <h2 className="text-lg sm:text-2xl font-black text-white">
-                📅 Розклад майбутніх матчів, Хайлайти та Повні записи ({upcomingAndOtherEvents.length})
-              </h2>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Calendar className="w-5 h-5 text-blue-400" />
+                <h2 className="text-lg sm:text-2xl font-black text-white">
+                  📅 Анонси майбутніх трансляцій ({upcomingEvents.length})
+                </h2>
+              </div>
+              <span className="text-xs text-slate-400 hidden sm:inline">
+                Розклад майбутніх матчів • Прямі ефіри відкриються перед початком
+              </span>
             </div>
 
             <div
@@ -968,7 +1023,7 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
               style={{ overflowAnchor: 'none' }}
               className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
             >
-              {upcomingAndOtherEvents.map((ev) => (
+              {upcomingEvents.map((ev) => (
                 <div
                   key={ev.id}
                   tabIndex={0}
@@ -980,13 +1035,13 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
                       openEventPlayer(ev, 0);
                     }
                   }}
-                  className="group rounded-2xl bg-[#0b101c] border border-white/10 hover:border-amber-500/50 p-4 sm:p-5 flex flex-col justify-between gap-3 cursor-pointer transition-all tv-card-focus focus:outline-none"
+                  className="group rounded-2xl bg-[#0b101c] border border-white/10 hover:border-blue-500/50 p-4 sm:p-5 flex flex-col justify-between gap-3 cursor-pointer transition-all tv-card-focus focus:outline-none"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-white/5 text-slate-300">
                       {ev.leagueBadge} • {ev.league}
                     </span>
-                    <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                    <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-blue-500/15 text-blue-300 border border-blue-500/30 flex items-center gap-1">
                       <Clock className="w-3 h-3" />
                       {ev.statusText}
                     </span>
@@ -996,24 +1051,24 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
                     <div className="py-2.5 px-3 rounded-xl bg-black/30 border border-white/5 flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2 min-w-0 flex-1">
                         <TeamLogo team={ev.homeTeam} sport={ev.sport} size="sm" />
-                        <span className="text-xs sm:text-sm font-bold text-white truncate">
-                          {ev.homeTeam.name}
+                        <span className="text-xs sm:text-sm font-black text-white truncate uppercase tracking-wide">
+                          {ev.homeTeam.name.toUpperCase()}
                         </span>
                       </div>
                       <span className="px-2 py-0.5 rounded bg-white/5 text-[11px] font-black text-slate-400 shrink-0">
                         VS
                       </span>
                       <div className="flex items-center justify-end gap-2 min-w-0 flex-1 text-right">
-                        <span className="text-xs sm:text-sm font-bold text-white truncate">
-                          {ev.awayTeam.name}
+                        <span className="text-xs sm:text-sm font-black text-white truncate uppercase tracking-wide">
+                          {ev.awayTeam.name.toUpperCase()}
                         </span>
                         <TeamLogo team={ev.awayTeam} sport={ev.sport} size="sm" />
                       </div>
                     </div>
                   ) : (
                     <div>
-                      <h3 className="text-sm sm:text-base font-extrabold text-white group-hover:text-amber-400 transition-colors">
-                        {ev.title}
+                      <h3 className="text-sm sm:text-base font-black text-white group-hover:text-blue-400 transition-colors uppercase tracking-wide">
+                        {ev.title.toUpperCase()}
                       </h3>
                       <p className="text-xs text-slate-400 mt-1">{ev.subtitle}</p>
                     </div>
@@ -1036,9 +1091,101 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
                         </button>
                       ))}
                     </div>
-                    <span className="px-3 py-1.5 rounded-xl bg-white/10 group-hover:bg-amber-500 group-hover:text-slate-950 text-white text-xs font-bold flex items-center gap-1.5 shrink-0 transition-colors">
+                    <span className="px-3 py-1.5 rounded-xl bg-white/10 group-hover:bg-blue-600 text-white text-xs font-bold flex items-center gap-1.5 shrink-0 transition-colors">
                       <Play className="w-3.5 h-3.5 fill-current" />
-                      <span>Увімкнути</span>
+                      <span>Анонс</span>
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ========================================================
+            4. FINISHED MATCH RESULTS (RETAINED UP TO 48 HOURS)
+            ======================================================== */}
+        {finishedEvents.length > 0 && (
+          <section className="space-y-4 pt-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                <h2 className="text-lg sm:text-2xl font-black text-white">
+                  🏁 Результати завершених матчів ({finishedEvents.length})
+                </h2>
+              </div>
+              <span className="text-xs text-slate-400 hidden sm:inline">
+                Історія за останні 48 годин • Фінальні рахунки та хайлайти
+              </span>
+            </div>
+
+            <div
+              data-nav-row="sports-finished-events"
+              style={{ overflowAnchor: 'none' }}
+              className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
+            >
+              {finishedEvents.map((ev) => (
+                <div
+                  key={ev.id}
+                  tabIndex={0}
+                  role="button"
+                  onClick={() => openEventPlayer(ev, 0)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      openEventPlayer(ev, 0);
+                    }
+                  }}
+                  className="group rounded-2xl bg-[#090d16] border border-white/10 hover:border-emerald-500/50 p-4 sm:p-5 flex flex-col justify-between gap-3 cursor-pointer transition-all tv-card-focus focus:outline-none opacity-90 hover:opacity-100"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-white/5 text-slate-300">
+                      {ev.leagueBadge} • {ev.league}
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-md text-[11px] font-black bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                      {ev.statusText || 'Фінальний рахунок'}
+                    </span>
+                  </div>
+
+                  {ev.homeTeam && ev.awayTeam ? (
+                    <div className="py-2.5 px-3 rounded-xl bg-black/40 border border-white/5 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <TeamLogo team={ev.homeTeam} sport={ev.sport} size="sm" />
+                        <span className="text-xs sm:text-sm font-black text-white truncate uppercase tracking-wide">
+                          {ev.homeTeam.name.toUpperCase()}
+                        </span>
+                      </div>
+
+                      <div className="px-3 py-1 rounded-lg bg-emerald-950/70 border border-emerald-500/30 text-emerald-300 font-mono font-black text-base sm:text-lg shrink-0">
+                        {ev.homeTeam.score !== undefined && ev.awayTeam.score !== undefined
+                          ? `${ev.homeTeam.score} : ${ev.awayTeam.score}`
+                          : 'FT'}
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2 min-w-0 flex-1 text-right">
+                        <span className="text-xs sm:text-sm font-black text-white truncate uppercase tracking-wide">
+                          {ev.awayTeam.name.toUpperCase()}
+                        </span>
+                        <TeamLogo team={ev.awayTeam} sport={ev.sport} size="sm" />
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <h3 className="text-sm sm:text-base font-black text-white uppercase tracking-wide">
+                        {ev.title.toUpperCase()}
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-1">{ev.subtitle}</p>
+                    </div>
+                  )}
+
+                  <div className="pt-2 border-t border-white/5 flex items-center justify-between gap-2">
+                    <span className="text-[10px] text-slate-400">
+                      Зберігається до 48 год
+                    </span>
+                    <span className="px-3 py-1.5 rounded-xl bg-white/10 group-hover:bg-emerald-600 text-white text-xs font-bold flex items-center gap-1.5 shrink-0 transition-colors">
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                      <span>{ev.streams.length > 0 ? 'Запис / Огляд' : 'Огляд матчу'}</span>
                     </span>
                   </div>
                 </div>
@@ -1093,11 +1240,24 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
                   className="bg-[#111827] text-white text-xs font-bold px-3 py-2 rounded-xl border border-emerald-500/40 focus:outline-none focus:border-emerald-400 max-w-[230px] sm:max-w-[320px] truncate"
                   title="Швидкий вибір матчу або спортивного каналу"
                 >
-                  <optgroup label="🔴 LIVE Матчі та Події">
-                    {events.map((ev) => (
+                  <optgroup label="🔴 Зараз у прямому ефірі">
+                    {events.filter(e => e.status === 'live').map((ev) => (
                       <option key={ev.id} value={ev.id}>
-                        {ev.status === 'live' ? '🔴 ' : '📅 '}
-                        {ev.leagueBadge}: {ev.title}
+                        🔴 {ev.leagueBadge}: {ev.title.toUpperCase()}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="📅 Анонси майбутніх трансляцій">
+                    {events.filter(e => e.status === 'upcoming').map((ev) => (
+                      <option key={ev.id} value={ev.id}>
+                        📅 {ev.leagueBadge}: {ev.title.toUpperCase()} ({ev.statusText})
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="🏁 Результати (останні 48 годин)">
+                    {events.filter(e => e.status === 'finished').map((ev) => (
+                      <option key={ev.id} value={ev.id}>
+                        🏁 {ev.leagueBadge}: {ev.title.toUpperCase()} ({ev.homeTeam?.score ?? '-'}:{ev.awayTeam?.score ?? '-'})
                       </option>
                     ))}
                   </optgroup>

@@ -21,18 +21,16 @@ const BEST_KEY = 'cinemavault_best_server_v372';
 
 export function rememberWorkingServer(id: string) {
   try {
-    if (!id || id.startsWith('rezka-')) return;
+    if (!id) return;
     localStorage.setItem(BEST_KEY, id);
   } catch {
     // ignore
   }
 }
 
-function preferredServerId(): string | null {
+export function preferredServerId(): string | null {
   try {
-    const val = localStorage.getItem(BEST_KEY);
-    if (val && val.startsWith('rezka-')) return null;
-    return val;
+    return localStorage.getItem(BEST_KEY);
   } catch {
     return null;
   }
@@ -61,6 +59,7 @@ const toSource = (
 export const rezkaService = {
   /**
    * Synchronously builds available sources from cached IDs so playback & modals open in 0ms.
+   * HDRezka #1 is always placed first.
    */
   buildSourcesSync(
     media: MediaItem,
@@ -75,7 +74,7 @@ export const rezkaService = {
 
   /**
    * Resolves ids, looks for a Ukrainian dub, builds every server and returns them as sources.
-   * If `withHealth` is true the servers are probed first and returned best-first.
+   * HDRezka (#1) always stays first unless dead, followed by Ukrainian & hierarchy servers.
    */
   async resolveSources(
     media: MediaItem,
@@ -86,10 +85,9 @@ export const rezkaService = {
     const s = seasonNumber || 1;
     const e = episodeNumber || 1;
 
-    // Resolve IDs first so Kinobox & UAKino lookups always have IMDb + TMDB IDs
     await Promise.race([
       ensureIds(media).then(() => resolveUaServer(media, s)),
-      new Promise((r) => setTimeout(() => r(null), 4200)),
+      new Promise((r) => setTimeout(() => r(null), 3800)),
     ]);
 
     let servers = buildServers(media, s, e);
@@ -98,14 +96,6 @@ export const rezkaService = {
     if (options.withHealth) {
       healthMap = await probeServers(servers, (srv, h) => options.onHealth?.(srv.id, h));
       servers = orderByHealth(servers, healthMap);
-
-      // Prefer the server that worked last time if it is healthy, but never displace direct UA Ashdi (#1)
-      const pref = preferredServerId();
-      const prefIdx = servers.findIndex((x) => x.id === pref && healthMap.get(x.id) === 'ok');
-      if (prefIdx > 0 && servers[0]?.id !== 'ua-ashdi') {
-        const [p] = servers.splice(prefIdx, 1);
-        servers.unshift(p);
-      }
     }
 
     return servers.map((srv) => toSource(media, srv, servers, s, e, healthMap.get(srv.id)));

@@ -117,15 +117,22 @@ const AD_BLOCK_DOMAINS = [
   'portablica.com',
   'grainergamasidnotioned.forum',
   'realintelligence360.com',
+  'distribrey.com',
+  'myangular.life',
+  'getsdk.online',
+  'stiven-king.com',
+  'a-stiven-king.com',
 ];
 
 const AD_BLOCK_URL_REGEX =
-  /(\/vast(\.xml|\?|$)|\/preroll|\/midroll|\/popunder|\/clickunder|\/adserver|\/adtag|ima3\.js|gpt\.js|adsbygoogle\.js|subid=backfilter|click\?key=|download-free-real)/i;
+  /(\/vast(\.xml|\?|$)|\/load-xml\/|\/preroll|\/midroll|\/popunder|\/clickunder|\/adserver|\/adtag|ima3\.js|gpt\.js|adsbygoogle\.js|subid=backfilter|click\?key=|download-free-real|distribrey|myangular|getsdk)/i;
 
 // Universal Subframe Player Bridge (matches Android MainActivity.java + AdBlock + Error Failover)
 const SUBFRAME_PLAYER_BRIDGE_JS = `(function(){
   if(window.__cinemaSubframeBridgeInstalled)return;
   window.__cinemaSubframeBridgeInstalled=true;
+  try{window.adsConfig=null;Object.defineProperty(window,'adsConfig',{get:function(){return null;},set:function(){},configurable:true});}catch(e){}
+  try{if(window.VenomPlayer){var _vm=window.VenomPlayer.make;window.VenomPlayer.make=function(s,o){if(o&&o.ads)delete o.ads;if(o&&o.preroll)delete o.preroll;return _vm?_vm.apply(this,arguments):null;};}}catch(e){}
   var isSubframe=(window!==window.top);
   var audioCtx=null,gainNode=null,hookedVideo=null;
   var preferredLang='ua',langAutoAttempts=0,langAutoSelected=false;

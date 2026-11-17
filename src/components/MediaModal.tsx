@@ -47,7 +47,6 @@ export const MediaModal: React.FC<MediaModalProps> = ({
   const [selectedSeason, setSelectedSeason] = useState<number>(1);
   const [selectedEpisode, setSelectedEpisode] = useState<Episode | undefined>();
   const [copiedMagnet, setCopiedMagnet] = useState<string | null>(null);
-  const [downloadProgress, setDownloadProgress] = useState<{ [key: string]: number }>({});
   const [backdropSrc, setBackdropSrc] = useState<string>('');
   const [serverHealth, setServerHealth] = useState<Record<string, ServerHealth>>({});
   const [sourceLangFilter, setSourceLangFilter] = useState<string>('all');
@@ -226,18 +225,16 @@ export const MediaModal: React.FC<MediaModalProps> = ({
     onPlayOnline(media, torrentSource, selectedEpisode);
   };
 
-  const handleFakeDownload = (name: string) => {
-    setDownloadProgress((prev) => ({ ...prev, [name]: 5 }));
-    const interval = setInterval(() => {
-      setDownloadProgress((prev) => {
-        const curr = prev[name] || 0;
-        if (curr >= 100) {
-          clearInterval(interval);
-          return { ...prev, [name]: 100 };
-        }
-        return { ...prev, [name]: curr + 15 };
-      });
-    }, 400);
+  const handleDownloadDirectOrTorrents = () => {
+    if (media.streamUrl) {
+      openExternalDownload(media.streamUrl);
+      return;
+    }
+    if (torrents.length > 0 && torrents[0]?.magnet) {
+      setActiveTab('torrents');
+      return;
+    }
+    setActiveTab('torrents');
   };
 
   const getMediaLabel = () => {
@@ -609,14 +606,14 @@ export const MediaModal: React.FC<MediaModalProps> = ({
                   const idLow = src.id.toLowerCase();
 
                   const getChannelLangDesc = () => {
-                    if (idLow.includes('rezka-ag')) return '🎬 Офіційна база HDRezka (rezka.ag) • Усі студії озвучки, дубляж та оригінал';
-                    if (idLow.includes('ua-kino-rezka')) return '🇺🇦 HDRezka (rezka.ag) • Професійний український дубляж';
+                    if (idLow.includes('rezka-embess')) return '🇺🇦 HDRezka #1 (Головний сервер) • Українська озвучка в пріоритеті + усі студії та оригінал 1080p';
+                    if (idLow.includes('rezka-namy')) return '🇺🇦 HDRezka #2 (Пряме дзеркало) • Український переклад, дубляж та студії 1080p';
+                    if (idLow.includes('rezka-kinogram')) return '🇺🇦 HDRezka #3 (Kinogram VIP) • Український дубляж та багатозвучка 1080p';
+                    if (idLow.includes('rezka')) return '🎬 HDRezka CDN • Усі студії озвучки, українська та оригінал';
                     if (idLow.includes('ashdi')) return '🇺🇦 Повний український дубляж (UAKino / Ashdi VIP)';
-                    if (idLow.includes('ua-videasy')) return '🇺🇦 Українська звукова доріжка та субтитри у 4K HDR';
-                    if (idLow.includes('ua-autoembed')) return '🇺🇦 Український та мультиязичний потік (AutoEmbed UA)';
+                    if (idLow.includes('kinobox')) return '🇺🇦 Каскадний балансер: HDRezka • Ashdi • VidLink (Українська / Multi)';
                     if (idLow.includes('pl-')) return '🇵🇱 Polski Lektor / Dubbing / Napisy PL + EN';
                     if (idLow.includes('es-')) return '🇪🇸 Español Latino / Castellano + Subtítulos';
-                    if (idLow.includes('videasy')) return '🌐 Усі мови додатку: 🇺🇦 UA / 🇬🇧 EN / 🇵🇱 PL / 🇪🇸 ES / Multi';
                     return '🇬🇧 English Original 4K/1080p + Multi Subtitles';
                   };
 
@@ -661,17 +658,11 @@ export const MediaModal: React.FC<MediaModalProps> = ({
                             <button
                               type="button"
                               tabIndex={0}
-                              onClick={() => handleFakeDownload(src.id)}
+                              onClick={handleDownloadDirectOrTorrents}
                               className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors tv-btn-focus focus:outline-none"
                             >
                               <Download className="w-3.5 h-3.5" />
-                              <span>
-                                {downloadProgress[src.id] !== undefined
-                                  ? downloadProgress[src.id] >= 100
-                                    ? t('downloaded')
-                                    : `${downloadProgress[src.id]}%`
-                                  : t('download')}
-                              </span>
+                              <span>{t('download')}</span>
                             </button>
                           )}
 

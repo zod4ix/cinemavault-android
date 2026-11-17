@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="referrer" content="origin" />
-  <title>CinemaVault Multi-Balancer</title>
+  <title>CinemaVault HDRezka & Multi-Balancer</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body {
@@ -19,6 +19,7 @@
       width: 100%;
       height: 100%;
       border: none;
+      display: block;
     }
     #fallback-msg {
       display: none;
@@ -40,17 +41,20 @@
   <div class="kinobox_player"></div>
   <div id="fallback-msg">
     <h3>Перемикання на резервне дзеркало...</h3>
-    <p>Дзеркало Kinobox недоступне у вашій мережі. Автоматичний перехід на сусідній робочий сервер...</p>
+    <p>Автоматичний перехід на сусідній робочий сервер...</p>
   </div>
 
   <script>
     (function () {
+      try { window.open = function () { return null; }; } catch (e) {}
       var params = new URLSearchParams(window.location.search);
       var imdb = params.get('imdb') || '';
       var tmdb = params.get('tmdb') || '';
       var title = params.get('title') || '';
+      var year = params.get('year') || '';
       var season = params.get('season') || '';
       var episode = params.get('episode') || '';
+      var mirror = params.get('mirror') || '';
       var reportedFatal = false;
 
       function notifyFatal(reason) {
@@ -61,126 +65,110 @@
           window.top.postMessage({
             __cinemaPlayerBridge: true,
             type: 'subframeFatalError',
-            reason: reason || 'kinoboxUnavailable'
+            reason: reason || 'balancerUnavailable'
           }, '*');
         } catch (e) {}
       }
 
-      // First try direct Kinobox API to extract Ashdi / Voidboost / Alloha / Kodik iframe URLs directly
-      var apiUrl = 'https://api.kinobox.tv/api/players?';
-      var q = [];
-      if (imdb) q.push('imdb=' + encodeURIComponent(imdb));
-      if (tmdb) q.push('tmdb=' + encodeURIComponent(tmdb));
-      if (title) q.push('title=' + encodeURIComponent(title));
-
-      var timeout = setTimeout(function () {
-        var container = document.querySelector('.kinobox_player');
-        var hasIframe = container && container.querySelector('iframe');
-        if (!hasIframe) {
-          notifyFatal('kinoboxTimeout');
-        }
-      }, 4500);
-
-      function bootKinoboxScript() {
-        var script = document.createElement('script');
-        script.src = 'https://kinobox.tv/static/kinobox.min.js';
-        script.async = true;
-
-        script.onload = function () {
-          if (typeof window.kbox === 'function') {
-            var searchCfg = {};
-            if (imdb) searchCfg.imdb = imdb;
-            if (tmdb) searchCfg.tmdb = tmdb;
-            if (title) searchCfg.title = title;
-
-            window.kbox('.kinobox_player', {
-              search: searchCfg,
-              menu: {
-                enable: true,
-                default: 'menu_list',
-                mobile: 'menu_button',
-                format: '{N} :: {T} ({Q})'
-              },
-              players: {
-                ashdi: { enable: true, position: 1 },
-                voidboost: { enable: true, position: 2 },
-                alloha: { enable: true, position: 3 },
-                kodik: { enable: true, position: 4 },
-                collaps: { enable: true, position: 5 },
-                veoveo: { enable: true, position: 6 },
-                cdnmovies: { enable: true, position: 7 }
+      function resolveImdbFast() {
+        if (imdb && imdb.indexOf('tt') === 0) return Promise.resolve(imdb);
+        if (!title) return Promise.resolve('');
+        var clean = title.trim();
+        return fetch('https://v3.sg.media-imdb.com/suggestion/x/' + encodeURIComponent(clean) + '.json')
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            var list = (data && Array.isArray(data.d)) ? data.d : [];
+            var valid = list.filter(function (x) { return x && typeof x.id === 'string' && x.id.indexOf('tt') === 0; });
+            if (valid.length === 0) return '';
+            if (year) {
+              var yr = parseInt(year, 10);
+              for (var i = 0; i < valid.length; i++) {
+                if (Math.abs((Number(valid[i].y) || 0) - yr) <= 1) return valid[i].id;
               }
-            });
-          } else {
-            notifyFatal('kinoboxInitFailed');
-          }
-        };
-
-        script.onerror = function () {
-          notifyFatal('kinoboxScriptBlocked');
-        };
-
-        document.body.appendChild(script);
+            }
+            return valid[0].id;
+          })
+          .catch(function () { return ''; });
       }
 
-      fetch(apiUrl + q.join('&'))
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-          var list = Array.isArray(data) ? data : (data && Array.isArray(data.data) ? data.data : []);
-          var valid = list.filter(function (p) {
-            if (!p || !p.iframeUrl || typeof p.iframeUrl !== 'string') return false;
-            var u = p.iframeUrl.toLowerCase();
-            if (u.indexOf('loadbox') !== -1 || u.indexOf('namy.ws') !== -1) return false;
-            return true;
-          });
-          if (valid.length === 0) {
-            valid = list.filter(function (p) { return p && p.iframeUrl && typeof p.iframeUrl === 'string'; });
-          }
-          if (valid.length > 0) {
-            clearTimeout(timeout);
-            var priority = ['ashdi', 'voidboost', 'veoveo', 'collaps', 'nextembed', 'alloha', 'videoseed', 'kodik', 'cdnmovies', 'vibix'];
-            var rankOf = function (p) {
-              var key = (String(p.type || p.source || '') + ' ' + String(p.iframeUrl || '')).toLowerCase();
-              for (var i = 0; i < priority.length; i++) {
-                if (key.indexOf(priority[i]) !== -1) return i;
-              }
-              return priority.length;
-            };
-            var candidates = valid.slice().sort(function (a, b) { return rankOf(a) - rankOf(b); });
-            var curIdx = 0;
-            var container = document.querySelector('.kinobox_player');
+      var mirrorHosts = {
+        embess: 'api.embess.ws',
+        namy: 'api.namy.ws',
+        kinogram: 'api.kinogram.best',
+        delivembd: 'api.delivembd.ws'
+      };
 
-            function loadCandidate(idx) {
-              if (idx >= candidates.length) {
-                notifyFatal('kinoboxAllFailed');
-                return;
-              }
-              curIdx = idx;
-              var targetUrl = candidates[idx].iframeUrl.indexOf('//') === 0
-                ? 'https:' + candidates[idx].iframeUrl
-                : candidates[idx].iframeUrl;
-              if (season && episode) {
-                var sep = targetUrl.indexOf('?') === -1 ? '?' : '&';
-                targetUrl += sep + 'season=' + encodeURIComponent(season) + '&episode=' + encodeURIComponent(episode);
-              }
-              container.innerHTML = '<iframe id="direct-iframe" scrolling="no" style="overflow:hidden;width:100%;height:100%;border:0;" src="' + targetUrl + '" allowfullscreen allow="autoplay; fullscreen; encrypted-media"></iframe>';
+      resolveImdbFast().then(function (resolvedImdb) {
+        imdb = resolvedImdb || imdb;
+        var candidates = [];
+        var isSeries = Boolean(season && episode);
+        var seQuery = isSeries ? ('?season=' + encodeURIComponent(season) + '&episode=' + encodeURIComponent(episode)) : '';
+
+        if (mirror && mirrorHosts[mirror] && imdb) {
+          candidates.push('https://' + mirrorHosts[mirror] + '/embed/imdb/' + imdb + seQuery);
+        }
+
+        if (imdb) {
+          var order = ['api.embess.ws', 'api.namy.ws', 'api.kinogram.best', 'api.delivembd.ws'];
+          for (var i = 0; i < order.length; i++) {
+            var u = 'https://' + order[i] + '/embed/imdb/' + imdb + seQuery;
+            if (candidates.indexOf(u) === -1) candidates.push(u);
+          }
+        }
+
+        if (tmdb) {
+          candidates.push(
+            isSeries
+              ? 'https://vidlink.pro/tv/' + tmdb + '/' + season + '/' + episode + '?primaryColor=e50914&autoplay=true'
+              : 'https://vidlink.pro/movie/' + tmdb + '?primaryColor=e50914&autoplay=true'
+          );
+          candidates.push(
+            isSeries
+              ? 'https://vidsrc.su/embed/tv/' + tmdb + '/' + season + '/' + episode
+              : 'https://vidsrc.su/embed/movie/' + tmdb
+          );
+        } else if (imdb) {
+          candidates.push(
+            isSeries
+              ? 'https://vidsrc.to/embed/tv/' + imdb + '/' + season + '/' + episode
+              : 'https://vidsrc.to/embed/movie/' + imdb
+          );
+        }
+
+        if (candidates.length === 0) {
+          notifyFatal('noCandidates');
+          return;
+        }
+
+        var curIdx = 0;
+        var container = document.querySelector('.kinobox_player');
+
+        function loadCandidate(idx) {
+          if (idx >= candidates.length) {
+            notifyFatal('allCandidatesFailed');
+            return;
+          }
+          curIdx = idx;
+          container.innerHTML = '<iframe id="direct-iframe" scrolling="no" style="overflow:hidden;width:100%;height:100%;border:0;background:#000;" src="' + candidates[idx] + '" allowfullscreen allow="autoplay; fullscreen; encrypted-media; picture-in-picture"></iframe>';
+        }
+
+        window.addEventListener('message', function (ev) {
+          var d = ev && ev.data;
+          if (!d || typeof d !== 'object') return;
+          if (d.__cinemaPlayerBridge && d.type === 'subframeFatalError') {
+            loadCandidate(curIdx + 1);
+            return;
+          }
+          if (d.__cinemaCmd) {
+            var sub = document.getElementById('direct-iframe');
+            if (sub && sub.contentWindow) {
+              try { sub.contentWindow.postMessage(d, '*'); } catch (e) {}
             }
-
-            window.addEventListener('message', function (ev) {
-              var d = ev && ev.data;
-              if (d && typeof d === 'object' && d.__cinemaPlayerBridge && d.type === 'subframeFatalError') {
-                loadCandidate(curIdx + 1);
-              }
-            });
-
-            loadCandidate(0);
-          } else {
-            bootKinoboxScript();
           }
-        })
-        .catch(function () {
-          bootKinoboxScript();
         });
+
+        loadCandidate(0);
+      });
     })();
   </script>
 </body>
