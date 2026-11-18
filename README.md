@@ -1,12 +1,31 @@
-# 🎬 CinemaVault PRO v3.7.2 (HDRezka #1, Total AdBlock, Sports 48h Overhaul & Peak Optimization)
+# 🎬 CinemaVault PRO v3.7.3 (Smooth Windows Auto-Update, Bidirectional Cyrillic ⇄ Latin Smart Search, Brand Shield Icon & Device Telemetry)
 
 > **Автономний мультиплатформний онлайн-кінотеатр та спортивний хаб «для своїх»**: оптимізований під **Smart TV (Android TV / Google TV / TV-бокси / проєктори)**, пульти дистанційного керування (2D Spatial D-Pad), **пульти-указки (Air Mouse / гіроскоп)**, планшети, смартфони, комп'ютерні миші та клавіатури. Без реклами, з прямим **P2P-програванням торрентів онлайн (Torrentio + TPB + YTS + EZTV)**, наскрізним керуванням усіма внутрішніми елементами плеєрів (HDRezka #1, Ashdi, Videasy, VidLink, HLS), окремим потужним комбайном **🔴 Спорт Live 24/7 (NBA, Футбол, АПЛ, NHL, Формула 1, Бокс/UFC, Теніс)**, **15+ джерелами (HDRezka на чолі списку + український дубляж у найвищому пріоритеті)**, нескінченною бібліотекою контенту (від золотої класики до новинок 2026), самовідновленням (`Self-Healing Engine`), GitHub Auto-Updater та крос-девайс хмарною синхронізацією.
 
-## 📲 Завантажити актуальну версію v3.7.2 (Android & Windows)
-- **[Завантажити CinemaVault-PRO-v3.7.2-Windows.exe (Windows 10/11 Інсталятор)](https://github.com/zod4ix/cinemavault-android/releases/download/v3.7.2/CinemaVault-PRO-v3.7.2-Windows.exe)** *(Офіційна збірка v3.7.2 для Windows із HDRezka #1, AdBlock та апаратним відтворенням 4K/HLS)*
-- **[Завантажити CinemaVault-PRO-v3.7.2.apk (Android / Smart TV)](https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.7.2.apk)** *(Найновіша актуальна версія v3.7.2 для планшетів, смартфонів, Smart TV, проєкторів та TV Box)*
+## 📲 Завантажити актуальну версію v3.7.3 (Android & Windows)
+- **[Завантажити CinemaVault-PRO-v3.7.3-Windows.exe (Windows 10/11 Інсталятор)](https://github.com/zod4ix/cinemavault-android/releases/download/v3.7.3/CinemaVault-PRO-v3.7.3-Windows.exe)** *(Офіційна збірка v3.7.3 для Windows із плавним автооновленням, брендовим логотипом, HDRezka #1, AdBlock та апаратним відтворенням 4K/HLS)*
+- **[Завантажити CinemaVault-PRO-v3.7.3.apk (Android / Smart TV)](https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.7.3.apk)** *(Найновіша актуальна версія v3.7.3 для планшетів, смартфонів, Smart TV, проєкторів та TV Box)*
 - **[Офіційний каталог програм Vinegret.net](https://vinegret.net/prostye-poleznye-programmy-dlja-windows/)** *(Корисні програми та утиліти для Windows та Android)*
 - **[Сторінка релізу на GitHub](https://github.com/zod4ix/cinemavault-android/releases/latest)**
+
+---
+
+## 🔥 Що нового у версії v3.7.3 PRO
+
+0. **💻 Плавне автооновлення Windows-версії (повна єдність з Android)**:
+   - При появі нової версії на GitHub у Windows-додатку автоматично з'являється сповіщення про оновлення.
+   - Натискання кнопки оновлення завантажує свіжий `.exe` інсталятор прямо всередині додатку з живим прогрес-баром у відсотках і мегабайтах, після чого автоматично запускає оновлення без потреби відкривати браузер.
+
+1. **🔍 Покращений двомовний пошук (Кирилиця ⇄ Латиниця)**:
+   - **Двосторонній інтелектуальний пошук**: миттєво знаходить фільми, серіали, мультфільми та аніме при введенні кирилицею (українською та російською) або латиницею (англійською чи транслітом).
+   - **Розуміння трансліту та автовиправлення розкладки**: автоматично розпізнає запити транслітом (`forsazh`, `vidmak`, `sam udoma`) та випадкове введення в іншій розкладці клавіатури (`ЙЦУКЕН ⇄ QWERTY`), а також точковий пошук за частинами (`Дюна 2`, `Dune 2`).
+   - **Паралельний резолвер Wikidata + Wikipedia + IMDb**: автоматично підтягує українські назви, постери високої роздільної здатності та точні IMDb ID.
+
+2. **🎨 Єдиний брендовий логотип CinemaVault PRO у Windows та Android**:
+   - Інтегровано фірмовий шестикутний щит CinemaVault PRO у багатошаровому форматі `.ico` (16–256px) та `.png` (512px) для інсталятора Windows, ярликів робочого столу, панелі завдань та всіх типів іконок Android.
+
+3. **📊 Телеметрія пристроїв та щоденна аналітика в Telegram**:
+   - Автоматичний облік платформ (Windows 10/11 з точними збірками, Android 9–15, Smart TV, проєктори, смартфони, планшети) та формування щоденного структурованого звіту в Telegram-бот.
 
 ---
 

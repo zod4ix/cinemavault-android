@@ -1,8 +1,10 @@
 import { httpGetJson } from './tmdb';
 
-export const APP_VERSION = '3.7.2';
+export const APP_VERSION = '3.7.3';
 export const GITHUB_REPO = 'zod4ix/cinemavault-android';
 export const DEFAULT_APK_URL = `https://github.com/${GITHUB_REPO}/raw/main/CinemaVault-PRO-v${APP_VERSION}.apk`;
+export const DEFAULT_WIN_URL = `https://github.com/${GITHUB_REPO}/releases/download/v${APP_VERSION}/CinemaVault-PRO-v${APP_VERSION}-Windows.exe`;
+export const DEFAULT_MAC_URL = `https://github.com/${GITHUB_REPO}/releases/download/v${APP_VERSION}/CinemaVault-PRO-v${APP_VERSION}-macOS.dmg`;
 export const GITHUB_RELEASE_PAGE = `https://github.com/${GITHUB_REPO}/releases/latest`;
 export const VINEGRET_PORTAL_URL = 'https://vinegret.net/prostye-poleznye-programmy-dlja-windows/';
 
@@ -11,6 +13,8 @@ export interface UpdateInfo {
   latestVersion: string;
   hasUpdate: boolean;
   apkDownloadUrl: string;
+  winDownloadUrl: string;
+  macDownloadUrl: string;
   releasePageUrl: string;
   releaseNotes: string;
   publishedAt: string;
@@ -87,7 +91,10 @@ export function subscribeApkDownloadProgress(cb: ProgressListener): () => void {
 export function openExternalDownload(url: string) {
   try {
     const win = window as any;
-    if (url.toLowerCase().includes('.apk') && win.AndroidCinemaBridge?.downloadAndInstallApk) {
+    const lower = url.toLowerCase();
+    const isInstallerAsset =
+      lower.includes('.apk') || lower.includes('.exe') || lower.includes('.dmg');
+    if (isInstallerAsset && win.AndroidCinemaBridge?.downloadAndInstallApk) {
       win.AndroidCinemaBridge.downloadAndInstallApk(url);
       return;
     }
@@ -125,11 +132,14 @@ export const updaterService = {
   async checkForUpdates(): Promise<UpdateInfo> {
     let latestVersion = APP_VERSION;
     let apkDownloadUrl = DEFAULT_APK_URL;
+    let winDownloadUrl = DEFAULT_WIN_URL;
+    let macDownloadUrl = DEFAULT_MAC_URL;
     let releasePageUrl = GITHUB_RELEASE_PAGE;
     let releaseNotes =
-      '• 🏆 ОФІЦІЙНИЙ РЕЛІЗ 3.7.2: HDREZKA #1 ТА ПОВНИЙ АДБЛОК: HDRezka виведено на перше місце в ієрархії серверів з пріоритетом українського дубляжу. Впроваджено тотальний дворівневий AdBlock — жодної реклами та переривань при натисканні Play.\n' +
-      '• ⚽ ОНОВЛЕННЯ СПОРТУ: матчі, що завершилися, не зависають у прямому ефірі; кнопка сканування оновлює потоки з живою телеметрією; результати матчів виносяться окремо та зберігаються до 48 годин; анонси майбутніх подій розміщені суворо після поточних трансляцій; точне визначення ліг (без фальшивих \'Ліга чемпіонів\') та назви команд великими літерами.\n' +
-      '• ⚡ ЧИСТИЙ ТА ОПТИМІЗОВАНИЙ КОД: усунено фіктивні кнопки, полегшено додаток та підвищено загальну швидкодію.';
+      '• 🚀 ОФІЦІЙНИЙ РЕЛІЗ 3.7.3: ПЛАВНЕ АВТООНОВЛЕННЯ WINDOWS, ДВОМОВНИЙ РОЗУМНИЙ ПОШУК ТА ЄДИНИЙ БРЕНД-ДИЗАЙН:\n' +
+      '• 💻 ПЛАВНЕ ОНОВЛЕННЯ WINDOWS ЯК НА ANDROID: при виході нової версії додаток автоматично сповіщає користувача, завантажує інсталятор з прогрес-баром прямо всередині вікна та безшовно запускає оновлення.\n' +
+      '• 🔍 ІНТЕЛЕКТУАЛЬНИЙ ПОШУК (КИРИЛИЦЯ ⇄ ЛАТИНИЦЯ): миттєвий пошук українською, російською та англійською мовами, розуміння трансліту, автоматичне виправлення розкладки клавіатури (ЙЦУКЕН ⇄ QWERTY) та глибока інтеграція з Wikidata/Wikipedia/IMDb.\n' +
+      '• 🎨 ЄДИНЕ БРЕНДОВЕ ЛОГО ТА ТЕЛЕМЕТРІЯ ПРИСТРОЇВ: фірмовий щит CinemaVault PRO інтегровано у Windows-інсталятор, ярлики робочого столу, панель завдань та Android.';
     let publishedAt = new Date().toISOString().slice(0, 10);
 
     try {
@@ -144,6 +154,8 @@ export const updaterService = {
         if (tagVer) {
           latestVersion = tagVer;
           apkDownloadUrl = `https://github.com/${GITHUB_REPO}/raw/main/CinemaVault-PRO-v${tagVer}.apk`;
+          winDownloadUrl = `https://github.com/${GITHUB_REPO}/releases/download/v${tagVer}/CinemaVault-PRO-v${tagVer}-Windows.exe`;
+          macDownloadUrl = `https://github.com/${GITHUB_REPO}/releases/download/v${tagVer}/CinemaVault-PRO-v${tagVer}-macOS.dmg`;
         }
         if (rel.html_url) releasePageUrl = rel.html_url;
         if (rel.body && typeof rel.body === 'string' && rel.body.trim().length > 10) {
@@ -152,18 +164,36 @@ export const updaterService = {
         if (rel.published_at) {
           publishedAt = String(rel.published_at).slice(0, 10);
         }
-        // Check if release has an attached .apk asset
+        // Check if release has attached .apk / .exe / .dmg assets
         if (Array.isArray(rel.assets)) {
           const apkAsset = rel.assets.find(
-            (a: any) => typeof a?.browser_download_url === 'string' && a.browser_download_url.endsWith('.apk')
+            (a: any) =>
+              typeof a?.browser_download_url === 'string' &&
+              a.browser_download_url.toLowerCase().endsWith('.apk')
           );
           if (apkAsset) {
             apkDownloadUrl = apkAsset.browser_download_url;
           }
+          const winAsset = rel.assets.find(
+            (a: any) =>
+              typeof a?.browser_download_url === 'string' &&
+              a.browser_download_url.toLowerCase().endsWith('.exe')
+          );
+          if (winAsset) {
+            winDownloadUrl = winAsset.browser_download_url;
+          }
+          const macAsset = rel.assets.find(
+            (a: any) =>
+              typeof a?.browser_download_url === 'string' &&
+              a.browser_download_url.toLowerCase().endsWith('.dmg')
+          );
+          if (macAsset) {
+            macDownloadUrl = macAsset.browser_download_url;
+          }
         }
       }
 
-      // 2. Also check raw package.json on main branch (in case a new commit pushed a newer APK before creating a release tag)
+      // 2. Also check raw package.json on main branch (in case a new commit pushed a newer version before creating a release tag)
       const pkg = await httpGetJson(
         `https://raw.githubusercontent.com/${GITHUB_REPO}/main/package.json?t=${bust}`,
         5000
@@ -173,6 +203,8 @@ export const updaterService = {
         if (isNewerVersion(latestVersion, pkgVer)) {
           latestVersion = pkgVer;
           apkDownloadUrl = `https://github.com/${GITHUB_REPO}/raw/main/CinemaVault-PRO-v${pkgVer}.apk`;
+          winDownloadUrl = `https://github.com/${GITHUB_REPO}/releases/download/v${pkgVer}/CinemaVault-PRO-v${pkgVer}-Windows.exe`;
+          macDownloadUrl = `https://github.com/${GITHUB_REPO}/releases/download/v${pkgVer}/CinemaVault-PRO-v${pkgVer}-macOS.dmg`;
           if (typeof pkg.releaseNotes === 'string' && pkg.releaseNotes.trim().length > 10) {
             releaseNotes = pkg.releaseNotes.trim();
           }
@@ -186,6 +218,8 @@ export const updaterService = {
     if (!hasUpdate) {
       latestVersion = APP_VERSION;
       apkDownloadUrl = DEFAULT_APK_URL;
+      winDownloadUrl = DEFAULT_WIN_URL;
+      macDownloadUrl = DEFAULT_MAC_URL;
     }
 
     return {
@@ -193,6 +227,8 @@ export const updaterService = {
       latestVersion,
       hasUpdate,
       apkDownloadUrl,
+      winDownloadUrl,
+      macDownloadUrl,
       releasePageUrl,
       releaseNotes,
       publishedAt,

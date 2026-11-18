@@ -1,10 +1,10 @@
 {
   "name": "cinemavault-app",
   "private": true,
-  "version": "3.7.2",
+  "version": "3.7.3",
   "description": "CinemaVault PRO — 4K HDR Online Cinema & Live Sports",
   "author": "CinemaVault PRO",
-  "releaseNotes": "• 🏆 ОФІЦІЙНИЙ РЕЛІЗ 3.7.2: HDREZKA #1 ТА ПОВНИЙ АДБЛОК: HDRezka виведено на перше місце в ієрархії серверів з пріоритетом українського дубляжу. Впроваджено тотальний дворівневий AdBlock — жодної реклами та переривань при натисканні Play.\n• ⚽ ОНОВЛЕННЯ СПОРТУ: матчі, що завершилися, не зависають у прямому ефірі; кнопка сканування оновлює потоки з живою телеметрією; результати матчів виносяться окремо та зберігаються до 48 годин; анонси майбутніх подій розміщені суворо після поточних трансляцій; точне визначення ліг (без фальшивих 'Ліга чемпіонів') та назви команд великими літерами.\n• ⚡ ЧИСТИЙ ТА ОПТИМІЗОВАНИЙ КОД: усунено фіктивні кнопки, полегшено додаток та підвищено загальну швидкодію.",
+  "releaseNotes": "• 🚀 ОФІЦІЙНИЙ РЕЛІЗ 3.7.3: ПЛАВНЕ АВТООНОВЛЕННЯ WINDOWS, ДВОМОВНИЙ РОЗУМНИЙ ПОШУК ТА ЄДИНИЙ БРЕНД-ДИЗАЙН:\n• 💻 ПЛАВНЕ ОНОВЛЕННЯ WINDOWS ЯК НА ANDROID: при виході нової версії додаток автоматично сповіщає користувача, завантажує інсталятор з прогрес-баром прямо всередині вікна та безшовно запускає оновлення.\n• 🔍 ІНТЕЛЕКТУАЛЬНИЙ ПОШУК (КИРИЛИЦЯ ⇄ ЛАТИНИЦЯ): миттєвий пошук українською, російською та англійською мовами, розуміння трансліту, автоматичне виправлення розкладки клавіатури (ЙЦУКЕН ⇄ QWERTY) та глибока інтеграція з Wikidata/Wikipedia/IMDb.\n• 🎨 ЄДИНЕ БРЕНДОВЕ ЛОГО ТА ТЕЛЕМЕТРІЯ ПРИСТРОЇВ: фірмовий щит CinemaVault PRO інтегровано у Windows-інсталятор, ярлики робочого столу, панель завдань та Android.",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -17,7 +17,8 @@
     "electron:start": "electron .",
     "build:win": "npm run build && electron-builder --win",
     "build:mac": "npm run build && electron-builder --mac",
-    "build:desktop": "npm run build && electron-builder -mw"
+    "build:desktop": "npm run build && electron-builder -mw",
+    "report:telegram": "node scripts/send_telegram_report.mjs"
   },
   "build": {
     "appId": "net.cinemavault.pro",
@@ -37,7 +38,7 @@
         "nsis"
       ],
       "artifactName": "CinemaVault-PRO-v${version}-Windows.${ext}",
-      "icon": "electron/icon.png"
+      "icon": "electron/icon.ico"
     },
     "nsis": {
       "oneClick": false,
@@ -45,7 +46,10 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "runAfterFinish": true,
-      "shortcutName": "CinemaVault PRO"
+      "shortcutName": "CinemaVault PRO",
+      "installerIcon": "electron/icon.ico",
+      "uninstallerIcon": "electron/icon.ico",
+      "installerHeaderIcon": "electron/icon.ico"
     },
     "mac": {
       "target": [

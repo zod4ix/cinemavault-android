@@ -3,10 +3,14 @@ import {
   dynamicItemsCache,
   resolveViaWikidataDeep,
   searchImdbSuggestions,
+  searchItunesMovies,
   searchJikanAnime,
   searchTvMazeShows,
   tmdbService,
   transliterateToEnglish,
+  transliterateToEnglishVariants,
+  transliterateToCyrillicVariants,
+  swapKeyboardLayout,
   createPosterFallback,
   httpGetJson,
   normalizeGenre,
@@ -32,27 +36,67 @@ const withTimeout = <T,>(p: Promise<T>, ms: number, fallback: T): Promise<T> =>
 const norm = (s: string) =>
   (s || '')
     .toLowerCase()
-    .replace(/[^a-z0-9а-яіїєґё]+/g, '');
+    .replace(/ґ/g, 'г')
+    .replace(/ё|э/g, 'е')
+    .replace(/ї/g, 'і')
+    .replace(/\b(ii|part two|частина друга|часть вторая)\b/g, '2')
+    .replace(/\b(iii|part three|частина третя|часть третья)\b/g, '3')
+    .replace(/[^a-z0-9а-яіїєґ]+/g, '');
+
+const normTokens = (s: string) =>
+  (s || '')
+    .toLowerCase()
+    .replace(/ґ/g, 'г')
+    .replace(/ё|э/g, 'е')
+    .replace(/ї/g, 'і')
+    .replace(/\b(ii|part two|частина друга|часть вторая)\b/g, ' 2 ')
+    .replace(/\b(iii|part three|частина третя|часть третья)\b/g, ' 3 ')
+    .replace(/[^a-z0-9а-яіїєґ\s]+/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
 
 const isFallbackPoster = (p?: string) => !p || p.startsWith('data:image');
+const hasCyrillicText = (s?: string) => Boolean(s && /[а-яіїєґё]/i.test(s));
 
 function relevance(item: MediaItem, queries: string[]): number {
-  const names = [item.title, item.originalTitle || '', ...(item.aliases || [])].map(norm).filter(Boolean);
+  const rawNames = [
+    item.title,
+    item.originalTitle || '',
+    transliterateToEnglish(item.title),
+    ...(item.aliases || []),
+  ].filter(Boolean);
+  const names = rawNames.map(norm).filter(Boolean);
+  const nameTokenPool = rawNames.flatMap(normTokens);
+
   let best = 0;
   for (const q of queries) {
     const nq = norm(q);
     if (!nq) continue;
     for (const n of names) {
-      if (n === nq) best = Math.max(best, 100);
-      else if (n.startsWith(nq)) best = Math.max(best, 70);
-      else if (n.includes(nq)) best = Math.max(best, 45);
-      else if (nq.includes(n) && n.length > 3) best = Math.max(best, 25);
+      if (n === nq) best = Math.max(best, 110);
+      else if (n.startsWith(nq)) best = Math.max(best, 80);
+      else if (n.includes(nq)) best = Math.max(best, 55);
+      else if (nq.includes(n) && n.length > 3) best = Math.max(best, 30);
+    }
+
+    // Multi-word token matching (e.g. "дюна 2", "dune 2", "spider man")
+    const qTokens = normTokens(q);
+    if (qTokens.length > 1) {
+      const matchedCount = qTokens.filter((qt) =>
+        nameTokenPool.some((nt) => nt === qt || (qt.length >= 3 && nt.startsWith(qt)))
+      ).length;
+      if (matchedCount === qTokens.length) {
+        best = Math.max(best, 85);
+      } else if (matchedCount >= qTokens.length - 1 && qTokens.length >= 2) {
+        best = Math.max(best, 40);
+      }
     }
   }
   const popularity = Math.min(20, Math.log10((item.voteCount || 10) + 1) * 4);
-  const hasPoster = isFallbackPoster(item.posterPath) ? 0 : 6;
-  const hasImdb = item.imdbId ? 5 : 0;
-  return best + popularity + hasPoster + hasImdb + (item.rating || 0) / 5;
+  const hasPoster = isFallbackPoster(item.posterPath) ? 0 : 8;
+  const hasImdb = item.imdbId ? 6 : 0;
+  const hasUaTitle = hasCyrillicText(item.title) ? 4 : 0;
+  return best + popularity + hasPoster + hasImdb + hasUaTitle + (item.rating || 0) / 5;
 }
 
 function cleanItem(item: MediaItem): MediaItem {
@@ -63,9 +107,9 @@ function cleanItem(item: MediaItem): MediaItem {
 }
 
 /**
- * Live global search. Engines run in parallel with individual timeouts and every engine that
- * answers is merged and pushed to `onPartial` immediately, so results appear within ~1s even if
- * a slow engine (Jikan / Wikidata) takes several seconds.
+ * Live global search supporting both Cyrillic (UA/RU) and Latin (EN / translit / layout swap) queries.
+ * Engines run in parallel with individual timeouts and every engine that answers is merged
+ * and pushed to `onPartial` immediately.
  */
 export async function searchEverywhere(
   query: string,
@@ -76,8 +120,15 @@ export async function searchEverywhere(
   if (!q) return [];
 
   const isAscii = !/[^\u0000-\u007f]/.test(q);
-  const phonetic = isAscii ? q : transliterateToEnglish(q);
-  const queries = Array.from(new Set([q, phonetic].filter(Boolean)));
+  const enVariants = transliterateToEnglishVariants(q);
+  const phonetic = enVariants[0] || q;
+  const cyrVariants = isAscii ? transliterateToCyrillicVariants(q) : [];
+  const swapped = swapKeyboardLayout(q);
+  const swappedEn = swapped ? transliterateToEnglish(swapped) : '';
+
+  const queries = Array.from(
+    new Set([q, phonetic, ...enVariants, ...cyrVariants, swapped, swappedEn].filter(Boolean))
+  );
 
   const merged = new Map<string, MediaItem>();
   const keyOf = (i: MediaItem) => i.imdbId || `t:${norm(i.originalTitle || i.title)}-${i.year}`;
@@ -91,14 +142,40 @@ export async function searchEverywhere(
         merged.set(key, it);
         continue;
       }
-      // Enrich the existing entry with whatever it is missing
+      // Prefer localized Ukrainian/Cyrillic title for display while keeping English originalTitle & combined aliases
+      const bestTitle =
+        hasCyrillicText(ex.title) ? ex.title : hasCyrillicText(it.title) ? it.title : ex.title || it.title;
+      const bestOriginal =
+        !hasCyrillicText(ex.originalTitle) && ex.originalTitle
+          ? ex.originalTitle
+          : !hasCyrillicText(it.originalTitle) && it.originalTitle
+            ? it.originalTitle
+            : ex.originalTitle || it.originalTitle;
+      const combinedAliases = Array.from(
+        new Set(
+          [
+            ex.title,
+            it.title,
+            ex.originalTitle || '',
+            it.originalTitle || '',
+            ...(ex.aliases || []),
+            ...(it.aliases || []),
+          ].filter(Boolean)
+        )
+      );
+
       merged.set(key, {
         ...ex,
+        title: bestTitle,
+        originalTitle: bestOriginal,
+        aliases: combinedAliases,
         tmdbId: ex.tmdbId || it.tmdbId,
         overview: ex.overview || it.overview,
         posterPath: isFallbackPoster(ex.posterPath) ? it.posterPath : ex.posterPath,
+        backdropPath: isFallbackPoster(ex.backdropPath) ? it.backdropPath : ex.backdropPath,
         trailerYoutubeId: ex.trailerYoutubeId || it.trailerYoutubeId,
-        cast: ex.cast || it.cast,
+        cast: ex.cast && ex.cast.length > 0 ? ex.cast : it.cast,
+        director: ex.director || it.director,
       });
     }
   };
@@ -112,9 +189,13 @@ export async function searchEverywhere(
     onPartial(all);
   };
 
-  // Instant offline matches (curated catalog + everything seen so far)
+  // Instant offline matches (curated catalog + everything seen so far across all query variants)
   absorb(tmdbService.search(q));
-  absorb(isAscii ? [] : tmdbService.search(phonetic));
+  for (const variant of [phonetic, ...cyrVariants, swapped]) {
+    if (variant && variant !== q) {
+      absorb(tmdbService.search(variant));
+    }
+  }
   emit();
 
   const run = async (label: string, fn: () => Promise<MediaItem[]>, ms = 7000) => {
@@ -127,8 +208,10 @@ export async function searchEverywhere(
     void label;
   };
 
+  // Resolve via Wikidata + Wikipedia (for Cyrillic query OR Latin query OR Cyrillic translit variant)
+  const wdPrimaryQuery = !isAscii ? q : cyrVariants[0] && phonetic !== q.toLowerCase() ? cyrVariants[0] : q;
   const wikidata = withTimeout(
-    resolveViaWikidataDeep(q),
+    resolveViaWikidataDeep(wdPrimaryQuery),
     7000,
     { englishQueries: [], mediaItems: [] as MediaItem[] }
   ).then(async (wd) => {
@@ -137,21 +220,36 @@ export async function searchEverywhere(
       absorb(wd.mediaItems);
       emit();
     }
-    enQueries = wd.englishQueries.filter((x) => /[a-zA-Z0-9]/.test(x)).slice(0, 3);
+    enQueries = wd.englishQueries.filter((x) => /[a-zA-Z0-9]/.test(x)).slice(0, 4);
     const extra = enQueries.filter((x) => norm(x) !== norm(phonetic) && norm(x) !== norm(q));
     await Promise.all(
-      extra.slice(0, 2).flatMap((eq) => [
+      extra.slice(0, 3).flatMap((eq) => [
         run('cm-m2', () => cinemetaSearch(eq, 'movie')),
         run('cm-s2', () => cinemetaSearch(eq, 'series')),
         run('imdb2', () => searchImdbSuggestions(eq)),
+        run('tvmaze2', () => searchTvMazeShows(eq)),
       ])
     );
   });
 
+  // Secondary phonetic English variant if different from primary phonetic (e.g. strict UA vs international)
+  const altEn = enVariants.find((v) => norm(v) !== norm(phonetic) && /[a-z]/.test(v));
+
   await Promise.all([
     run('cm-movie', () => cinemetaSearch(phonetic, 'movie')),
     run('cm-series', () => cinemetaSearch(phonetic, 'series')),
-    ...(isAscii ? [] : [run('cm-raw-movie', () => cinemetaSearch(q, 'movie'))]),
+    ...(altEn
+      ? [
+          run('cm-alt-movie', () => cinemetaSearch(altEn, 'movie')),
+          run('imdb-alt', () => searchImdbSuggestions(altEn)),
+        ]
+      : []),
+    ...(isAscii
+      ? [run('itunes-us', () => searchItunesMovies(phonetic, 'US'))]
+      : [
+          run('cm-raw-movie', () => cinemetaSearch(q, 'movie')),
+          run('itunes-ua', () => searchItunesMovies(q, 'UA')),
+        ]),
     run('imdb', () => searchImdbSuggestions(phonetic)),
     run('tvmaze', () => searchTvMazeShows(phonetic)),
     run('jikan', () => searchJikanAnime(phonetic), 9000),

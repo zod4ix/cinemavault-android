@@ -426,7 +426,7 @@ class AuthSyncService {
   public exportBackupJson(): string {
     const data = {
       app: 'CinemaVault PRO',
-      version: '3.5.0',
+      version: '3.7.3',
       exportedAt: new Date().toISOString(),
       profile: this.profile,
       favorites: storageService.getFavorites(),

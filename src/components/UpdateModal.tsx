@@ -68,9 +68,22 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
   const currentVer = updateInfo?.currentVersion || updaterService.getCurrentVersion();
   const latestVer = updateInfo?.latestVersion || currentVer;
   const hasUpdate = Boolean(updateInfo?.hasUpdate);
+  const isDesktop = Boolean((window as any).AndroidCinemaBridge?.isDesktop);
+  const desktopPlatform = (window as any).AndroidCinemaBridge?.platform || 'win32';
   const apkUrl =
     updateInfo?.apkDownloadUrl ||
     `https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v${latestVer}.apk`;
+  const winUrl =
+    updateInfo?.winDownloadUrl ||
+    `https://github.com/zod4ix/cinemavault-android/releases/download/v${latestVer}/CinemaVault-PRO-v${latestVer}-Windows.exe`;
+  const macUrl =
+    updateInfo?.macDownloadUrl ||
+    `https://github.com/zod4ix/cinemavault-android/releases/download/v${latestVer}/CinemaVault-PRO-v${latestVer}-macOS.dmg`;
+  const primaryUpdateUrl = isDesktop
+    ? desktopPlatform === 'darwin'
+      ? macUrl
+      : winUrl
+    : apkUrl;
   const releaseUrl =
     updateInfo?.releasePageUrl ||
     'https://github.com/zod4ix/cinemavault-android/releases/latest';
@@ -170,10 +183,10 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-300">
-                {(window as any).AndroidCinemaBridge?.isDesktop
+                {isDesktop
                   ? hasUpdate
-                    ? 'Натисніть кнопку нижче, щоб завантажити свіжий інсталятор для Windows/macOS.'
-                    : 'Ви також можете переглянути реліз на GitHub або відкрити мобільне посилання через QR-код.'
+                    ? 'Натисніть кнопку нижче — додаток автоматично завантажить та запустить оновлення для Windows.'
+                    : 'Ви також можете перевстановити інсталятор Windows, переглянути реліз на GitHub або сканувати QR-код для Android.'
                   : hasUpdate
                     ? 'Натисніть кнопку нижче, щоб завантажити та встановити свіжий .APK файл напряму.'
                     : 'Ви також можете завантажити .APK за прямим посиланням або через QR-код для Smart TV.'}
@@ -195,8 +208,8 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" data-nav-row="update-actions">
             <button
               ref={downloadBtnRef}
-              onClick={() => openExternalDownload(apkUrl)}
-              disabled={apkProgress.status === 'downloading'}
+              onClick={() => openExternalDownload(primaryUpdateUrl)}
+              disabled={apkProgress.status === 'downloading' || apkProgress.status === 'installing'}
               tabIndex={0}
               className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 disabled:opacity-70 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xl shadow-red-600/30 active:scale-95 transition-all tv-btn-focus focus:outline-none"
             >
@@ -204,9 +217,11 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
               <span>
                 {apkProgress.status === 'downloading'
                   ? `Завантаження... ${apkProgress.percent}%`
-                  : (window as any).AndroidCinemaBridge?.isDesktop
-                    ? `Завантажити оновлення (v${latestVer})`
-                    : `Встановити оновлення .APK (v${latestVer})`}
+                  : apkProgress.status === 'installing'
+                    ? 'Запуск інсталятора...'
+                    : isDesktop
+                      ? `Оновити програму Windows (v${latestVer})`
+                      : `Встановити оновлення .APK (v${latestVer})`}
               </span>
             </button>
 

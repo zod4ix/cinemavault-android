@@ -1,7 +1,11 @@
 const { app, BrowserWindow, shell, ipcMain, session } = require('electron');
 const path = require('path');
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
+const os = require('os');
+const crypto = require('crypto');
+const { spawn } = require('child_process');
 
 // Enable unrestricted media playback, HLS streaming, DNS-over-HTTPS & ECH (ISP block bypass)
 app.commandLine.appendSwitch('no-sandbox');
@@ -813,21 +817,297 @@ function setupIpcHandlers() {
     }
   });
 
+  ipcMain.on('cinema-get-device-telemetry', (event) => {
+    try {
+      event.returnValue = JSON.stringify(getDesktopTelemetryObject());
+    } catch {
+      event.returnValue = '';
+    }
+  });
+
   ipcMain.on('cinema-download-update', (_event, url) => {
     if (typeof url !== 'string' || !url.trim()) return;
     let targetUrl = url.trim();
     // On desktop, map .apk download links to the corresponding desktop installer on GitHub Releases
     if (targetUrl.toLowerCase().endsWith('.apk')) {
       const verMatch = targetUrl.match(/v?(\d+\.\d+\.\d+)/i);
-      const ver = verMatch ? verMatch[1] : '3.7.1';
+      const ver = verMatch ? verMatch[1] : '3.7.3';
       if (process.platform === 'darwin') {
         targetUrl = `https://github.com/zod4ix/cinemavault-android/releases/download/v${ver}/CinemaVault-PRO-v${ver}-macOS.dmg`;
       } else {
         targetUrl = `https://github.com/zod4ix/cinemavault-android/releases/download/v${ver}/CinemaVault-PRO-v${ver}-Windows.exe`;
       }
     }
-    shell.openExternal(targetUrl).catch(() => {});
+    downloadAndInstallDesktopUpdate(targetUrl);
   });
+}
+
+let isDownloadingDesktopUpdate = false;
+
+function notifyDesktopUpdateProgress(status, percent, message) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  try {
+    const safeMsg = JSON.stringify(String(message || ''));
+    mainWindow.webContents
+      .executeJavaScript(
+        `if(window.__cinemaOnApkDownloadProgress){window.__cinemaOnApkDownloadProgress(${JSON.stringify(status)}, ${Number(percent) || 0}, ${safeMsg});}`,
+        true
+      )
+      .catch(() => {});
+  } catch {
+    // ignore
+  }
+}
+
+function downloadAndInstallDesktopUpdate(initialUrl) {
+  if (isDownloadingDesktopUpdate) {
+    notifyDesktopUpdateProgress('downloading', 50, '⏳ Оновлення вже завантажується...');
+    return;
+  }
+  isDownloadingDesktopUpdate = true;
+
+  const isMac = process.platform === 'darwin';
+  const ext = isMac ? '.dmg' : '.exe';
+  const destPath = path.join(os.tmpdir(), `CinemaVault-PRO-Update${ext}`);
+  try {
+    if (fs.existsSync(destPath)) fs.unlinkSync(destPath);
+  } catch {
+    // ignore
+  }
+
+  notifyDesktopUpdateProgress('downloading', 1, 'Підключення до сервера оновлень GitHub...');
+
+  function followAndDownload(currentUrl, redirectCount) {
+    if (redirectCount > 8) {
+      isDownloadingDesktopUpdate = false;
+      notifyDesktopUpdateProgress('error', 0, 'Забагато перенаправлень. Відкриваю у браузері...');
+      shell.openExternal(initialUrl).catch(() => {});
+      return;
+    }
+
+    const req = https.get(
+      currentUrl,
+      {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; CinemaVault-PRO-Desktop-Updater)',
+          Accept: 'application/octet-stream,*/*',
+        },
+        timeout: 25000,
+      },
+      (res) => {
+        const code = res.statusCode || 0;
+        if ([301, 302, 303, 307, 308].includes(code) && res.headers.location) {
+          res.resume();
+          const nextUrl = new URL(res.headers.location, currentUrl).toString();
+          followAndDownload(nextUrl, redirectCount + 1);
+          return;
+        }
+
+        if (code < 200 || code >= 400) {
+          res.resume();
+          isDownloadingDesktopUpdate = false;
+          notifyDesktopUpdateProgress(
+            'error',
+            0,
+            `Помилка сервера (HTTP ${code}). Відкриваю завантаження у браузері...`
+          );
+          shell.openExternal(initialUrl).catch(() => {});
+          return;
+        }
+
+        const totalBytes = parseInt(res.headers['content-length'] || '0', 10) || 120 * 1024 * 1024;
+        let downloaded = 0;
+        let lastNotify = 0;
+        const fileStream = fs.createWriteStream(destPath);
+
+        res.on('data', (chunk) => {
+          downloaded += chunk.length;
+          const now = Date.now();
+          if (now - lastNotify >= 200) {
+            lastNotify = now;
+            const pct = Math.max(2, Math.min(99, Math.round((downloaded * 100) / totalBytes)));
+            const mbDone = (downloaded / (1024 * 1024)).toFixed(1);
+            const mbTotal = (totalBytes / (1024 * 1024)).toFixed(1);
+            notifyDesktopUpdateProgress(
+              'downloading',
+              pct,
+              `Завантаження оновлення ${isMac ? 'macOS' : 'Windows'}: ${pct}% (${mbDone} / ${mbTotal} МБ)`
+            );
+          }
+        });
+
+        res.pipe(fileStream);
+
+        fileStream.on('finish', () => {
+          fileStream.close(() => {
+            isDownloadingDesktopUpdate = false;
+            try {
+              const stat = fs.statSync(destPath);
+              if (!stat || stat.size < 5 * 1024 * 1024) {
+                throw new Error('Incomplete installer binary');
+              }
+
+              notifyDesktopUpdateProgress(
+                'installing',
+                100,
+                `Завантаження завершено (100%). Запуск інсталятора оновлення...`
+              );
+
+              if (isMac) {
+                shell.openPath(destPath).catch(() => {});
+                notifyDesktopUpdateProgress('ready', 100, 'Образ оновлення відкрито!');
+              } else {
+                const child = spawn(destPath, [], {
+                  detached: true,
+                  stdio: 'ignore',
+                });
+                child.unref();
+                notifyDesktopUpdateProgress(
+                  'ready',
+                  100,
+                  'Інсталятор Windows запущено! Зараз програма закриється для оновлення...'
+                );
+                setTimeout(() => {
+                  app.quit();
+                }, 1400);
+              }
+            } catch (err) {
+              notifyDesktopUpdateProgress(
+                'error',
+                0,
+                'Не вдалося запустити інсталятор автоматично. Відкриваю у браузері...'
+              );
+              shell.openExternal(initialUrl).catch(() => {});
+            }
+          });
+        });
+
+        fileStream.on('error', () => {
+          isDownloadingDesktopUpdate = false;
+          notifyDesktopUpdateProgress('error', 0, 'Помилка запису файлу оновлення.');
+          shell.openExternal(initialUrl).catch(() => {});
+        });
+      }
+    );
+
+    req.on('error', () => {
+      isDownloadingDesktopUpdate = false;
+      notifyDesktopUpdateProgress(
+        'error',
+        0,
+        'Помилка мережі при завантаженні. Відкриваю у браузері...'
+      );
+      shell.openExternal(initialUrl).catch(() => {});
+    });
+  }
+
+  followAndDownload(initialUrl, 0);
+}
+
+function getDesktopTelemetryObject() {
+  let deviceId = '';
+  let installedAt = Date.now();
+  let isFirstInstall = false;
+
+  try {
+    const stateFile = path.join(app.getPath('userData'), 'device-telemetry.json');
+    if (fs.existsSync(stateFile)) {
+      const saved = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+      if (saved && saved.deviceId) {
+        deviceId = saved.deviceId;
+        installedAt = saved.installedAt || installedAt;
+      }
+    }
+    if (!deviceId) {
+      isFirstInstall = true;
+      const hwSeed = `${os.hostname()}|${os.userInfo().username}|${os.arch()}|${os.platform()}|cinemavault_desktop`;
+      const hash = crypto.createHash('sha256').update(hwSeed).digest('hex').slice(0, 16);
+      deviceId = `cv-${process.platform === 'darwin' ? 'mac' : 'win'}-${hash}`;
+      fs.writeFileSync(
+        stateFile,
+        JSON.stringify({ deviceId, installedAt, updatedAt: Date.now() }, null, 2),
+        'utf8'
+      );
+    }
+  } catch {
+    deviceId = `cv-win-fallback`;
+  }
+
+  const release = os.release() || ''; // e.g. "10.0.22631" or "10.0.26100"
+  const rawVer = typeof os.version === 'function' ? os.version() : ''; // e.g. "Windows 11 Pro"
+  const arch = os.arch() || 'x64';
+  const cpus = os.cpus() || [];
+  const cpuModel = (cpus[0] && cpus[0].model ? cpus[0].model : 'x64 Processor')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const ramGb = Math.max(1, Math.round(os.totalmem() / (1024 * 1024 * 1024)));
+
+  if (process.platform === 'darwin') {
+    return {
+      deviceId,
+      platform: 'macos',
+      osName: 'macOS',
+      osVersion: `macOS (${release}, ${arch})`,
+      osBuild: release,
+      deviceType: 'Mac / MacBook',
+      manufacturer: 'Apple',
+      model: `${cpuModel} (${ramGb} GB RAM)`,
+      arch,
+      appVersion: '3.7.3',
+      isFirstInstall,
+      installedAt,
+    };
+  }
+
+  // Accurate Windows 11 vs Windows 10 vs Windows 8.1/7 detection
+  const parts = release.split('.');
+  const major = parseInt(parts[0] || '10', 10);
+  const minor = parseInt(parts[1] || '0', 10);
+  const build = parseInt(parts[2] || '0', 10);
+
+  let osName = 'Windows 10';
+  let featureUpdate = '';
+  if (major === 10 && build >= 22000) {
+    osName = 'Windows 11';
+    if (build >= 26100) featureUpdate = '24H2';
+    else if (build >= 22631) featureUpdate = '23H2';
+    else if (build >= 22621) featureUpdate = '22H2';
+    else featureUpdate = '21H2';
+  } else if (major === 10) {
+    osName = 'Windows 10';
+    if (build >= 19045) featureUpdate = '22H2';
+    else if (build >= 19044) featureUpdate = '21H2';
+    else if (build >= 19041) featureUpdate = '2004+';
+  } else if (major === 6 && minor === 3) {
+    osName = 'Windows 8.1';
+  } else if (major === 6 && minor === 2) {
+    osName = 'Windows 8';
+  } else if (major === 6 && minor === 1) {
+    osName = 'Windows 7';
+  }
+
+  const editionClean = rawVer && /Windows/i.test(rawVer) ? rawVer.trim() : osName;
+  const osVersion = `${editionClean}${featureUpdate ? ` ${featureUpdate}` : ''} (Build ${build || release}, ${arch})`;
+  const cpuBrand = /AMD/i.test(cpuModel)
+    ? 'AMD PC'
+    : /Intel/i.test(cpuModel)
+      ? 'Intel PC'
+      : 'Windows PC';
+
+  return {
+    deviceId,
+    platform: 'windows',
+    osName,
+    osVersion,
+    osBuild: release,
+    deviceType: 'ПК / Ноутбук Windows',
+    manufacturer: cpuBrand,
+    model: `${cpuModel} (${ramGb} GB RAM)`,
+    arch,
+    appVersion: '3.7.3',
+    isFirstInstall,
+    installedAt,
+  };
 }
 
 function isTrustedExternalUrl(rawUrl) {
@@ -843,6 +1123,10 @@ function isTrustedExternalUrl(rawUrl) {
 
 async function createWindow() {
   const isVerifyMode = process.argv.includes('--verify-launch');
+  const winIconFile =
+    process.platform === 'win32' && fs.existsSync(path.join(__dirname, 'icon.ico'))
+      ? 'icon.ico'
+      : 'icon.png';
 
   mainWindow = new BrowserWindow({
     width: 1360,
@@ -851,8 +1135,8 @@ async function createWindow() {
     minHeight: 600,
     show: !isVerifyMode,
     backgroundColor: '#07090e',
-    title: 'CinemaVault PRO v3.7.1',
-    icon: path.join(__dirname, 'icon.png'),
+    title: 'CinemaVault PRO v3.7.3',
+    icon: path.join(__dirname, winIconFile),
     autoHideMenuBar: true,
     fullscreenable: true,
     webPreferences: {
@@ -1056,6 +1340,37 @@ if (!gotTheLock) {
     setupIpcHandlers();
     await startLocalStaticServer();
     await createWindow();
+    if (!isVerifyLaunch) {
+      setTimeout(() => {
+        try {
+          const payload = {
+            ...getDesktopTelemetryObject(),
+            lang: app.getLocale() || 'uk',
+            screen: '1920x1080',
+            timestamp: Date.now(),
+          };
+          const body = JSON.stringify(payload);
+          const req = https.request(
+            'https://vinegret.net/wp-json/cinemavault/v1/telemetry',
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(body),
+                'User-Agent': 'CinemaVault-PRO-Desktop/3.7.3',
+              },
+              timeout: 7000,
+            },
+            (res) => res.resume()
+          );
+          req.on('error', () => {});
+          req.write(body);
+          req.end();
+        } catch {
+          // ignore
+        }
+      }, 2500);
+    }
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {

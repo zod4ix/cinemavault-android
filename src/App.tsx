@@ -46,6 +46,7 @@ import {
 } from './services/updater';
 import { selfHealService, SelfHealingBoundary } from './services/selfHeal';
 import { initSpatialNavigation } from './services/spatialNav';
+import { reportDeviceTelemetry } from './services/telemetry';
 
 declare global {
   interface Window {
@@ -105,10 +106,12 @@ const MainAppContent: React.FC = () => {
   const [history, setHistory] = useState<PlaybackProgress[]>([]);
   const latestSearchReqRef = useRef<number>(0);
   const infiniteSentinelRef = useRef<HTMLDivElement>(null);
+  const hasAutoPromptedUpdateRef = useRef<boolean>(false);
 
-  // Initialize Self-Healing Guards, Strict Horizontal Viewport Lock & Smart 2D Spatial Navigation
+  // Initialize Self-Healing Guards, Telemetry Heartbeat, Strict Horizontal Viewport Lock & Smart 2D Spatial Navigation
   useEffect(() => {
     selfHealService.initGlobalGuards();
+    reportDeviceTelemetry();
     const cleanupSpatial = initSpatialNavigation();
     const preventHorizontalDrift = () => {
       if (window.scrollX !== 0) window.scrollTo(0, window.scrollY);
@@ -128,6 +131,10 @@ const MainAppContent: React.FC = () => {
     setUpdateInfo(info);
     if (info.hasUpdate && !updaterService.isDismissed(info.latestVersion)) {
       setShowUpdateBanner(true);
+      if (!hasAutoPromptedUpdateRef.current) {
+        hasAutoPromptedUpdateRef.current = true;
+        setIsUpdateOpen(true);
+      }
     }
   }, []);
 
@@ -455,8 +462,14 @@ const MainAppContent: React.FC = () => {
             <div className="flex items-center gap-2" data-nav-row="update-toast">
               <button
                 tabIndex={0}
-                disabled={apkProgress.status === 'downloading'}
-                onClick={() => openExternalDownload(updateInfo.apkDownloadUrl)}
+                disabled={apkProgress.status === 'downloading' || apkProgress.status === 'installing'}
+                onClick={() =>
+                  openExternalDownload(
+                    (window as any).AndroidCinemaBridge?.isDesktop
+                      ? updateInfo.winDownloadUrl || updateInfo.apkDownloadUrl
+                      : updateInfo.apkDownloadUrl
+                  )
+                }
                 className="px-3 py-1 rounded-lg bg-white text-slate-950 font-black text-xs flex items-center gap-1 shadow hover:bg-amber-100 disabled:opacity-75 transition-colors tv-btn-focus focus:outline-none"
               >
                 <Download className={`w-3.5 h-3.5 ${apkProgress.status === 'downloading' ? 'animate-bounce' : ''}`} />

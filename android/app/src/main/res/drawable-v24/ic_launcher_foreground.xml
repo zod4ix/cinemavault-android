@@ -1,26 +1,89 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Outer Crimson Ring -->
+
+    <!-- Outer Hexagonal CinemaVault Shield (scaled inside 108dp adaptive safe zone) -->
+    <path
+        android:strokeWidth="2.4"
+        android:strokeLineJoin="round"
+        android:pathData="M54,24 L81.3,38.3 L81.3,69.7 L54,84 L26.7,69.7 L26.7,38.3 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="26"
+                android:startY="24"
+                android:endX="82"
+                android:endY="84"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#1A0B12" />
+                <item android:offset="0.5" android:color="#2A0D18" />
+                <item android:offset="1.0" android:color="#0D0408" />
+            </gradient>
+        </aapt:attr>
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:startX="26"
+                android:startY="24"
+                android:endX="82"
+                android:endY="84"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#F59E0B" />
+                <item android:offset="0.35" android:color="#EF4444" />
+                <item android:offset="0.7" android:color="#DC2626" />
+                <item android:offset="1.0" android:color="#FBBF24" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 6 Film Perforations on Hexagonal Shield Border -->
+    <path android:fillColor="#F59E0B" android:pathData="M39.7,35.8m-1.7,0a1.7,1.7 0 1,1 3.4,0a1.7,1.7 0 1,1 -3.4,0" />
+    <path android:fillColor="#F59E0B" android:pathData="M68.3,35.8m-1.7,0a1.7,1.7 0 1,1 3.4,0a1.7,1.7 0 1,1 -3.4,0" />
+    <path android:fillColor="#EF4444" android:pathData="M77.4,54m-1.7,0a1.7,1.7 0 1,1 3.4,0a1.7,1.7 0 1,1 -3.4,0" />
+    <path android:fillColor="#EF4444" android:pathData="M68.3,72.2m-1.7,0a1.7,1.7 0 1,1 3.4,0a1.7,1.7 0 1,1 -3.4,0" />
+    <path android:fillColor="#F59E0B" android:pathData="M39.7,72.2m-1.7,0a1.7,1.7 0 1,1 3.4,0a1.7,1.7 0 1,1 -3.4,0" />
+    <path android:fillColor="#EF4444" android:pathData="M30.6,54m-1.7,0a1.7,1.7 0 1,1 3.4,0a1.7,1.7 0 1,1 -3.4,0" />
+
+    <!-- Central Film Reel Ring -->
     <path
         android:fillColor="#00000000"
-        android:strokeColor="#E50914"
-        android:strokeWidth="4.5"
-        android:pathData="M54,24A30,30 0 1,1 53.99,24Z" />
-    <!-- Inner Gold Accent Ring -->
+        android:strokeWidth="1.9"
+        android:pathData="M54,37.1A16.9,16.9 0 1,1 53.99,37.1Z">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:startX="37"
+                android:startY="71"
+                android:endX="71"
+                android:endY="37"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#DC2626" />
+                <item android:offset="1.0" android:color="#F59E0B" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Vault Core Circle -->
     <path
-        android:fillColor="#1A0B12"
+        android:fillColor="#17060B"
         android:strokeColor="#F59E0B"
-        android:strokeWidth="2.2"
-        android:pathData="M54,31A23,23 0 1,1 53.99,31Z" />
-    <!-- Central Golden/Red Cinema Play Emblem -->
+        android:strokeWidth="1.5"
+        android:pathData="M54,41.6A12.4,12.4 0 1,1 53.99,41.6Z" />
+
+    <!-- Central Play Arrow / Cinema Vault Key -->
     <path
-        android:fillColor="#E50914"
-        android:pathData="M46,40L69,54L46,68Z" />
-    <path
-        android:fillColor="#F59E0B"
-        android:pathData="M48.5,44L65,54L48.5,64Z" />
+        android:pathData="M50.7,46.2 L61.8,54 L50.7,61.8 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="50"
+                android:startY="46"
+                android:endX="62"
+                android:endY="62"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#FFFFFF" />
+                <item android:offset="1.0" android:color="#FFD27D" />
+            </gradient>
+        </aapt:attr>
+    </path>
 </vector>

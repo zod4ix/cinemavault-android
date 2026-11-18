@@ -768,7 +768,7 @@ export function normalizeGenre(g: string): string {
   return GENRE_MAP_TO_UA[lower] || g;
 }
 
-// Fast Cyrillic -> English phonetic transliterator so Ukrainian/Russian queries hit IMDb & TVMaze immediately
+// Fast Cyrillic ⇄ English phonetic transliterator & Keyboard Layout converter so both Cyrillic and Latin queries hit all engines immediately
 const CYR_TO_LAT: { [ch: string]: string } = {
   а: 'a', б: 'b', в: 'v', г: 'h', ґ: 'g', д: 'd', е: 'e', є: 'ye',
   ё: 'yo', ж: 'zh', з: 'z', и: 'y', і: 'i', ї: 'yi', й: 'y', к: 'k',
@@ -777,7 +777,96 @@ const CYR_TO_LAT: { [ch: string]: string } = {
   ь: '', ъ: '', ы: 'y', э: 'e', ю: 'yu', я: 'ya',
 };
 
-// Popular Ukrainian/Russian movie title dictionary for instant translation
+// Cinematic / International phonetic variant (г->g, и->i, і->i, х->h, й->i) for borrowed names like "Гладіатор", "Інтерстеллар", "Кінг Конг", "Шерлок"
+const CYR_TO_LAT_INTL: { [ch: string]: string } = {
+  а: 'a', б: 'b', в: 'v', г: 'g', ґ: 'g', д: 'd', е: 'e', є: 'e',
+  ё: 'yo', ж: 'zh', з: 'z', и: 'i', і: 'i', ї: 'i', й: 'i', к: 'k',
+  л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't',
+  у: 'u', ф: 'f', х: 'h', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'shch',
+  ь: '', ъ: '', ы: 'y', э: 'e', ю: 'yu', я: 'ya',
+};
+
+const LAT_DIGRAPHS_TO_CYR: Array<[string, string]> = [
+  ['shch', 'щ'],
+  ['sch', 'щ'],
+  ['zh', 'ж'],
+  ['kh', 'х'],
+  ['ch', 'ч'],
+  ['sh', 'ш'],
+  ['ts', 'ц'],
+  ['yu', 'ю'],
+  ['ju', 'ю'],
+  ['ya', 'я'],
+  ['ja', 'я'],
+  ['ye', 'є'],
+  ['yo', 'йо'],
+  ['yi', 'ї'],
+  ['ck', 'к'],
+  ['ph', 'ф'],
+  ['th', 'т'],
+];
+
+const LAT_CHAR_TO_CYR_UA: { [ch: string]: string } = {
+  a: 'а', b: 'б', c: 'к', d: 'д', e: 'е', f: 'ф', g: 'г', h: 'г',
+  i: 'і', j: 'дж', k: 'к', l: 'л', m: 'м', n: 'н', o: 'о', p: 'п',
+  q: 'к', r: 'р', s: 'с', t: 'т', u: 'у', v: 'в', w: 'в', x: 'кс',
+  y: 'и', z: 'з',
+};
+
+const LAT_CHAR_TO_CYR_RU: { [ch: string]: string } = {
+  a: 'а', b: 'б', c: 'к', d: 'д', e: 'е', f: 'ф', g: 'г', h: 'х',
+  i: 'и', j: 'дж', k: 'к', l: 'л', m: 'м', n: 'н', o: 'о', p: 'п',
+  q: 'к', r: 'р', s: 'с', t: 'т', u: 'у', v: 'в', w: 'в', x: 'кс',
+  y: 'ы', z: 'з',
+};
+
+// Keyboard layout maps (QWERTY ⇄ ЙЦУКЕН UA/RU)
+const EN_TO_UA_KB: { [ch: string]: string } = {
+  q: 'й', w: 'ц', e: 'у', r: 'к', t: 'е', y: 'н', u: 'г', i: 'ш', o: 'щ', p: 'з', '[': 'х', ']': 'ї',
+  a: 'ф', s: 'і', d: 'в', f: 'а', g: 'п', h: 'р', j: 'о', k: 'л', l: 'д', ';': 'ж', "'": 'є',
+  z: 'я', x: 'ч', c: 'с', v: 'м', b: 'и', n: 'т', m: 'ь', ',': 'б', '.': 'ю',
+};
+const UA_TO_EN_KB: { [ch: string]: string } = {};
+for (const [k, v] of Object.entries(EN_TO_UA_KB)) UA_TO_EN_KB[v] = k;
+UA_TO_EN_KB['ы'] = 's';
+UA_TO_EN_KB['э'] = "'";
+UA_TO_EN_KB['ъ'] = ']';
+UA_TO_EN_KB['ґ'] = '\\';
+
+export function swapKeyboardLayout(input: string): string {
+  const lower = input.toLowerCase().trim();
+  if (!lower) return '';
+  const hasCyr = /[а-яіїєґё]/i.test(lower);
+  const map = hasCyr ? UA_TO_EN_KB : EN_TO_UA_KB;
+  return lower
+    .split('')
+    .map((ch) => (map[ch] !== undefined ? map[ch] : ch))
+    .join('');
+}
+
+export function transliterateToCyrillicVariants(input: string): string[] {
+  const lower = input.toLowerCase().trim();
+  if (!lower || !/[a-z]/.test(lower)) return [];
+
+  const convert = (charMap: { [ch: string]: string }) => {
+    let s = lower;
+    for (const [dg, cyr] of LAT_DIGRAPHS_TO_CYR) {
+      s = s.split(dg).join(cyr);
+    }
+    return s
+      .split('')
+      .map((ch) => (charMap[ch] !== undefined ? charMap[ch] : ch))
+      .join('');
+  };
+
+  const uaVar = convert(LAT_CHAR_TO_CYR_UA);
+  const ruVar = convert(LAT_CHAR_TO_CYR_RU);
+  // Also variant where 'i' -> 'и' in Ukrainian (e.g. "vidmak" -> "відьмак" / "видьмак", "interstellar" -> "інтерстеллар")
+  const uaSoft = uaVar.replace(/л([аеіоу])/g, 'л$1');
+  return Array.from(new Set([uaVar, ruVar, uaSoft].filter(Boolean)));
+}
+
+// Comprehensive Ukrainian/Russian movie, series, cartoon & anime title dictionary for instant translation
 const POPULAR_UA_EN_DICT: { [key: string]: string } = {
   'термінатор': 'terminator',
   'терминатор': 'terminator',
@@ -791,6 +880,7 @@ const POPULAR_UA_EN_DICT: { [key: string]: string } = {
   'людина павук': 'spider-man',
   'людина-павук': 'spider-man',
   'человек паук': 'spider-man',
+  'человек-паук': 'spider-man',
   'бетмен': 'the batman',
   'бэтмен': 'the batman',
   'супермен': 'superman',
@@ -801,11 +891,14 @@ const POPULAR_UA_EN_DICT: { [key: string]: string } = {
   'володар перснів': 'the lord of the rings',
   'властелин колец': 'the lord of the rings',
   'хоббіт': 'the hobbit',
+  'хоббит': 'the hobbit',
   'гобіт': 'the hobbit',
   'зоряні війни': 'star wars',
   'звездные войны': 'star wars',
   'чужий': 'alien',
   'чужой': 'alien',
+  'чужі': 'aliens',
+  'чужие': 'aliens',
   'хижак': 'predator',
   'хищник': 'predator',
   'матриця': 'the matrix',
@@ -828,6 +921,7 @@ const POPULAR_UA_EN_DICT: { [key: string]: string } = {
   'начало': 'inception',
   'оппенгеймер': 'oppenheimer',
   'барбі': 'barbie',
+  'барби': 'barbie',
   'гладіатор': 'gladiator',
   'гладиатор': 'gladiator',
   'титанік': 'titanic',
@@ -842,20 +936,112 @@ const POPULAR_UA_EN_DICT: { [key: string]: string } = {
   'хрещений батько': 'the godfather',
   'крестный отец': 'the godfather',
   'вовк з уолл-стріт': 'the wolf of wall street',
+  'волк с уолл-стрит': 'the wolf of wall street',
   'форест гамп': 'forrest gump',
   'форрест гамп': 'forrest gump',
+  'втеча з шоушенка': 'the shawshank redemption',
+  'побег из шоушенка': 'the shawshank redemption',
+  'шоушенк': 'the shawshank redemption',
+  'острів проклятих': 'shutter island',
+  'остров проклятых': 'shutter island',
+  'ілюзія обману': 'now you see me',
+  'иллюзия обмана': 'now you see me',
+  'ножі наголо': 'knives out',
+  'достать ножи': 'knives out',
+  'прибуття': 'arrival',
+  'прибытие': 'arrival',
+  'джентльмени': 'the gentlemen',
+  'джентльмены': 'the gentlemen',
+  'гнів людський': 'wrath of man',
+  'гнев человеческий': 'wrath of man',
+  'перевізник': 'the transporter',
+  'перевозчик': 'the transporter',
+  'механік': 'the mechanic',
+  'механик': 'the mechanic',
+  'бджоляр': 'the beekeeper',
+  'пчеловод': 'the beekeeper',
+  'заручниця': 'taken',
+  'заложница': 'taken',
+  'праведник': 'the equalizer',
+  'великий зрівнювач': 'the equalizer',
+  'ніхто': 'nobody',
+  'никто': 'nobody',
+  'швидкісний поїзд': 'bullet train',
+  'быстрее пули': 'bullet train',
+  'темний лицар': 'the dark knight',
+  'темный рыцарь': 'the dark knight',
+  'престиж': 'the prestige',
+  'тенет': 'tenet',
+  'дюнкерк': 'dunkirk',
+  'пам’ятай': 'memento',
+  'мементо': 'memento',
+  'той хто біжить по лезу': 'blade runner',
+  'бегущий по лезвию': 'blade runner',
+  'шалений макс': 'mad max',
+  'безумный макс': 'mad max',
+  'фуріоза': 'furiosa',
+  'фуриоза': 'furiosa',
+  'дикий робот': 'the wild robot',
+  'субстанція': 'the substance',
+  'субстанция': 'the substance',
+  'каскадер': 'the fall guy',
+  'каскадьор': 'the fall guy',
+  'годзілла': 'godzilla',
+  'годзилла': 'godzilla',
+  'кінг конг': 'king kong',
+  'кинг конг': 'king kong',
+  'конг': 'kong',
+  'планета мавп': 'planet of the apes',
+  'планета обезьян': 'planet of the apes',
+  'тихе місце': 'a quiet place',
+  'тихое место': 'a quiet place',
+  'ворон': 'the crow',
+  'бітлджус': 'beetlejuice',
+  'битлджус': 'beetlejuice',
+  'кравен': 'kraven the hunter',
+  'моана': 'moana',
+  'ваяна': 'moana',
+  'думками навиворіт': 'inside out',
+  'головоломка': 'inside out',
+  'таємниця коко': 'coco',
+  'тайна коко': 'coco',
+  'енканто': 'encanto',
+  'энканто': 'encanto',
+  'рапунцель': 'tangled',
+  'рататуй': 'ratatouille',
+  'корпорація монстрів': 'monsters inc',
+  'корпорация монстров': 'monsters inc',
+  'у пошуках немо': 'finding nemo',
+  'в поисках немо': 'finding nemo',
+  'суперсімейка': 'the incredibles',
+  'суперсемейка': 'the incredibles',
+  'волл-і': 'wall-e',
+  'валли': 'wall-e',
+  'вперед і вгору': 'up',
+  'вверх': 'up',
+  'душа': 'soul',
+  'елементарно': 'elemental',
+  'элементарно': 'elemental',
+  'кіт у чоботях': 'puss in boots',
+  'кот в сапогах': 'puss in boots',
+  'погані хлопці': 'the bad guys',
+  'плохие парни': 'bad boys',
   'гра престолів': 'game of thrones',
   'игра престолов': 'game of thrones',
   'дім дракона': 'house of the dragon',
   'дом дракона': 'house of the dragon',
   'пуститися берега': 'breaking bad',
   'во все тяжкие': 'breaking bad',
+  'краще подзвоніть солу': 'better call saul',
+  'лучше звоните солу': 'better call saul',
   'дивні дива': 'stranger things',
   'очень странные дела': 'stranger things',
   'відьмак': 'the witcher',
   'ведьмак': 'the witcher',
   'хлопаки': 'the boys',
   'пацаны': 'the boys',
+  'покоління ві': 'gen v',
+  'поколение ви': 'gen v',
   'венздей': 'wednesday',
   'уэнздей': 'wednesday',
   'гра в кальмара': 'squid game',
@@ -875,6 +1061,65 @@ const POPULAR_UA_EN_DICT: { [key: string]: string } = {
   'ходячие мертвецы': 'the walking dead',
   'вікінги': 'vikings',
   'викинги': 'vikings',
+  'аркейн': 'arcane',
+  'сьоґун': 'shogun',
+  'сьогун': 'shogun',
+  'сегун': 'shogun',
+  'фолаут': 'fallout',
+  'фоллаут': 'fallout',
+  'пінгвін': 'the penguin',
+  'пингвин': 'the penguin',
+  'ріچر': 'reacher',
+  'ричер': 'reacher',
+  'джек річер': 'reacher',
+  'укриття': 'silo',
+  'бункер': 'silo',
+  'розрив': 'severance',
+  'разделение': 'severance',
+  'останні з нас': 'the last of us',
+  'одни из нас': 'the last of us',
+  'мандалорець': 'the mandalorian',
+  'мандалорец': 'the mandalorian',
+  'андор': 'andor',
+  'локі': 'loki',
+  'локи': 'loki',
+  'чорне дзеркало': 'black mirror',
+  'черное зеркало': 'black mirror',
+  'любов смерть і роботи': 'love death & robots',
+  'любовь смерть и роботы': 'love death & robots',
+  'справжній детектив': 'true detective',
+  'настоящий детектив': 'true detective',
+  'фарго': 'fargo',
+  'декстер': 'dexter',
+  'ганібал': 'hannibal',
+  'ганнибал': 'hannibal',
+  'шерлок': 'sherlock',
+  'шерлок холмс': 'sherlock holmes',
+  'клан сопрано': 'the sopranos',
+  'офіс': 'the office',
+  'офис': 'the office',
+  'теорія великого вибуху': 'the big bang theory',
+  'теория большого взрыва': 'the big bang theory',
+  'клініка': 'scrubs',
+  'клиника': 'scrubs',
+  'загублені': 'lost',
+  'остаться в живых': 'lost',
+  'втеча з в\'язниці': 'prison break',
+  'побег': 'prison break',
+  'світ дикого заходу': 'westworld',
+  'мир дикого запада': 'westworld',
+  'пітьма': 'dark',
+  'тьма': 'dark',
+  'люцифер': 'lucifer',
+  'нарко': 'narcos',
+  'наркос': 'narcos',
+  'король талси': 'tulsa king',
+  'король талсы': 'tulsa king',
+  'день шакала': 'the day of the jackal',
+  'невразливий': 'invincible',
+  'неуязвимый': 'invincible',
+  'кіберпанк': 'cyberpunk edgerunners',
+  'киберпанк': 'cyberpunk edgerunners',
   'шрек': 'shrek',
   'мадагаскар': 'madagascar',
   'льодовиковий період': 'ice age',
@@ -882,8 +1127,10 @@ const POPULAR_UA_EN_DICT: { [key: string]: string } = {
   'король лев': 'the lion king',
   'тачки': 'cars',
   'історія іграшок': 'toy story',
+  'история игрушек': 'toy story',
   'панда кунг-фу': 'kung fu panda',
   'кунг фу панда': 'kung fu panda',
+  'кунг-фу панда': 'kung fu panda',
   'як приборкати дракона': 'how to train your dragon',
   'как приручить дракона': 'how to train your dragon',
   'крижане серце': 'frozen',
@@ -900,6 +1147,20 @@ const POPULAR_UA_EN_DICT: { [key: string]: string } = {
   'симпсоны': 'the simpsons',
   'футурама': 'futurama',
   'губка боб': 'spongebob',
+  'гравіті фолз': 'gravity falls',
+  'гравити фолз': 'gravity falls',
+  'південний парк': 'south park',
+  'южный парк': 'south park',
+  'гріфіни': 'family guy',
+  'гриффины': 'family guy',
+  'мавка': 'mavka the forest song',
+  'довбуш': 'dovbush',
+  'кіборги': 'cyborgs',
+  'памфір': 'pamfir',
+  'захар беркут': 'the rising hawk',
+  'люксембург люксембург': 'luxembourg luxembourg',
+  'мої думки тихі': 'my thoughts are silent',
+  'козаки': 'cossacks',
   'наруто': 'naruto',
   'ван піс': 'one piece',
   'ван пис': 'one piece',
@@ -914,19 +1175,185 @@ const POPULAR_UA_EN_DICT: { [key: string]: string } = {
   'людина бензопила': 'chainsaw man',
   'человек бензопила': 'chainsaw man',
   'клинок': 'demon slayer',
+  'підняття рівня поодинці': 'solo leveling',
+  'поднятие уровня в одиночку': 'solo leveling',
+  'проводи фрірен': 'frieren',
+  'фрірен': 'frieren',
+  'фрирен': 'frieren',
+  'віднесені привидами': 'spirited away',
+  'унесенные призраками': 'spirited away',
+  'мандрівний замок': 'howl\'s moving castle',
+  'ходячий замок': 'howl\'s moving castle',
+  'мій сусід тоторо': 'my neighbor totoro',
+  'мой сосед тоторо': 'my neighbor totoro',
+  'твоє ім\'я': 'your name',
+  'твое имя': 'your name',
+  'сталевий алхімік': 'fullmetal alchemist',
+  'стальной алхимик': 'fullmetal alchemist',
+  'токійський гуль': 'tokyo ghoul',
+  'токийский гуль': 'tokyo ghoul',
+  'ванпанчмен': 'one punch man',
+  'берсерк': 'berserk',
+  'євангеліон': 'neon genesis evangelion',
+  'евангелион': 'neon genesis evangelion',
+  'паразити': 'parasite',
+  'паразиты': 'parasite',
+  'потяг до пусана': 'train to busan',
+  'поезд в пусан': 'train to busan',
+  '1+1': 'the intouchables',
+  'недоторканні': 'the intouchables',
+  'неприкасаемые': 'the intouchables',
+  'таксі': 'taxi',
+  'такси': 'taxi',
+  'леон': 'leon the professional',
+  'п\'ятий елемент': 'the fifth element',
+  'пятый элемент': 'the fifth element',
+  'люсі': 'lucy',
+  'люси': 'lucy',
+  'великий куш': 'snatch',
+  'большой куш': 'snatch',
+  'карти гроші два стволи': 'lock stock and two smoking barrels',
+  'безславні виродки': 'inglourious basterds',
+  'бесславные ублюдки': 'inglourious basterds',
+  'джанго вільний': 'django unchained',
+  'джанго освобожденный': 'django unchained',
+  'одного разу в голлівуді': 'once upon a time in hollywood',
+  'однажды в голливуде': 'once upon a time in hollywood',
+  'убити білла': 'kill bill',
+  'убить билла': 'kill bill',
+  'мовчання ягнят': 'the silence of the lambs',
+  'молчание ягнят': 'the silence of the lambs',
+  'сім': 'se7en',
+  'семь': 'se7en',
+  'список шиндлера': 'schindler\'s list',
+  'піаніст': 'the pianist',
+  'пианист': 'the pianist',
+  'врятувати рядового раяна': 'saving private ryan',
+  'спасти рядового райана': 'saving private ryan',
+  'хоробре серце': 'braveheart',
+  'храброе сердце': 'braveheart',
+  'троя': 'troy',
+  '300 спартанців': '300',
+  '300 спартанцев': '300',
+  'останній самурай': 'the last samurai',
+  'последний самурай': 'the last samurai',
+  'легенда х\'ю гласса': 'the revenant',
+  'выживший': 'the revenant',
+  'марсіанин': 'the martian',
+  'марсианин': 'the martian',
+  'гравітація': 'gravity',
+  'гравитация': 'gravity',
+  'пасажири': 'passengers',
+  'пассажиры': 'passengers',
+  'вартові галактики': 'guardians of the galaxy',
+  'стражи галактики': 'guardians of the galaxy',
+  'доктор стрендж': 'doctor strange',
+  'доктор стрэндж': 'doctor strange',
+  'чорна пантера': 'black panther',
+  'черная пантера': 'black panther',
+  'капітан америка': 'captain america',
+  'перший месник': 'captain america',
+  'загін самогубців': 'the suicide squad',
+  'отряд самоубийц': 'the suicide squad',
+  'аквамен': 'aquaman',
+  'ліга справедливості': 'justice league',
+  'лига справедливости': 'justice league',
+  'костянтин': 'constantine',
+  'константин': 'constantine',
+  'блейд': 'blade',
+  'мумія': 'the mummy',
+  'мумия': 'the mummy',
+  'індіана джонс': 'indiana jones',
+  'индиана джонс': 'indiana jones',
+  'парк юрського періоду': 'jurassic park',
+  'парк юрского периода': 'jurassic park',
+  'світ юрського періоду': 'jurassic world',
+  'мир юрского периода': 'jurassic world',
+  'назад у майбутнє': 'back to the future',
+  'назад в будущее': 'back to the future',
+  'люди в чорному': 'men in black',
+  'люди в черном': 'men in black',
+  'люди ікс': 'x-men',
+  'люди икс': 'x-men',
+  'кінгсман': 'kingsman',
+  'кингсман': 'kingsman',
+  'джеймс бонд': 'james bond',
+  'міцний горішок': 'die hard',
+  'крепкий орешек': 'die hard',
+  'рембо': 'rambo',
+  'рэмбо': 'rambo',
+  'роккі': 'rocky',
+  'рокки': 'rocky',
+  'крід': 'creed',
+  'крид': 'creed',
+  'нестримні': 'the expendables',
+  'неудержимые': 'the expendables',
+  'маска': 'the mask',
+  'шоу трумана': 'the truman show',
+  'брюс всемогутній': 'bruce almighty',
+  'брюс всемогущий': 'bruce almighty',
+  'похмілля у вегасі': 'the hangover',
+  'мальчишник в вегасе': 'the hangover',
 };
 
+const SORTED_DICT_ENTRIES = Object.entries(POPULAR_UA_EN_DICT).sort(
+  (a, b) => b[0].length - a[0].length
+);
+
 export function transliterateToEnglish(input: string): string {
-  const lower = input.toLowerCase().trim();
-  for (const [uaKey, enVal] of Object.entries(POPULAR_UA_EN_DICT)) {
-    if (lower === uaKey || lower.startsWith(uaKey + ' ')) {
-      return lower.replace(uaKey, enVal);
+  const lower = input
+    .toLowerCase()
+    .replace(/[’`']/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!lower) return '';
+
+  // 1. Exact or prefix match from dictionary (sorted longest-first)
+  for (const [uaKey, enVal] of SORTED_DICT_ENTRIES) {
+    if (lower === uaKey || lower.startsWith(uaKey + ' ') || lower.startsWith(uaKey + ':')) {
+      const rest = lower.slice(uaKey.length);
+      const restTranslit = rest
+        ? rest
+            .split('')
+            .map((ch) => (CYR_TO_LAT_INTL[ch] !== undefined ? CYR_TO_LAT_INTL[ch] : ch))
+            .join('')
+        : '';
+      return (enVal + restTranslit).trim();
     }
   }
+
+  // 2. Also check if input is Latin transliteration of a known Ukrainian/Russian title (e.g. "sam udoma", "mesnyky", "vidmak", "forsazh")
+  if (!/[а-яіїєґё]/i.test(lower)) {
+    const cyrVariants = transliterateToCyrillicVariants(lower);
+    for (const cyr of cyrVariants) {
+      for (const [uaKey, enVal] of SORTED_DICT_ENTRIES) {
+        if (cyr === uaKey || cyr.startsWith(uaKey + ' ')) {
+          return cyr.replace(uaKey, enVal);
+        }
+      }
+    }
+  }
+
+  // 3. Default cinematic phonetic transliteration (preferred by IMDb/Cinemeta: "інтерстеллар" -> "interstellar", "гладіатор" -> "gladiator")
   return lower
+    .split('')
+    .map((ch) => (CYR_TO_LAT_INTL[ch] !== undefined ? CYR_TO_LAT_INTL[ch] : ch))
+    .join('');
+}
+
+export function transliterateToEnglishVariants(input: string): string[] {
+  const lower = input.toLowerCase().trim();
+  if (!lower) return [];
+  const primary = transliterateToEnglish(lower);
+  const uaStrict = lower
     .split('')
     .map((ch) => (CYR_TO_LAT[ch] !== undefined ? CYR_TO_LAT[ch] : ch))
     .join('');
+  const intl = lower
+    .split('')
+    .map((ch) => (CYR_TO_LAT_INTL[ch] !== undefined ? CYR_TO_LAT_INTL[ch] : ch))
+    .join('');
+  return Array.from(new Set([primary, intl, uaStrict].filter(Boolean)));
 }
 
 // Runtime cache so any dynamically fetched item is accessible by ID
@@ -1025,12 +1452,29 @@ export async function resolveViaWikidataDeep(query: string): Promise<WikidataRes
 
   try {
     const isCyrillic = /[а-яіїєґё]/i.test(query);
-    const langsToTry = isCyrillic ? ['uk', 'ru'] : ['en', 'pl', 'es'];
+    const langsToTry = isCyrillic ? ['uk', 'ru'] : ['en', 'uk', 'pl'];
 
     const entityIds: string[] = [];
-    for (const lang of langsToTry) {
-      const searchUrl = `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(query)}&language=${lang}&uselang=en&type=item&limit=6&format=json&origin=*`;
-      const data = await httpGetJson(searchUrl);
+
+    // 1. Query Wikidata entity search across languages in parallel + Wikipedia pageprops resolver
+    const wdPromises = langsToTry.map(async (lang) => {
+      const searchUrl = `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(query)}&language=${lang}&uselang=en&type=item&limit=8&format=json&origin=*`;
+      return httpGetJson(searchUrl, 4500);
+    });
+
+    // Also query Wikipedia (uk & ru for Cyrillic, en for Latin) for film/series articles to catch idiomatic titles
+    const wikiLangs = isCyrillic ? ['uk', 'ru'] : ['en'];
+    const wikiPromises = wikiLangs.map(async (wLang) => {
+      const wikiUrl = `https://${wLang}.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(query)}&gsrlimit=5&prop=pageprops&ppprop=wikibase_item&format=json&origin=*`;
+      return httpGetJson(wikiUrl, 4500);
+    });
+
+    const [wdResults, wikiResults] = await Promise.all([
+      Promise.all(wdPromises),
+      Promise.all(wikiPromises),
+    ]);
+
+    for (const data of wdResults) {
       if (data?.search && Array.isArray(data.search)) {
         for (const s of data.search) {
           if (s.label && !englishQueries.includes(s.label)) {
@@ -1041,17 +1485,29 @@ export async function resolveViaWikidataDeep(query: string): Promise<WikidataRes
           }
         }
       }
-      if (entityIds.length >= 5) break;
+    }
+
+    for (const wData of wikiResults) {
+      const pages = wData?.query?.pages;
+      if (pages && typeof pages === 'object') {
+        for (const p of Object.values(pages) as any[]) {
+          const qid = p?.pageprops?.wikibase_item;
+          if (qid && typeof qid === 'string' && !entityIds.includes(qid)) {
+            entityIds.push(qid);
+          }
+        }
+      }
     }
 
     if (entityIds.length > 0) {
-      const idsParam = entityIds.slice(0, 8).join('|');
+      const idsParam = entityIds.slice(0, 14).join('|');
       const detailsUrl = `https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${idsParam}&props=labels|descriptions|claims&languages=uk|en|ru|pl|es&format=json&origin=*`;
-      const entitiesJson = await httpGetJson(detailsUrl);
+      const entitiesJson = await httpGetJson(detailsUrl, 5000);
       const entities = entitiesJson?.entities || {};
 
-      for (const qid of Object.keys(entities)) {
+      for (const qid of entityIds.slice(0, 14)) {
         const ent = entities[qid];
+        if (!ent) continue;
         const claims = ent?.claims || {};
         // P345 = IMDb ID (must start with 'tt' to be a movie/series, not 'nm' actor!)
         const imdbId: string | undefined = claims.P345?.[0]?.mainsnak?.datavalue?.value;
@@ -1066,11 +1522,21 @@ export async function resolveViaWikidataDeep(query: string): Promise<WikidataRes
 
         const ukLabel = ent.labels?.uk?.value;
         const enLabel = ent.labels?.en?.value;
-        const fallbackLabel =
-          ukLabel || enLabel || ent.labels?.pl?.value || ent.labels?.ru?.value || query;
+        const ruLabel = ent.labels?.ru?.value;
+        const plLabel = ent.labels?.pl?.value;
+        const cleanTitle = (lbl?: string) =>
+          lbl ? lbl.replace(/\s*\((фільм|серіал|мультфільм|аніме|телесеріал|film|TV series|miniseries|movie|филм|фильм|сериал|мультфильм)[^)]*\)/gi, '').trim() : '';
 
-        if (enLabel && !englishQueries.includes(enLabel)) {
-          englishQueries.unshift(enLabel);
+        const primaryTitle =
+          cleanTitle(ukLabel) ||
+          cleanTitle(enLabel) ||
+          cleanTitle(plLabel) ||
+          cleanTitle(ruLabel) ||
+          query;
+        const origTitle = cleanTitle(enLabel) || primaryTitle;
+
+        if (origTitle && !englishQueries.includes(origTitle)) {
+          englishQueries.unshift(origTitle);
         }
 
         const ukDesc = ent.descriptions?.uk?.value;
@@ -1088,18 +1554,30 @@ export async function resolveViaWikidataDeep(query: string): Promise<WikidataRes
             ? Number(tmdbTvId)
             : undefined;
 
+        const aliases = Array.from(
+          new Set(
+            [
+              cleanTitle(ukLabel),
+              cleanTitle(enLabel),
+              cleanTitle(ruLabel),
+              cleanTitle(plLabel),
+            ].filter(Boolean)
+          )
+        );
+
         const item: MediaItem = {
           id: `wd-${imdbId}`,
           imdbId,
           tmdbId: tmdbNumeric && !isNaN(tmdbNumeric) ? tmdbNumeric : undefined,
-          title: fallbackLabel,
-          originalTitle: enLabel || fallbackLabel,
+          title: primaryTitle,
+          originalTitle: origTitle,
+          aliases,
           overview:
             ukDesc ||
             enDesc ||
-            `Повна версія «${fallbackLabel}» (${year}) доступна для онлайн-перегляду (IMDb: ${imdbId}).`,
-          posterPath: createPosterFallback(fallbackLabel, year, 8.2),
-          backdropPath: createPosterFallback(fallbackLabel, year, 8.2),
+            `Повна версія «${primaryTitle}» (${year}) доступна для онлайн-перегляду (IMDb: ${imdbId}).`,
+          posterPath: `https://images.metahub.space/poster/medium/${imdbId}/img`,
+          backdropPath: `https://images.metahub.space/background/medium/${imdbId}/img`,
           releaseDate: `${year}-01-01`,
           year,
           rating: 8.1,
@@ -1123,7 +1601,7 @@ export async function resolveViaWikidataDeep(query: string): Promise<WikidataRes
 }
 
 // 3. Search Apple iTunes Movies API
-async function searchItunesMovies(query: string, country: string = 'UA'): Promise<MediaItem[]> {
+export async function searchItunesMovies(query: string, country: string = 'UA'): Promise<MediaItem[]> {
   try {
     const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=movie&entity=movie&country=${country}&limit=20`;
     const data = await httpGetJson(url);
@@ -1318,26 +1796,58 @@ export const tmdbService = {
     }
   },
 
-  // Fast local filter (matches Ukrainian, English, aliases, genres, cast, director)
+  // Fast local filter (matches Ukrainian, Russian, English, Latin translit, keyboard layout swap, multi-word tokens, aliases, genres, cast, director)
   search(query: string): MediaItem[] {
     const q = query.toLowerCase().trim();
     if (!q) return CURATED_CATALOG;
-    const translit = transliterateToEnglish(q);
+
+    const normSearchStr = (s: string) =>
+      (s || '')
+        .toLowerCase()
+        .replace(/ґ/g, 'г')
+        .replace(/ё|э/g, 'е')
+        .replace(/ї/g, 'і')
+        .replace(/\b(ii|part two|частина друга|часть вторая|друга частина)\b/g, ' 2 ')
+        .replace(/\b(iii|part three|частина третя|часть третья|третя частина)\b/g, ' 3 ')
+        .replace(/\b(iv|part four|частина четверта)\b/g, ' 4 ')
+        .replace(/[^a-z0-9а-яіїєґ\s]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    const enVariants = transliterateToEnglishVariants(q);
+    const cyrVariants = transliterateToCyrillicVariants(q);
+    const swapped = swapKeyboardLayout(q);
+    const swappedEn = swapped ? transliterateToEnglish(swapped) : '';
+
+    const candidateQueries = Array.from(
+      new Set([q, ...enVariants, ...cyrVariants, swapped, swappedEn].map(normSearchStr).filter((x) => x.length >= 2))
+    );
+
     const allCached = Array.from(dynamicItemsCache.values());
 
-    return allCached.filter(
-      (item) =>
-        item.title.toLowerCase().includes(q) ||
-        (item.originalTitle && item.originalTitle.toLowerCase().includes(q)) ||
-        (item.originalTitle &&
-          translit.length >= 2 &&
-          item.originalTitle.toLowerCase().includes(translit)) ||
-        (item.aliases && item.aliases.some((a) => a.toLowerCase().includes(q))) ||
-        item.genres.some((g) => g.toLowerCase().includes(q)) ||
-        (item.director && item.director.toLowerCase().includes(q)) ||
-        (item.cast && item.cast.some((c) => c.toLowerCase().includes(q))) ||
-        (item.imdbId && item.imdbId.toLowerCase() === q)
-    );
+    return allCached.filter((item) => {
+      if (item.imdbId && item.imdbId.toLowerCase() === q) return true;
+
+      const searchableText = normSearchStr(
+        [
+          item.title,
+          item.originalTitle || '',
+          ...(item.aliases || []),
+          ...(item.genres || []),
+          item.director || '',
+          ...(item.cast || []),
+        ].join(' ')
+      );
+
+      for (const cq of candidateQueries) {
+        if (searchableText.includes(cq)) return true;
+        const tokens = cq.split(' ').filter((t) => t.length >= 1);
+        if (tokens.length > 1 && tokens.every((tk) => searchableText.includes(tk))) {
+          return true;
+        }
+      }
+      return false;
+    });
   },
 
   // 5-ENGINE LIVE GLOBAL SEARCH (Offline Mega-Catalog + IMDb 15M Titles + Wikidata UA/Multi + TVMaze + iTunes + Jikan)

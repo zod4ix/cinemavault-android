@@ -19,6 +19,13 @@ const bridgeApi = {
       ipcRenderer.send('cinema-download-update', url.trim());
     }
   },
+  getDeviceTelemetryJson: () => {
+    try {
+      return ipcRenderer.sendSync('cinema-get-device-telemetry') || '';
+    } catch {
+      return '';
+    }
+  },
 };
 
 try {

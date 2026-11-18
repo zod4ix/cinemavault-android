@@ -42,7 +42,7 @@ interface HeaderProps {
   hasAppUpdate?: boolean;
 }
 
-const COMMIT_DELAY_MS = 450;
+const COMMIT_DELAY_MS = 260;
 
 export const Header: React.FC<HeaderProps> = ({
   searchQuery,

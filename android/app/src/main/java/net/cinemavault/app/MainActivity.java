@@ -1428,6 +1428,63 @@ public class MainActivity extends BridgeActivity {
         }
 
         @JavascriptInterface
+        public String getDeviceTelemetryJson() {
+            try {
+                String release = Build.VERSION.RELEASE != null ? Build.VERSION.RELEASE : "Unknown";
+                int sdk = Build.VERSION.SDK_INT;
+                String manufacturer = Build.MANUFACTURER != null ? Build.MANUFACTURER.trim() : "Android";
+                if (!manufacturer.isEmpty()) {
+                    manufacturer = manufacturer.substring(0, 1).toUpperCase(Locale.US) + manufacturer.substring(1);
+                }
+                String model = Build.MODEL != null ? Build.MODEL.trim() : "Android Device";
+                String brand = Build.BRAND != null ? Build.BRAND.trim() : "";
+                String product = Build.PRODUCT != null ? Build.PRODUCT.trim() : "";
+                String arch = (Build.SUPPORTED_ABIS != null && Build.SUPPORTED_ABIS.length > 0)
+                    ? Build.SUPPORTED_ABIS[0]
+                    : "arm64-v8a";
+
+                PackageManager pm = getPackageManager();
+                boolean isTelevision = pm.hasSystemFeature(PackageManager.FEATURE_LEANBACK) ||
+                    (getResources().getConfiguration().uiMode & Configuration.UI_MODE_TYPE_MASK) == Configuration.UI_MODE_TYPE_TELEVISION;
+                String combinedLower = (manufacturer + " " + brand + " " + model + " " + product).toLowerCase(Locale.US);
+                boolean isProjector = combinedLower.contains("projector") ||
+                    combinedLower.contains("hy300") ||
+                    combinedLower.contains("hy320") ||
+                    combinedLower.contains("xgimi") ||
+                    combinedLower.contains("wanbo") ||
+                    combinedLower.contains("dangbei") ||
+                    combinedLower.contains("formovie");
+                boolean isTablet = !isTelevision && !isProjector &&
+                    getResources().getConfiguration().smallestScreenWidthDp >= 600;
+
+                String deviceType = isProjector
+                    ? "Проєктор"
+                    : isTelevision
+                        ? "Smart TV / Android TV"
+                        : isTablet
+                            ? "Планшет"
+                            : "Смартфон";
+
+                String displayModel = model.toLowerCase(Locale.US).startsWith(manufacturer.toLowerCase(Locale.US))
+                    ? model
+                    : (manufacturer + " " + model).trim();
+
+                org.json.JSONObject obj = new org.json.JSONObject();
+                obj.put("platform", "android");
+                obj.put("osName", "Android " + release.split("\\.")[0]);
+                obj.put("osVersion", "Android " + release + " (SDK " + sdk + ")");
+                obj.put("osBuild", Build.DISPLAY != null ? Build.DISPLAY : String.valueOf(sdk));
+                obj.put("deviceType", deviceType);
+                obj.put("manufacturer", manufacturer);
+                obj.put("model", displayModel);
+                obj.put("arch", arch);
+                return obj.toString();
+            } catch (Exception e) {
+                return "";
+            }
+        }
+
+        @JavascriptInterface
         public void openExternalUrl(String url) {
             if (url == null || url.trim().isEmpty()) return;
             final String cleanUrl = url.trim();
@@ -1443,7 +1500,7 @@ public class MainActivity extends BridgeActivity {
                 } catch (Exception noBrowserException) {
                     // Projector has no browser installed: fall back to direct in-app APK download!
                     downloadAndInstallApkInternal(
-                        "https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.7.0.apk"
+                        "https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.7.3.apk"
                     );
                 }
             });
