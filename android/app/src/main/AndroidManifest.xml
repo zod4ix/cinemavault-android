@@ -38,6 +38,25 @@
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
 
+            <!-- Custom URI Scheme Deep Linking (cinemavault://open?cv_movie=... / cinemavault://sync?token=...) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="cinemavault" />
+            </intent-filter>
+
+            <!-- Android App Links / HTTPS Deep Linking for vinegret.net shared movies -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="vinegret.net"
+                    android:pathPrefix="/prostye-poleznye-programmy-dlja-windows" />
+            </intent-filter>
+
         </activity>
 
         <provider

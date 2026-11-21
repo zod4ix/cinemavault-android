@@ -2,6 +2,7 @@ import { MediaItem, PlaybackProgress } from '../types/movie';
 import { authSyncService } from './authSync';
 
 const FAVORITES_KEY = 'cinemavault_favorites_v2';
+const DELETED_FAVORITES_KEY = 'cinemavault_deleted_favorites_v2';
 const HISTORY_KEY = 'cinemavault_history_v2';
 const SETTINGS_KEY = 'cinemavault_settings_v2';
 
@@ -89,19 +90,35 @@ export const storageService = {
     return list.some((item) => item.id.toString() === id.toString());
   },
 
+  getDeletedFavoriteIds(): string[] {
+    try {
+      const raw = localStorage.getItem(DELETED_FAVORITES_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed.map(String);
+      }
+    } catch {}
+    return [];
+  },
+
   toggleFavorite(item: MediaItem): boolean {
     const list = this.getFavorites();
-    const index = list.findIndex((i) => i.id.toString() === item.id.toString());
+    const deleted = new Set(this.getDeletedFavoriteIds());
+    const idStr = item.id.toString();
+    const index = list.findIndex((i) => i.id.toString() === idStr);
     let added = false;
     if (index >= 0) {
       list.splice(index, 1);
+      deleted.add(idStr);
     } else {
       list.unshift(item);
+      deleted.delete(idStr);
       added = true;
     }
     const json = JSON.stringify(list);
     try {
       localStorage.setItem(FAVORITES_KEY, json);
+      localStorage.setItem(DELETED_FAVORITES_KEY, JSON.stringify(Array.from(deleted).slice(-200)));
       idbSet(FAVORITES_KEY, list);
     } catch {}
 
@@ -109,19 +126,29 @@ export const storageService = {
     return added;
   },
 
-  mergeFavorites(incoming: MediaItem[]) {
-    if (!Array.isArray(incoming) || incoming.length === 0) return;
+  mergeFavorites(incoming: MediaItem[], deletedIds?: Array<string | number>) {
+    const localDeleted = this.getDeletedFavoriteIds();
+    const deletedSet = new Set([...localDeleted, ...(deletedIds || []).map((id) => String(id))]);
     const current = this.getFavorites();
     const map = new Map<string, MediaItem>();
-    // Add current first
-    current.forEach((i) => map.set(i.id.toString(), i));
-    // Merge incoming
-    incoming.forEach((i) => {
-      if (i && i.id) map.set(i.id.toString(), i);
+    // Add current first (excluding deleted)
+    current.forEach((i) => {
+      if (i && i.id && !deletedSet.has(i.id.toString())) {
+        map.set(i.id.toString(), i);
+      }
     });
+    // Merge incoming (excluding deleted)
+    if (Array.isArray(incoming)) {
+      incoming.forEach((i) => {
+        if (i && i.id && !deletedSet.has(i.id.toString())) {
+          map.set(i.id.toString(), i);
+        }
+      });
+    }
     const merged = Array.from(map.values());
     try {
       localStorage.setItem(FAVORITES_KEY, JSON.stringify(merged));
+      localStorage.setItem(DELETED_FAVORITES_KEY, JSON.stringify(Array.from(deletedSet).slice(-200)));
       idbSet(FAVORITES_KEY, merged);
     } catch {}
   },
@@ -214,11 +241,14 @@ export const storageService = {
     }
   },
 
-  saveSettings(settings: Partial<UserSettings>): UserSettings {
+  saveSettings(settings: Partial<UserSettings>, skipCloudSync = false): UserSettings {
     const updated = { ...this.getSettings(), ...settings };
     try {
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(updated));
     } catch {}
+    if (!skipCloudSync) {
+      authSyncService.scheduleCloudSync();
+    }
     return updated;
   },
 

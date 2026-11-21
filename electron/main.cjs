@@ -502,6 +502,53 @@ const SUBFRAME_PLAYER_BRIDGE_JS = `(function(){
 let mainWindow = null;
 let localServer = null;
 let localServerUrl = null;
+let pendingDeepLinkUrl = null;
+
+function extractDeepLinkFromArgv(argv) {
+  if (!Array.isArray(argv)) return null;
+  for (const arg of argv) {
+    if (
+      typeof arg === 'string' &&
+      (arg.startsWith('cinemavault://') ||
+        (arg.includes('vinegret.net') &&
+          (arg.includes('cv_movie=') || arg.includes('cv_sync='))))
+    ) {
+      return arg;
+    }
+  }
+  return null;
+}
+
+function forwardDeepLinkToRenderer(url) {
+  if (!url || typeof url !== 'string') return;
+  pendingDeepLinkUrl = url;
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    const safeUrl = JSON.stringify(url);
+    mainWindow.webContents
+      .executeJavaScript(
+        `window.__cinemaPendingDeepLink = ${safeUrl}; if (typeof window.__cinemaHandleDeepLink === 'function') { window.__cinemaHandleDeepLink(${safeUrl}); }`,
+        true
+      )
+      .catch(() => {});
+  }
+}
+
+try {
+  if (process.defaultApp) {
+    if (process.argv.length >= 2) {
+      app.setAsDefaultProtocolClient('cinemavault', process.execPath, [
+        path.resolve(process.argv[1]),
+      ]);
+    }
+  } else {
+    app.setAsDefaultProtocolClient('cinemavault');
+  }
+} catch {}
+
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  forwardDeepLinkToRenderer(url);
+});
 
 /**
  * Starts a local static HTTP server serving ../dist on 127.0.0.1.
@@ -831,7 +878,7 @@ function setupIpcHandlers() {
     // On desktop, map .apk download links to the corresponding desktop installer on GitHub Releases
     if (targetUrl.toLowerCase().endsWith('.apk')) {
       const verMatch = targetUrl.match(/v?(\d+\.\d+\.\d+)/i);
-      const ver = verMatch ? verMatch[1] : '3.7.3';
+      const ver = verMatch ? verMatch[1] : '3.7.4';
       if (process.platform === 'darwin') {
         targetUrl = `https://github.com/zod4ix/cinemavault-android/releases/download/v${ver}/CinemaVault-PRO-v${ver}-macOS.dmg`;
       } else {
@@ -1053,7 +1100,7 @@ function getDesktopTelemetryObject() {
       manufacturer: 'Apple',
       model: `${cpuModel} (${ramGb} GB RAM)`,
       arch,
-      appVersion: '3.7.3',
+      appVersion: '3.7.4',
       isFirstInstall,
       installedAt,
     };
@@ -1104,7 +1151,7 @@ function getDesktopTelemetryObject() {
     manufacturer: cpuBrand,
     model: `${cpuModel} (${ramGb} GB RAM)`,
     arch,
-    appVersion: '3.7.3',
+    appVersion: '3.7.4',
     isFirstInstall,
     installedAt,
   };
@@ -1135,7 +1182,7 @@ async function createWindow() {
     minHeight: 600,
     show: !isVerifyMode,
     backgroundColor: '#07090e',
-    title: 'CinemaVault PRO v3.7.3',
+    title: 'CinemaVault PRO v3.7.4',
     icon: path.join(__dirname, winIconFile),
     autoHideMenuBar: true,
     fullscreenable: true,
@@ -1269,6 +1316,11 @@ async function createWindow() {
     }
   }
 
+  const initialDeepLink = pendingDeepLinkUrl || extractDeepLinkFromArgv(process.argv);
+  if (initialDeepLink) {
+    setTimeout(() => forwardDeepLinkToRenderer(initialDeepLink), 700);
+  }
+
   if (isVerifyMode) {
     setTimeout(async () => {
       try {
@@ -1315,10 +1367,14 @@ const gotTheLock = isVerifyLaunch ? true : app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
+  app.on('second-instance', (_event, commandLine) => {
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
+    }
+    const dl = extractDeepLinkFromArgv(commandLine);
+    if (dl) {
+      forwardDeepLinkToRenderer(dl);
     }
   });
 
@@ -1357,7 +1413,7 @@ if (!gotTheLock) {
               headers: {
                 'Content-Type': 'application/json',
                 'Content-Length': Buffer.byteLength(body),
-                'User-Agent': 'CinemaVault-PRO-Desktop/3.7.3',
+                'User-Agent': 'CinemaVault-PRO-Desktop/3.7.4',
               },
               timeout: 7000,
             },

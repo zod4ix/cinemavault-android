@@ -161,7 +161,63 @@
   border-color: #475569 !important;
   color: #ffffff !important;
 }
+/* Dynamic Shared Movie Deep Link Landing Card */
+#vng-shared-movie-landing {
+  display: none;
+  margin-bottom: 32px;
+  border-radius: 22px;
+  overflow: hidden;
+  border: 2px solid #e50914;
+  background: linear-gradient(135deg, #120810 0%, #0b111e 55%, #07090e 100%);
+  box-shadow: 0 20px 56px rgba(229, 9, 20, 0.28);
+  padding: 28px;
+  position: relative;
+}
+.vng-shared-flex {
+  display: flex;
+  gap: 26px;
+  align-items: center;
+}
+.vng-shared-poster {
+  width: 170px;
+  height: 252px;
+  object-fit: cover;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.2);
+  box-shadow: 0 12px 30px rgba(0,0,0,0.75);
+  flex-shrink: 0;
+  background: #1e293b;
+}
+@media (max-width: 680px) {
+  .vng-shared-flex {
+    flex-direction: column;
+    text-align: center;
+  }
+}
 </style>
+<!-- DYNAMIC SHARED MOVIE DEEP LINK LANDING CARD (Shown automatically when opened via Share Movie link ?cv_movie=...) -->
+<div id="vng-shared-movie-landing">
+  <div class="vng-shared-flex">
+    <img id="vng-shared-poster-img" class="vng-shared-poster" src="https://image.tmdb.org/t/p/w600_and_h900_bestv2/8b8R8l88Qje9dn9OE8PY05Nxl1X.jpg" alt="Постер фільму" />
+    <div style="flex:1;min-width:0;">
+      <div style="display:inline-flex;align-items:center;gap:8px;background:rgba(229,9,20,0.2);border:1px solid rgba(229,9,20,0.5);padding:5px 14px;border-radius:30px;margin-bottom:12px;">
+        <span style="width:8px;height:8px;border-radius:50%;background:#e50914;box-shadow:0 0 8px #e50914;"></span>
+        <span style="color:#fca5a5;font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;">🎬 ВАМ НАДІСЛАЛИ ФІЛЬМ У CINEMAVAULT PRO 4K</span>
+      </div>
+      <h2 id="vng-shared-title" style="margin:0 0 8px;font-size:clamp(22px, 3.2vw, 32px);font-weight:900;color:#ffffff;line-height:1.2;">Фільм у CinemaVault PRO</h2>
+      <div id="vng-shared-meta" style="font-size:13px;font-weight:700;color:#f59e0b;margin-bottom:12px;">4K HDR • 1080p Full HD • Український дубляж (HDRezka & UAKino)</div>
+      <p id="vng-shared-desc" style="margin:0 0 20px;font-size:14px;color:#cbd5e1;line-height:1.6;max-width:780px;">Відкрийте цей фільм прямо у додатку CinemaVault PRO без реклами у якості 4K HDR або встановіть додаток для вашої платформи в один клік.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;">
+        <a id="vng-shared-open-app-btn" href="cinemavault://open" class="vng-btn-primary" style="background:linear-gradient(90deg, #e50914, #dc2626);color:#ffffff;padding:13px 24px;border-radius:12px;font-size:14px;font-weight:800;text-decoration:none;display:inline-flex;align-items:center;gap:8px;box-shadow:0 8px 24px rgba(229,9,20,0.4);">
+          <span>▶</span> Відкрити у Vinegret / CinemaVault PRO
+        </a>
+        <a id="vng-shared-install-btn" href="https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.7.4.apk" class="vng-btn-primary" style="background:linear-gradient(90deg, #0284c7, #0369a1);color:#ffffff;padding:13px 22px;border-radius:12px;font-size:14px;font-weight:800;text-decoration:none;display:inline-flex;align-items:center;gap:8px;box-shadow:0 8px 24px rgba(2,132,199,0.35);">
+          <span>⬇️</span> <span id="vng-shared-install-label">Встановити додаток (v3.7.4)</span>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
 <!-- HERO BANNER -->
 <div style="position:relative;border-radius:20px;overflow:hidden;margin-bottom:32px;box-shadow:0 16px 48px rgba(0,0,0,0.7);border:1px solid #1e293b;background:linear-gradient(135deg, #090d16 0%, #0f172a 50%, #07090e 100%);">
 <div style="position:absolute;inset:0;background:radial-gradient(circle at 15% 25%, rgba(0,210,255,0.12) 0%, transparent 50%), radial-gradient(circle at 85% 75%, rgba(229,9,20,0.12) 0%, transparent 50%);pointer-events:none;"></div>
@@ -171,9 +227,9 @@
 <span style="color:#00d2ff;font-size:11px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;">ОФІЦІЙНИЙ ХАБ ПРОГРАМ ТА СЕРВІСІВ</span>
 </div>
 <h1 style="margin:0 0 14px;font-size:clamp(24px, 4vw, 38px);font-weight:900;letter-spacing:-0.5px;color:#ffffff;line-height:1.2;text-shadow:0 2px 10px rgba(0,0,0,0.8);">Корисні програми, боти та цифрові інструменти від Vinegret</h1>
-<p style="margin:0;font-size:clamp(14px, 1.8vw, 16px);color:#cbd5e1;max-width:920px;line-height:1.65;text-shadow:0 1px 4px rgba(0,0,0,0.8);">Ексклюзивні авторські розробки, перевірений софт та швидкі боти для Android, проєкторів, Smart TV, Telegram, Windows та веб. 100% безкоштовно, без настирливої реклами та прихованих підписок. Завантажуйте безпечно на максимальній швидкості.</p>
+<p style="margin:0;font-size:clamp(14px, 1.8vw, 16px);color:#cbd5e1;max-width:920px;line-height:1.65;text-shadow:0 1px 4px rgba(0,0,0,0.8);">Ексклюзивні авторські розробки, перевірений софт та швидкі боти для Android, проєкторів, Smart TV, Telegram, Windows, macOS та веб. 100% безкоштовно, без настирливої реклами та прихованих підписок. Завантажуйте безпечно на максимальній швидкості.</p>
 <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:24px;">
-<a href="#cinemavault-app" class="vng-pill" style="background:#0f172a;color:#00d2ff;border:1px solid rgba(0,210,255,0.4);padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">🍿 CinemaVault PRO v3.7.3 (Android • Windows • Mac)</a>
+<a href="#cinemavault-app" class="vng-pill" style="background:#0f172a;color:#00d2ff;border:1px solid rgba(0,210,255,0.4);padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">🍿 CinemaVault PRO v3.7.4 (Android • Windows • Mac)</a>
 <a href="#fly-tickets-bot" class="vng-pill" style="background:#0f172a;color:#10b981;border:1px solid rgba(16,185,129,0.4);padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">✈️ Telegram Авіа-Бот</a>
 <a href="#shutdown-timer" class="vng-pill" style="background:#0f172a;color:#f8fafc;border:1px solid #334155;padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">⏱️ Shutdown Timer</a>
 <a href="#support-section" class="vng-pill" style="background:#0f172a;color:#f59e0b;border:1px solid rgba(245,158,11,0.4);padding:8px 16px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">💖 Підтримати автора</a>
@@ -187,16 +243,16 @@
 <div>
 <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(229,9,20,0.15);border:1px solid rgba(229,9,20,0.35);padding:4px 12px;border-radius:20px;margin-bottom:14px;">
 <span style="width:6px;height:6px;border-radius:50%;background:#e50914;box-shadow:0 0 8px #e50914;"></span>
-<span style="color:#f87171;font-size:10px;font-weight:800;letter-spacing:1px;text-transform:uppercase;">ОНОВЛЕНО • МЕДІА-КОМБАЙН v3.7.3 PRO (Android • Windows • macOS)</span>
+<span style="color:#f87171;font-size:10px;font-weight:800;letter-spacing:1px;text-transform:uppercase;">ОНОВЛЕНО • МЕДІА-КОМБАЙН v3.7.4 PRO (Android • Windows • macOS)</span>
 </div>
-<h2 style="margin:0 0 8px;font-size:23px;font-weight:900;color:#ffffff;display:flex;align-items:center;gap:8px;"><span>🎬</span> CinemaVault PRO v3.7.3</h2>
+<h2 style="margin:0 0 8px;font-size:23px;font-weight:900;color:#ffffff;display:flex;align-items:center;gap:8px;"><span>🎬</span> CinemaVault PRO v3.7.4</h2>
 <p style="margin:0 0 16px;font-size:13.5px;color:#94a3b8;line-height:1.5;">Флагманський мультиплатформений онлайн-кінотеатр та спортивний хаб 4K HDR для Windows (ПК, ноутбуки), macOS, Android (планшети, смартфони), проєкторів та Smart TV / TV-боксів (мишка, пульт, клавіатура, тач)</p>
 <div style="margin-bottom:20px;">
-<div class="vng-feature-item"><strong style="color:#38bdf8;">• Плавне автооновлення Windows та фірмове лого (v3.7.3):</strong><span style="color:#cbd5e1;"> Як і на Android, при виході нової версії на Windows з'являється сповіщення з прямим внутрішнім завантаженням (прогрес-бар) та автоматичним встановленням оновлення. Єдиний брендовий щит-логотип інтегровано у Windows та Android.</span></div>
-<div class="vng-feature-item"><strong style="color:#a855f7;">• Двомовний розумний пошук Кирилиця ⇄ Латиниця (v3.7.3):</strong><span style="color:#cbd5e1;"> Миттєвий пошук українською, російською та англійською мовами, розуміння трансліту, автоматичне виправлення розкладки клавіатури (ЙЦУКЕН ⇄ QWERTY) та інтеграція з Wikidata/Wikipedia/IMDb.</span></div>
-<div class="vng-feature-item"><strong style="color:#00d2ff;">• HDRezka на першому місці (#1) та український дубляж:</strong><span style="color:#cbd5e1;"> Найстабільніші активні дзеркала Rezka очолюють ієрархію з автовизначенням української доріжки, швидким стартом та усуненням 404 помилок.</span></div>
-<div class="vng-feature-item"><strong style="color:#f43f5e;">• Тотальний дворівневий AdBlock:</strong><span style="color:#cbd5e1;"> Повне блокування реклами на рівні мережі та скриптів. Жодних банерів, VAST pre-rolls чи рекламних вікон при натисканні Play.</span></div>
-<div class="vng-feature-item"><strong style="color:#10b981;">• 24/7 Спортивний Хаб: Сканер, Live та історія 48г:</strong><span style="color:#cbd5e1;"> Завершені матчі більше не висять як живі. Робоча кнопка сканування з телеметрією, збереження результатів до 48 годин, анонси після live-подій, точні назви ліг та команд великими літерами.</span></div>
+<div class="vng-feature-item"><strong style="color:#38bdf8;">• Екосистема синхронізації в реальному часі та Клавіатура пульта (v3.7.4):</strong><span style="color:#cbd5e1;"> Миттєва синхронізація поточного фільму, серії, секунди перегляду, паузи, обраного та списку підключених пристроїв (онлайн/офлайн статус). У вікні синхронізації натискання OK на пульті проєктора автоматично викликає екранну клавіатуру.</span></div>
+<div class="vng-feature-item"><strong style="color:#eab308;">• Плеєр UAKino (Ashdi VIP 1080p) одразу після HDRezka (v3.7.4):</strong><span style="color:#cbd5e1;"> Повноцінний плеєр UAKino з українським дубляжем інтегровано другим джерелом одразу за дзеркалами HDRezka (#1) на всіх платформах.</span></div>
+<div class="vng-feature-item"><strong style="color:#a855f7;">• Кнопка «Поділитися фільмом» та Deep Links (v3.7.4):</strong><span style="color:#cbd5e1;"> Створюйте прямі посилання на будь-який фільм чи серіал — вони автоматично відкривають потрібну картину прямо в додатку (Android App Links / cinemavault://) або показують картку фільму зі встановленням.</span></div>
+<div class="vng-feature-item"><strong style="color:#f43f5e;">• Плавне автооновлення Windows та тотальний AdBlock:</strong><span style="color:#cbd5e1;"> Автоматичне сповіщення та завантаження оновлень із прогрес-баром прямо всередині вікна Windows та Android. Повне двоступеневе блокування реклами та VAST pre-rolls.</span></div>
+<div class="vng-feature-item"><strong style="color:#10b981;">• 24/7 Спортивний Хаб та Двомовний пошук Кирилиця ⇄ Латиниця:</strong><span style="color:#cbd5e1;"> Сканер прямих трансляцій 1080p, архів матчів 48г, розумний пошук українською, російською та англійською з розумінням трансліту та розкладки (ЙЦУКЕН ⇄ QWERTY).</span></div>
 
 <details class="vng-spoiler">
 <summary class="vng-spoiler-summary">
@@ -204,12 +260,12 @@
 <span class="vng-spoiler-arrow">▼</span>
 </summary>
 <div class="vng-spoiler-content">
-<div class="vng-feature-item"><strong style="color:#eab308;">• Екранна віртуальна клавіатура для ТБ та Проєкторів:</strong><span style="color:#cbd5e1;"> Спеціальна адаптивна клавіатура під пульт (D-Pad) у вікні хмарної синхронізації пристроїв для швидкого введення токенів, адрес та email.</span></div>
+<div class="vng-feature-item"><strong style="color:#eab308;">• Керування пристроями акаунту:</strong><span style="color:#cbd5e1;"> Переглядайте всі підключені пристрої (Проєктор, Smart TV, ПК, Смартфон), їхній статус онлайн, поточну картину та продовжуйте перегляд в один клік.</span></div>
 <div class="vng-feature-item"><strong style="color:#00d2ff;">• Інтелектуальний підбір «Схожих картин»:</strong><span style="color:#cbd5e1;"> Автоматичні рекомендації в картці кожного фільму за спільним режисером, акторським складом, сюжетом, франшизою та жанром зі зручними бейджами-підказками.</span></div>
 <div class="vng-feature-item"><strong style="color:#00d2ff;">• Ідеальний повний екран для планшетів та смартфонів:</strong><span style="color:#cbd5e1;"> Бездоганне перемикання між вертикальним та горизонтальним режимами, миттєве розгортання та вихід кнопкою «Назад».</span></div>
 <div class="vng-feature-item"><strong style="color:#eab308;">• Народний рейтинг: Лайки та дізлайки з градацією:</strong><span style="color:#cbd5e1;"> Інтерактивні оцінки з лічильниками під кожним фільмом (За увесь час / Рік / Місяць / Тиждень) та преміальний ряд рейтингу на головному екрані.</span></div>
 <div class="vng-feature-item"><strong style="color:#38bdf8;">• Чистий кіноекран та швидка прокрутка пультом +10/-10с:</strong><span style="color:#cbd5e1;"> Автоприховування панелей під час перегляду, керування стрілками Вліво/Вправо на пульті з накопиченням часу та подвійні тапи.</span></div>
-<div class="vng-feature-item"><strong style="color:#f59e0b;">• PRO-начинка для проєкторів (Звук 300% & Кінозум):</strong><span style="color:#cbd5e1;"> Підсилювач звуку до 300% для тихих динаміків проєкторів, прибирання чорних смуг (Кінозум 115%), швидкість 0.5x–2.0x та 14+ серверів.</span></div>
+<div class="vng-feature-item"><strong style="color:#f59e0b;">• PRO-начинка для проєкторів (Звук 300% & Кінозум):</strong><span style="color:#cbd5e1;"> Підсилювач звуку до 300% для тихих динаміків проєкторів, прибирання чорних смуг (Кінозум 115%), швидкість 0.5x–2.0x та 15+ серверів.</span></div>
 <div class="vng-feature-item"><strong style="color:#10b981;">• P2P Торренти онлайн без реклами:</strong><span style="color:#cbd5e1;"> Пряме програвання торрентів через вбудований рушій без очікування повного завантаження файлу.</span></div>
 <div class="vng-feature-item"><strong style="color:#c084fc;">• Нескінченна бібліотека та Хмарна синхронізація:</strong><span style="color:#cbd5e1;"> Золота класика та свіжі новинки 2026 року, 5 мов інтерфейсу, синхронізація профілю CV-XXXXXX та оновлення в один клік.</span></div>
 </div>
@@ -218,24 +274,24 @@
 </div>
 <div>
 <div style="display:flex;flex-wrap:wrap;gap:8px;padding:12px 14px;background:#060911;border:1px solid #1e293b;border-radius:12px;margin-bottom:16px;font-size:11px;color:#94a3b8;">
-<div><span style="color:#64748b;">Версія:</span> <strong style="color:#f1f5f9;">v3.7.3 PRO</strong></div>
+<div><span style="color:#64748b;">Версія:</span> <strong style="color:#f1f5f9;">v3.7.4 PRO</strong></div>
 <div>•</div>
 <div><span style="color:#64748b;">Платформи:</span> <strong style="color:#38bdf8;">Windows 10/11 • macOS • Android 8.0+ / Smart TV</strong></div>
 <div>•</div>
-<div><span style="color:#64748b;">Розмір:</span> <strong style="color:#f1f5f9;">3.8 MB (APK) / 116 MB (Win EXE)</strong></div>
+<div><span style="color:#64748b;">Розмір:</span> <strong style="color:#f1f5f9;">3.9 MB (APK) / 116 MB (Win EXE)</strong></div>
 </div>
 <div style="display:flex;flex-direction:column;gap:10px;">
-<a href="https://github.com/zod4ix/cinemavault-android/releases/download/v3.7.3/CinemaVault-PRO-v3.7.3-Windows.exe" data-cv-dl="windows" target="_blank" rel="noopener noreferrer" class="vng-btn-primary" style="background:linear-gradient(90deg, #0284c7, #0369a1);color:#ffffff;padding:14px 20px;border-radius:12px;font-size:14px;font-weight:800;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 8px 24px rgba(2,132,199,0.35);">
-<span>💻</span> Завантажити для Windows 10/11 (.exe, 116MB)
+<a href="https://github.com/zod4ix/cinemavault-android/releases/download/v3.7.4/CinemaVault-PRO-v3.7.4-Windows.exe" data-cv-dl="windows" target="_blank" rel="noopener noreferrer" class="vng-btn-primary" style="background:linear-gradient(90deg, #0284c7, #0369a1);color:#ffffff;padding:14px 20px;border-radius:12px;font-size:14px;font-weight:800;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 8px 24px rgba(2,132,199,0.35);">
+<span>💻</span> Завантажити для Windows 10/11 (.exe інсталятор, v3.7.4)
 </a>
-<a href="https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.7.3.apk" data-cv-dl="android" target="_blank" rel="noopener noreferrer" class="vng-btn-primary" style="background:linear-gradient(90deg, #e50914, #b91c1c);color:#ffffff;padding:13px 20px;border-radius:12px;font-size:14px;font-weight:800;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 8px 24px rgba(229,9,20,0.35);">
-<span>📱</span> Завантажити для Android / Smart TV (.apk, 3.8MB)
+<a href="https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.7.4.apk" data-cv-dl="android" target="_blank" rel="noopener noreferrer" class="vng-btn-primary" style="background:linear-gradient(90deg, #e50914, #b91c1c);color:#ffffff;padding:13px 20px;border-radius:12px;font-size:14px;font-weight:800;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 8px 24px rgba(229,9,20,0.35);">
+<span>📱</span> Завантажити для Android / Smart TV / Проєкторів (.apk, v3.7.4)
 </a>
-<a href="https://github.com/zod4ix/cinemavault-android/releases/download/v3.7.0/CinemaVault-PRO-v3.7.0-macOS.dmg" data-cv-dl="macos" target="_blank" rel="noopener noreferrer" class="vng-btn-secondary" style="background:#131d2e;color:#cbd5e1;border:1px solid #334155;padding:12px 18px;border-radius:12px;font-size:13.5px;font-weight:700;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:8px;">
-<span>🍏</span> Завантажити для Apple macOS (.dmg)
+<a href="https://github.com/zod4ix/cinemavault-android/releases/download/v3.7.4/CinemaVault-PRO-v3.7.4-macOS.dmg" data-cv-dl="macos" target="_blank" rel="noopener noreferrer" class="vng-btn-secondary" style="background:#131d2e;color:#cbd5e1;border:1px solid #334155;padding:12px 18px;border-radius:12px;font-size:13.5px;font-weight:700;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:8px;">
+<span>🍏</span> Завантажити для Apple macOS (.dmg, v3.7.4)
 </a>
-<a href="https://github.com/zod4ix/cinemavault-android/releases/tag/v3.7.3" target="_blank" rel="noopener noreferrer" class="vng-btn-secondary" style="background:#0b111e;color:#94a3b8;border:1px dashed #334155;padding:10px 16px;border-radius:12px;font-size:12.5px;font-weight:600;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:6px;">
-<span>🐙</span> Сторінка релізу v3.7.3 та вихідний код на GitHub
+<a href="https://github.com/zod4ix/cinemavault-android/releases/tag/v3.7.4" target="_blank" rel="noopener noreferrer" class="vng-btn-secondary" style="background:#0b111e;color:#94a3b8;border:1px dashed #334155;padding:10px 16px;border-radius:12px;font-size:12.5px;font-weight:600;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:6px;">
+<span>🐙</span> Сторінка релізу v3.7.4 та вихідний код на GitHub
 </a>
 </div>
 </div>
@@ -371,6 +427,48 @@
 <script>
 (function(){
   try {
+    var params = new URLSearchParams(window.location.search);
+    var cvMovie = params.get('cv_movie') || params.get('imdb') || params.get('id');
+    if (cvMovie) {
+      var box = document.getElementById('vng-shared-movie-landing');
+      var titleEl = document.getElementById('vng-shared-title');
+      var metaEl = document.getElementById('vng-shared-meta');
+      var descEl = document.getElementById('vng-shared-desc');
+      var posterEl = document.getElementById('vng-shared-poster-img');
+      var openBtn = document.getElementById('vng-shared-open-app-btn');
+      var installBtn = document.getElementById('vng-shared-install-btn');
+      var installLbl = document.getElementById('vng-shared-install-label');
+
+      var mTitle = params.get('title') || ('Фільм ' + cvMovie);
+      var mYear = params.get('year') || '2024';
+      var mRating = params.get('rating') || '8.5';
+      var mPoster = params.get('poster');
+      var mDesc = params.get('desc');
+
+      if (titleEl) titleEl.textContent = mTitle + (mYear ? ' (' + mYear + ')' : '');
+      if (metaEl) metaEl.textContent = '★ IMDb ' + mRating + ' • 4K HDR / 1080p • Український дубляж (HDRezka & UAKino)';
+      if (descEl && mDesc) descEl.textContent = mDesc;
+      if (posterEl && mPoster && mPoster.indexOf('http') === 0) posterEl.src = mPoster;
+
+      var deepUri = 'cinemavault://open' + window.location.search;
+      if (openBtn) openBtn.href = deepUri;
+
+      var ua = navigator.userAgent || '';
+      if (/Windows/i.test(ua)) {
+        if (installBtn) installBtn.href = 'https://github.com/zod4ix/cinemavault-android/releases/download/v3.7.4/CinemaVault-PRO-v3.7.4-Windows.exe';
+        if (installLbl) installLbl.textContent = 'Завантажити для Windows 10/11 (.exe v3.7.4)';
+      } else if (/Macintosh|Mac OS X/i.test(ua)) {
+        if (installBtn) installBtn.href = 'https://github.com/zod4ix/cinemavault-android/releases/download/v3.7.4/CinemaVault-PRO-v3.7.4-macOS.dmg';
+        if (installLbl) installLbl.textContent = 'Завантажити для macOS (.dmg v3.7.4)';
+      } else {
+        if (installBtn) installBtn.href = 'https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.7.4.apk';
+        if (installLbl) installLbl.textContent = 'Встановити на Android / Smart TV (.apk v3.7.4)';
+      }
+
+      if (box) box.style.display = 'block';
+      try { localStorage.setItem('cinemavault_pending_shared_movie', window.location.search); } catch(e){}
+    }
+
     document.addEventListener('click', function(e) {
       var a = e.target && e.target.closest ? e.target.closest('a[data-cv-dl]') : null;
       if (!a) return;
@@ -380,7 +478,7 @@
       var osVer = ua.slice(0, 80);
       var m = ua.match(/Android\s+([0-9.]+)/i);
       if (m) { osName = 'Android ' + m[1].split('.')[0]; osVer = 'Android ' + m[1]; }
-      var payload = JSON.stringify({ event: 'portal_download', platform: dlPlat, osName: osName, osVersion: osVer, deviceType: dlPlat === 'windows' ? 'ПК / Ноутбук Windows' : 'Смартфон / Smart TV', appVersion: '3.7.3' });
+      var payload = JSON.stringify({ event: 'portal_download', platform: dlPlat, osName: osName, osVersion: osVer, deviceType: dlPlat === 'windows' ? 'ПК / Ноутбук Windows' : 'Смартфон / Smart TV', appVersion: '3.7.4' });
       if (navigator.sendBeacon) {
         navigator.sendBeacon('/wp-json/cinemavault/v1/telemetry', new Blob([payload], { type: 'application/json' }));
       } else {

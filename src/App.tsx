@@ -34,7 +34,8 @@ import {
 import { LanguageProvider, useLanguage } from './i18n/LanguageContext';
 import { SplashScreen } from './components/SplashScreen';
 import { AuthModal } from './components/AuthModal';
-import { authSyncService, UserProfile } from './services/authSync';
+import { authSyncService, UserProfile, ActiveSessionState } from './services/authSync';
+import { parseDeepLinkUrl, resolveDeepLinkMedia } from './services/deepLink';
 import { fetchNovelties } from './services/novelties';
 import {
   updaterService,
@@ -51,6 +52,8 @@ import { reportDeviceTelemetry } from './services/telemetry';
 declare global {
   interface Window {
     __cinemaHandleBack?: () => boolean;
+    __cinemaHandleDeepLink?: (url: string) => void;
+    __cinemaPendingDeepLink?: string;
   }
 }
 
@@ -240,11 +243,62 @@ const MainAppContent: React.FC = () => {
       if (active) setAuthProfile(p);
     });
 
+    const unsubData = authSyncService.subscribeDataChanges(() => {
+      if (active) {
+        setFavorites(storageService.getFavorites());
+        setHistory(storageService.getHistory());
+      }
+    });
+
     return () => {
       active = false;
       unsub();
+      unsubData();
     };
   }, [activePlayback, refreshCatalogAndUserData]);
+
+  // Universal Deep Link Handler (handles ?cv_movie=... / cinemavault://open?... / cinemavault://sync?token=...)
+  const handleIncomingDeepLink = useCallback(
+    async (rawUrl: string) => {
+      const parsed = parseDeepLinkUrl(rawUrl);
+      if (!parsed) return;
+
+      if (parsed.syncToken) {
+        await authSyncService.linkDeviceWithSyncToken(parsed.syncToken);
+        setFavorites(storageService.getFavorites());
+        setHistory(storageService.getHistory());
+      }
+
+      if (parsed.id || parsed.imdb || parsed.tmdb || parsed.title) {
+        const resolved = await resolveDeepLinkMedia(parsed, liveCatalogPool);
+        if (resolved) {
+          setShowSplash(false);
+          setIsSportsActive(false);
+          setIsFavoritesActive(false);
+          setSelectedMedia(resolved);
+        }
+      }
+    },
+    [liveCatalogPool]
+  );
+
+  useEffect(() => {
+    window.__cinemaHandleDeepLink = (url: string) => {
+      handleIncomingDeepLink(url);
+    };
+
+    if (window.__cinemaPendingDeepLink) {
+      const pending = window.__cinemaPendingDeepLink;
+      delete window.__cinemaPendingDeepLink;
+      handleIncomingDeepLink(pending);
+    } else if (window.location.search && window.location.search.length > 1) {
+      handleIncomingDeepLink(window.location.href);
+    }
+
+    return () => {
+      delete window.__cinemaHandleDeepLink;
+    };
+  }, [handleIncomingDeepLink]);
 
   // Initial background fetch of extra live catalog items (movies, series, anime, classics)
   useEffect(() => {
@@ -1045,6 +1099,21 @@ const MainAppContent: React.FC = () => {
         onDataSync={() => {
           setFavorites(storageService.getFavorites());
           setHistory(storageService.getHistory());
+        }}
+        onResumeRemoteSession={(session: ActiveSessionState) => {
+          handleResumePlayback({
+            mediaId: session.mediaId,
+            mediaSnapshot: session.mediaSnapshot,
+            title: session.title,
+            posterPath: session.posterPath,
+            currentTime: session.currentTime,
+            duration: session.duration,
+            lastUpdated: session.updatedAt,
+            episodeId: session.episodeId,
+            seasonNumber: session.seasonNumber,
+            episodeNumber: session.episodeNumber,
+            serverId: session.serverId,
+          });
         }}
       />
 

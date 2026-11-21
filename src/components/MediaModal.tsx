@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, Play, Heart, Download, Check, Wifi, HardDrive, 
   Layers, Clock, Copy, Sparkles, Globe, Youtube, Loader2, Users, ExternalLink,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, Share2
 } from 'lucide-react';
 import { MediaItem, Season, Episode, MediaSource, TorrentItem } from '../types/movie';
 import { tmdbService, createPosterFallback } from '../services/tmdb';
@@ -17,6 +17,7 @@ import { openExternalDownload } from '../services/updater';
 import { RatingFeedback } from './RatingFeedback';
 import { MediaCard } from './MediaCard';
 import { getSimilarMedia, SimilarMediaItem } from '../services/recommendations';
+import { shareMediaItem, buildShareMovieUrl } from '../services/deepLink';
 
 interface MediaModalProps {
   media: MediaItem | null;
@@ -53,6 +54,7 @@ export const MediaModal: React.FC<MediaModalProps> = ({
   const [torrentFilter, setTorrentFilter] = useState<string>('all');
   const [similarItems, setSimilarItems] = useState<SimilarMediaItem[]>([]);
   const [loadingSimilar, setLoadingSimilar] = useState<boolean>(false);
+  const [shareStatus, setShareStatus] = useState<'idle' | 'shared' | 'copied'>('idle');
   const watchNowBtnRef = useRef<HTMLButtonElement>(null);
   const modalScrollRef = useRef<HTMLDivElement>(null);
   const similarRowRef = useRef<HTMLDivElement>(null);
@@ -191,6 +193,14 @@ export const MediaModal: React.FC<MediaModalProps> = ({
   };
 
   if (!media) return null;
+
+  const handleShareMovie = async () => {
+    const res = await shareMediaItem(media);
+    if (res === 'shared' || res === 'copied') {
+      setShareStatus(res);
+      setTimeout(() => setShareStatus('idle'), 3000);
+    }
+  };
 
   const handleCopyMagnet = (magnet: string, id: string) => {
     navigator.clipboard.writeText(magnet);
@@ -340,6 +350,30 @@ export const MediaModal: React.FC<MediaModalProps> = ({
                 title={t('inFavorites')}
               >
                 <Heart className={`w-5 h-5 ${isFavorite ? 'fill-white' : ''}`} />
+              </button>
+
+              <button
+                type="button"
+                onClick={handleShareMovie}
+                tabIndex={0}
+                className={`px-3.5 py-2.5 rounded-xl border backdrop-blur-md font-bold text-xs flex items-center gap-1.5 transition-all shrink-0 tv-btn-focus focus:outline-none ${
+                  shareStatus !== 'idle'
+                    ? 'bg-emerald-600 text-white border-emerald-400 shadow-lg shadow-emerald-600/30'
+                    : 'bg-black/60 hover:bg-blue-600 text-slate-200 hover:text-white border-white/20 hover:border-blue-400'
+                }`}
+                title={`Поділитися прямим посиланням на фільм (${buildShareMovieUrl(media)})`}
+              >
+                {shareStatus !== 'idle' ? (
+                  <>
+                    <Check className="w-4 h-4 text-white shrink-0" />
+                    <span>Посилання скопійовано!</span>
+                  </>
+                ) : (
+                  <>
+                    <Share2 className="w-4 h-4 shrink-0" />
+                    <span>Поділитися</span>
+                  </>
+                )}
               </button>
 
               <RatingFeedback media={media} size="md" />
@@ -610,8 +644,8 @@ export const MediaModal: React.FC<MediaModalProps> = ({
                     if (idLow.includes('rezka-namy')) return '🇺🇦 HDRezka #2 (Пряме дзеркало) • Український переклад, дубляж та студії 1080p';
                     if (idLow.includes('rezka-kinogram')) return '🇺🇦 HDRezka #3 (Kinogram VIP) • Український дубляж та багатозвучка 1080p';
                     if (idLow.includes('rezka')) return '🎬 HDRezka CDN • Усі студії озвучки, українська та оригінал';
-                    if (idLow.includes('ashdi')) return '🇺🇦 Повний український дубляж (UAKino / Ashdi VIP)';
-                    if (idLow.includes('kinobox')) return '🇺🇦 Каскадний балансер: HDRezka • Ashdi • VidLink (Українська / Multi)';
+                    if (idLow.includes('ashdi')) return '🇺🇦 Повний український дубляж (UAKino • Ashdi VIP 1080p)';
+                    if (idLow.includes('kinobox')) return '🇺🇦 Каскадний балансер: HDRezka • UAKino • VidLink (Українська / Multi)';
                     if (idLow.includes('pl-')) return '🇵🇱 Polski Lektor / Dubbing / Napisy PL + EN';
                     if (idLow.includes('es-')) return '🇪🇸 Español Latino / Castellano + Subtítulos';
                     return '🇬🇧 English Original 4K/1080p + Multi Subtitles';

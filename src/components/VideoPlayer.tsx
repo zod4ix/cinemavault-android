@@ -41,6 +41,7 @@ import {
 } from '../services/servers';
 import { rememberWorkingServer } from '../services/rezka';
 import { storageService } from '../services/storage';
+import { authSyncService } from '../services/authSync';
 import { torrentService } from '../services/torrent';
 import { useLanguage } from '../i18n/LanguageContext';
 
@@ -218,7 +219,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           failedServerIdsRef.current.has('rezka-embess')
         ) {
           setSelectedServerId(ua.id);
-          showOsd('🇺🇦 Знайдено український дубляж (Ashdi VIP)');
+          showOsd('🇺🇦 Знайдено український дубляж (UAKino • Ashdi VIP)');
         }
       });
     return () => {
@@ -711,10 +712,89 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     };
   }, [activeServer?.id, activeServer?.mode, selectedQuality.url, customStreamUrl]);
 
+  // Broadcast initial open action to connected devices in the ecosystem
+  useEffect(() => {
+    authSyncService.broadcastPlaybackAction('open', {
+      mediaId: media.id,
+      mediaSnapshot: media,
+      title,
+      posterPath: media.posterPath,
+      serverId: activeServer?.id,
+      serverName: activeServer?.name,
+      seasonNumber: activeSeason,
+      episodeNumber: activeEpisode,
+      episodeId,
+      currentTime,
+      duration,
+      isPlaying,
+    });
+  }, [media.id, activeSeason, activeEpisode, activeServer?.id]);
+
+  // Listen for real-time remote playback actions (pause/play/seek/episode change) from other devices in the user's account
+  useEffect(() => {
+    return authSyncService.subscribeRemoteActions((msg) => {
+      if (!msg.session || String(msg.session.mediaId) !== String(media.id)) return;
+      if (msg.action === 'pause' && isPlaying) {
+        if (activeServer?.mode === 'native' && videoRef.current) {
+          videoRef.current.pause();
+        } else {
+          sendIframeCommand('pause');
+        }
+        setIsPlaying(false);
+        showOsd(`⏸ Пауза з пристрою «${msg.senderDeviceName}»`);
+      } else if (msg.action === 'play' && !isPlaying) {
+        if (activeServer?.mode === 'native' && videoRef.current) {
+          videoRef.current.play().catch(() => {});
+        } else {
+          sendIframeCommand('play');
+        }
+        setIsPlaying(true);
+        showOsd(`▶ Відтворення з пристрою «${msg.senderDeviceName}»`);
+      } else if (
+        msg.action === 'seek' &&
+        typeof msg.session.currentTime === 'number' &&
+        Math.abs(msg.session.currentTime - currentTime) > 12
+      ) {
+        const targetSec = msg.session.currentTime;
+        setCurrentTime(targetSec);
+        if (activeServer?.mode === 'native' && videoRef.current) {
+          videoRef.current.currentTime = targetSec;
+        } else {
+          const safeDur = duration > 0 ? duration : 7200;
+          sendIframeCommand('seekToPercent', {
+            percent: Math.max(0, Math.min(1, targetSec / safeDur)),
+            time: targetSec,
+          });
+        }
+        showOsd(`⏱ Синхронізовано позицію (${formatTime(targetSec)})`);
+      } else if (
+        msg.action === 'episode_change' &&
+        (msg.session.seasonNumber !== activeSeason || msg.session.episodeNumber !== activeEpisode)
+      ) {
+        if (msg.session.seasonNumber) setActiveSeason(msg.session.seasonNumber);
+        if (msg.session.episodeNumber) setActiveEpisode(msg.session.episodeNumber);
+        showOsd(
+          `📺 Перехід на С${msg.session.seasonNumber || 1}:Е${msg.session.episodeNumber || 1}`
+        );
+      }
+    });
+  }, [
+    media.id,
+    isPlaying,
+    currentTime,
+    duration,
+    activeSeason,
+    activeEpisode,
+    activeServer?.mode,
+    sendIframeCommand,
+    showOsd,
+  ]);
+
   // Periodic watch progress save
   useEffect(() => {
     if (!currentTime || !duration || duration <= 0) return;
     const timer = setInterval(() => {
+      const isCompleted = duration > 60 && currentTime >= duration * 0.94;
       storageService.saveProgress({
         mediaId: media.id,
         mediaSnapshot: media,
@@ -726,13 +806,27 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         episodeId,
         seasonNumber: activeSeason,
         episodeNumber: activeEpisode,
+        serverId: activeServer?.id,
+        isPlaying,
+        isCompleted,
       });
     }, 5000);
     return () => clearInterval(timer);
-  }, [currentTime, duration, media, episodeId, activeSeason, activeEpisode, title]);
+  }, [
+    currentTime,
+    duration,
+    media,
+    episodeId,
+    activeSeason,
+    activeEpisode,
+    title,
+    activeServer?.id,
+    isPlaying,
+  ]);
 
   // Universal Play/Pause across BOTH Native AND Embedded (Rezka / Ashdi / Videasy / VidLink) players!
   const togglePlay = useCallback(() => {
+    const nextPlaying = !isPlaying;
     if (activeServer?.mode === 'native' && videoRef.current) {
       if (isPlaying) {
         videoRef.current.pause();
@@ -743,16 +837,42 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         setIsPlaying(true);
         showOsd('▶ Відтворення');
       }
-      return;
+    } else {
+      setIsPlaying(nextPlaying);
+      sendIframeCommand(nextPlaying ? 'play' : 'pause');
+      sendIframeCommand('togglePlay');
+      showOsd(nextPlaying ? '▶ Відтворення' : '⏸ Пауза');
     }
 
-    // For embed / torrent mode: send explicit play/pause AND togglePlay to the iframe bridge!
-    const nextPlaying = !isPlaying;
-    setIsPlaying(nextPlaying);
-    sendIframeCommand(nextPlaying ? 'play' : 'pause');
-    sendIframeCommand('togglePlay');
-    showOsd(nextPlaying ? '▶ Відтворення' : '⏸ Пауза');
-  }, [activeServer?.mode, isPlaying, sendIframeCommand, showOsd]);
+    authSyncService.broadcastPlaybackAction(nextPlaying ? 'play' : 'pause', {
+      mediaId: media.id,
+      mediaSnapshot: media,
+      title,
+      posterPath: media.posterPath,
+      serverId: activeServer?.id,
+      serverName: activeServer?.name,
+      seasonNumber: activeSeason,
+      episodeNumber: activeEpisode,
+      episodeId,
+      currentTime,
+      duration,
+      isPlaying: nextPlaying,
+    });
+  }, [
+    activeServer?.mode,
+    activeServer?.id,
+    activeServer?.name,
+    isPlaying,
+    sendIframeCommand,
+    showOsd,
+    media,
+    title,
+    activeSeason,
+    activeEpisode,
+    episodeId,
+    currentTime,
+    duration,
+  ]);
 
   // Universal Seek (Прокрутка) across BOTH Native AND Embedded (Rezka / Ashdi / Videasy / VidLink) players!
   const seek = useCallback(
@@ -767,12 +887,41 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         sendIframeCommand('seekBy', { delta: seconds });
       }
 
+      authSyncService.broadcastPlaybackAction('seek', {
+        mediaId: media.id,
+        mediaSnapshot: media,
+        title,
+        posterPath: media.posterPath,
+        serverId: activeServer?.id,
+        serverName: activeServer?.name,
+        seasonNumber: activeSeason,
+        episodeNumber: activeEpisode,
+        episodeId,
+        currentTime: nextTime,
+        duration: safeDur,
+        isPlaying,
+      });
+
       const sign = seconds > 0 ? '+' : '';
       showOsd(
         `${seconds > 0 ? '⏩' : '⏪'} ${sign}${seconds} сек • ${formatTime(nextTime)} / ${formatTime(safeDur)}`
       );
     },
-    [activeServer?.mode, currentTime, duration, sendIframeCommand, showOsd]
+    [
+      activeServer?.mode,
+      activeServer?.id,
+      activeServer?.name,
+      currentTime,
+      duration,
+      sendIframeCommand,
+      showOsd,
+      media,
+      title,
+      activeSeason,
+      activeEpisode,
+      episodeId,
+      isPlaying,
+    ]
   );
 
   // Universal Seek to exact ratio [0..1] on Timeline Scrubber Bar
@@ -789,9 +938,37 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         sendIframeCommand('seekToPercent', { percent: clamped, time: targetSec });
       }
 
+      authSyncService.broadcastPlaybackAction('seek', {
+        mediaId: media.id,
+        mediaSnapshot: media,
+        title,
+        posterPath: media.posterPath,
+        serverId: activeServer?.id,
+        serverName: activeServer?.name,
+        seasonNumber: activeSeason,
+        episodeNumber: activeEpisode,
+        episodeId,
+        currentTime: targetSec,
+        duration: safeDur,
+        isPlaying,
+      });
+
       showOsd(`⏱ Прокрутка: ${formatTime(targetSec)} / ${formatTime(safeDur)}`);
     },
-    [activeServer?.mode, duration, sendIframeCommand, showOsd]
+    [
+      activeServer?.mode,
+      activeServer?.id,
+      activeServer?.name,
+      duration,
+      sendIframeCommand,
+      showOsd,
+      media,
+      title,
+      activeSeason,
+      activeEpisode,
+      episodeId,
+      isPlaying,
+    ]
   );
 
   const resetControlsTimeout = useCallback(() => {
@@ -1308,7 +1485,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     const idLow = (activeServer?.id || '').toLowerCase();
     if (idLow === 'rezka-embess') return '🇺🇦 HDRezka #1';
     if (idLow.startsWith('rezka-')) return '🎬 HDRezka UA';
-    if (idLow.includes('ashdi')) return '🇺🇦 Ashdi UA';
+    if (idLow.includes('ashdi')) return '🇺🇦 UAKino';
     if (idLow.includes('kinobox')) return '🇺🇦 Multi UA';
     if (idLow.startsWith('pl-')) return '🇵🇱 Polski';
     if (idLow.startsWith('es-')) return '🇪🇸 Español';

@@ -1,16 +1,21 @@
 {
   "name": "cinemavault-app",
   "private": true,
-  "version": "3.7.3",
-  "description": "CinemaVault PRO — 4K HDR Online Cinema & Live Sports",
-  "author": "CinemaVault PRO",
-  "releaseNotes": "• 🚀 ОФІЦІЙНИЙ РЕЛІЗ 3.7.3: ПЛАВНЕ АВТООНОВЛЕННЯ WINDOWS, ДВОМОВНИЙ РОЗУМНИЙ ПОШУК ТА ЄДИНИЙ БРЕНД-ДИЗАЙН:\n• 💻 ПЛАВНЕ ОНОВЛЕННЯ WINDOWS ЯК НА ANDROID: при виході нової версії додаток автоматично сповіщає користувача, завантажує інсталятор з прогрес-баром прямо всередині вікна та безшовно запускає оновлення.\n• 🔍 ІНТЕЛЕКТУАЛЬНИЙ ПОШУК (КИРИЛИЦЯ ⇄ ЛАТИНИЦЯ): миттєвий пошук українською, російською та англійською мовами, розуміння трансліту, автоматичне виправлення розкладки клавіатури (ЙЦУКЕН ⇄ QWERTY) та глибока інтеграція з Wikidata/Wikipedia/IMDb.\n• 🎨 ЄДИНЕ БРЕНДОВЕ ЛОГО ТА ТЕЛЕМЕТРІЯ ПРИСТРОЇВ: фірмовий щит CinemaVault PRO інтегровано у Windows-інсталятор, ярлики робочого столу, панель завдань та Android.",
+  "version": "3.7.4",
+  "description": "CinemaVault PRO (Vinegret.Net) — 4K HDR Online Cinema, UAKino & Live Sports",
+  "author": {
+    "name": "Vinegret.Net (CinemaVault PRO)",
+    "url": "https://vinegret.net"
+  },
+  "homepage": "https://vinegret.net/prostye-poleznye-programmy-dlja-windows/",
+  "releaseNotes": "• 🚀 ОФІЦІЙНИЙ РЕЛІЗ 3.7.4: ЕКОСИСТЕМА СИНХРОНІЗАЦІЇ В РЕАЛЬНОМУ ЧАСІ, КЛАВІАТУРА ПУЛЬТА ПРОЄКТОРА, UAKINO ТА ПОДІЛИТИСЯ ФІЛЬМОМ (DEEP LINKS):\n• ⌨️ ЕКРАННА КЛАВІАТУРА ДЛЯ ПРОЄКТОРІВ ТА ANDROID TV: автоматичне відкриття пульт-клавіатури при натисканні OK на будь-якому полі введення в меню Синхронізації, живий передперегляд та безшовна D-Pad навігація без залипання курсора.\n• 🇺🇦 ПОВНОЦІННИЙ ПЛЕЄР UAKINO (ASHDI VIP 1080P): гарантований український дубляж одразу після серверів HDRezka з каскадним пошуком через дзеркала UAKino та Kinobox API.\n• ☁️ ЄДИНА ЕКОСИСТЕМА СИНХРОНІЗАЦІЇ ПРИСТРОЇВ (REAL-TIME SSE): миттєва передача поточного фільму, серії, секунди перегляду, паузи/відтворення, обраного та керування списком підключених пристроїв (онлайн/офлайн статус, відключення девайсів).\n• 🔗 КНОПКА «ПОДІЛИТИСЯ ФІЛЬМОМ» ТА DEEP LINKS: прямі стабільні посилання на будь-який фільм або серіал з автоматичним відкриттям у додатку (Android App Links / cinemavault://) та інтерактивною маркетинговою сторінкою на Vinegret.Net.\n• 💻 ПРОФЕСІЙНІ ІНСТАЛЯТОРИ WINDOWS ТА MACOS: повні метадані видавця Vinegret.Net, реєстрація протоколу cinemavault://, конфігурація macOS Hardened Runtime та entitlements.",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "test": "node scripts/qa_test_suite.mjs",
     "cap:sync": "npm run build && npx cap sync",
     "cap:open": "npx cap open android",
     "cap:build": "cd android && gradlew.bat assembleRelease",
@@ -23,8 +28,17 @@
   "build": {
     "appId": "net.cinemavault.pro",
     "productName": "CinemaVault PRO",
+    "copyright": "Copyright © 2026 Vinegret.Net — CinemaVault PRO",
     "npmRebuild": false,
     "artifactName": "CinemaVault-PRO-v${version}-${os}.${ext}",
+    "protocols": [
+      {
+        "name": "CinemaVault PRO Deep Link",
+        "schemes": [
+          "cinemavault"
+        ]
+      }
+    ],
     "directories": {
       "output": "release-desktop"
     },
@@ -38,28 +52,48 @@
         "nsis"
       ],
       "artifactName": "CinemaVault-PRO-v${version}-Windows.${ext}",
-      "icon": "electron/icon.ico"
+      "icon": "electron/icon.ico",
+      "requestedExecutionLevel": "asInvoker"
     },
     "nsis": {
       "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false,
       "shortcutName": "CinemaVault PRO",
+      "uninstallDisplayName": "CinemaVault PRO v${version} (Vinegret.Net)",
       "installerIcon": "electron/icon.ico",
       "uninstallerIcon": "electron/icon.ico",
       "installerHeaderIcon": "electron/icon.ico"
     },
     "mac": {
       "target": [
+        "dmg",
         "zip",
         "dir"
       ],
       "artifactName": "CinemaVault-PRO-v${version}-macOS.${ext}",
       "identity": null,
       "icon": "electron/icon.png",
-      "category": "public.app-category.entertainment"
+      "category": "public.app-category.entertainment",
+      "darkModeSupport": true,
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "electron/entitlements.mac.plist",
+      "entitlementsInherit": "electron/entitlements.mac.plist",
+      "minimumSystemVersion": "10.15.0"
+    },
+    "dmg": {
+      "title": "CinemaVault PRO ${version}",
+      "icon": "electron/icon.png",
+      "window": {
+        "width": 540,
+        "height": 380
+      }
     }
   },
   "dependencies": {

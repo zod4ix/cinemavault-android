@@ -98,76 +98,126 @@
         delivembd: 'api.delivembd.ws'
       };
 
+      function resolveUakinoOrAshdi() {
+        var qParts = [];
+        if (imdb) qParts.push('imdb=' + encodeURIComponent(imdb));
+        if (tmdb) qParts.push('tmdb=' + encodeURIComponent(tmdb));
+        if (title) qParts.push('title=' + encodeURIComponent(title));
+        if (qParts.length === 0) return Promise.resolve([]);
+
+        return fetch('https://api.kinobox.tv/api/players?' + qParts.join('&'))
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            var list = Array.isArray(data) ? data : (data && Array.isArray(data.data) ? data.data : []);
+            var ashdiUrls = [];
+            var otherUaUrls = [];
+            for (var i = 0; i < list.length; i++) {
+              var p = list[i];
+              if (!p || typeof p.iframeUrl !== 'string') continue;
+              var rawUrl = p.iframeUrl.indexOf('//') === 0 ? ('https:' + p.iframeUrl) : p.iframeUrl;
+              var srcLower = ((p.type || p.source || '') + ' ' + rawUrl).toLowerCase();
+              if (srcLower.indexOf('ashdi') !== -1 || srcLower.indexOf('uakino') !== -1) {
+                ashdiUrls.push(rawUrl);
+              } else if (srcLower.indexOf('voidboost') !== -1 || srcLower.indexOf('rezka') !== -1 || srcLower.indexOf('alloha') !== -1 || srcLower.indexOf('veoveo') !== -1) {
+                otherUaUrls.push(rawUrl);
+              }
+            }
+            return ashdiUrls.concat(otherUaUrls);
+          })
+          .catch(function () { return []; });
+      }
+
       resolveImdbFast().then(function (resolvedImdb) {
         imdb = resolvedImdb || imdb;
-        var candidates = [];
         var isSeries = Boolean(season && episode);
         var seQuery = isSeries ? ('?season=' + encodeURIComponent(season) + '&episode=' + encodeURIComponent(episode)) : '';
 
-        if (mirror && mirrorHosts[mirror] && imdb) {
-          candidates.push('https://' + mirrorHosts[mirror] + '/embed/imdb/' + imdb + seQuery);
-        }
+        var pUakino = (mirror === 'uakino' || !mirror) ? resolveUakinoOrAshdi() : Promise.resolve([]);
 
-        if (imdb) {
-          var order = ['api.embess.ws', 'api.namy.ws', 'api.kinogram.best', 'api.delivembd.ws'];
-          for (var i = 0; i < order.length; i++) {
-            var u = 'https://' + order[i] + '/embed/imdb/' + imdb + seQuery;
-            if (candidates.indexOf(u) === -1) candidates.push(u);
-          }
-        }
+        pUakino.then(function (uaResolvedList) {
+          var candidates = [];
 
-        if (tmdb) {
-          candidates.push(
-            isSeries
-              ? 'https://vidlink.pro/tv/' + tmdb + '/' + season + '/' + episode + '?primaryColor=e50914&autoplay=true'
-              : 'https://vidlink.pro/movie/' + tmdb + '?primaryColor=e50914&autoplay=true'
-          );
-          candidates.push(
-            isSeries
-              ? 'https://vidsrc.su/embed/tv/' + tmdb + '/' + season + '/' + episode
-              : 'https://vidsrc.su/embed/movie/' + tmdb
-          );
-        } else if (imdb) {
-          candidates.push(
-            isSeries
-              ? 'https://vidsrc.to/embed/tv/' + imdb + '/' + season + '/' + episode
-              : 'https://vidsrc.to/embed/movie/' + imdb
-          );
-        }
-
-        if (candidates.length === 0) {
-          notifyFatal('noCandidates');
-          return;
-        }
-
-        var curIdx = 0;
-        var container = document.querySelector('.kinobox_player');
-
-        function loadCandidate(idx) {
-          if (idx >= candidates.length) {
-            notifyFatal('allCandidatesFailed');
-            return;
-          }
-          curIdx = idx;
-          container.innerHTML = '<iframe id="direct-iframe" scrolling="no" style="overflow:hidden;width:100%;height:100%;border:0;background:#000;" src="' + candidates[idx] + '" allowfullscreen allow="autoplay; fullscreen; encrypted-media; picture-in-picture"></iframe>';
-        }
-
-        window.addEventListener('message', function (ev) {
-          var d = ev && ev.data;
-          if (!d || typeof d !== 'object') return;
-          if (d.__cinemaPlayerBridge && d.type === 'subframeFatalError') {
-            loadCandidate(curIdx + 1);
-            return;
-          }
-          if (d.__cinemaCmd) {
-            var sub = document.getElementById('direct-iframe');
-            if (sub && sub.contentWindow) {
-              try { sub.contentWindow.postMessage(d, '*'); } catch (e) {}
+          if (mirror === 'uakino') {
+            for (var uIdx = 0; uIdx < uaResolvedList.length; uIdx++) {
+              if (candidates.indexOf(uaResolvedList[uIdx]) === -1) {
+                candidates.push(uaResolvedList[uIdx]);
+              }
             }
           }
-        });
 
-        loadCandidate(0);
+          if (mirror && mirrorHosts[mirror] && imdb) {
+            candidates.push('https://' + mirrorHosts[mirror] + '/embed/imdb/' + imdb + seQuery);
+          }
+
+          if (!mirror && uaResolvedList.length > 0) {
+            for (var kIdx = 0; kIdx < uaResolvedList.length; kIdx++) {
+              if (candidates.indexOf(uaResolvedList[kIdx]) === -1) {
+                candidates.push(uaResolvedList[kIdx]);
+              }
+            }
+          }
+
+          if (imdb) {
+            var order = ['api.embess.ws', 'api.namy.ws', 'api.kinogram.best', 'api.delivembd.ws'];
+            for (var i = 0; i < order.length; i++) {
+              var u = 'https://' + order[i] + '/embed/imdb/' + imdb + seQuery;
+              if (candidates.indexOf(u) === -1) candidates.push(u);
+            }
+          }
+
+          if (tmdb) {
+            candidates.push(
+              isSeries
+                ? 'https://vidlink.pro/tv/' + tmdb + '/' + season + '/' + episode + '?primaryColor=e50914&autoplay=true'
+                : 'https://vidlink.pro/movie/' + tmdb + '?primaryColor=e50914&autoplay=true'
+            );
+            candidates.push(
+              isSeries
+                ? 'https://vidsrc.su/embed/tv/' + tmdb + '/' + season + '/' + episode
+                : 'https://vidsrc.su/embed/movie/' + tmdb
+            );
+          } else if (imdb) {
+            candidates.push(
+              isSeries
+                ? 'https://vidsrc.to/embed/tv/' + imdb + '/' + season + '/' + episode
+                : 'https://vidsrc.to/embed/movie/' + imdb
+            );
+          }
+
+          if (candidates.length === 0) {
+            notifyFatal('noCandidates');
+            return;
+          }
+
+          var curIdx = 0;
+          var container = document.querySelector('.kinobox_player');
+
+          function loadCandidate(idx) {
+            if (idx >= candidates.length) {
+              notifyFatal('allCandidatesFailed');
+              return;
+            }
+            curIdx = idx;
+            container.innerHTML = '<iframe id="direct-iframe" scrolling="no" style="overflow:hidden;width:100%;height:100%;border:0;background:#000;" src="' + candidates[idx] + '" allowfullscreen allow="autoplay; fullscreen; encrypted-media; picture-in-picture"></iframe>';
+          }
+
+          window.addEventListener('message', function (ev) {
+            var d = ev && ev.data;
+            if (!d || typeof d !== 'object') return;
+            if (d.__cinemaPlayerBridge && d.type === 'subframeFatalError') {
+              loadCandidate(curIdx + 1);
+              return;
+            }
+            if (d.__cinemaCmd) {
+              var sub = document.getElementById('direct-iframe');
+              if (sub && sub.contentWindow) {
+                try { sub.contentWindow.postMessage(d, '*'); } catch (e) {}
+              }
+            }
+          });
+
+          loadCandidate(0);
+        });
       });
     })();
   </script>

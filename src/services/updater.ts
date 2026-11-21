@@ -1,6 +1,6 @@
 import { httpGetJson } from './tmdb';
 
-export const APP_VERSION = '3.7.3';
+export const APP_VERSION = '3.7.4';
 export const GITHUB_REPO = 'zod4ix/cinemavault-android';
 export const DEFAULT_APK_URL = `https://github.com/${GITHUB_REPO}/raw/main/CinemaVault-PRO-v${APP_VERSION}.apk`;
 export const DEFAULT_WIN_URL = `https://github.com/${GITHUB_REPO}/releases/download/v${APP_VERSION}/CinemaVault-PRO-v${APP_VERSION}-Windows.exe`;
@@ -136,10 +136,11 @@ export const updaterService = {
     let macDownloadUrl = DEFAULT_MAC_URL;
     let releasePageUrl = GITHUB_RELEASE_PAGE;
     let releaseNotes =
-      '• 🚀 ОФІЦІЙНИЙ РЕЛІЗ 3.7.3: ПЛАВНЕ АВТООНОВЛЕННЯ WINDOWS, ДВОМОВНИЙ РОЗУМНИЙ ПОШУК ТА ЄДИНИЙ БРЕНД-ДИЗАЙН:\n' +
-      '• 💻 ПЛАВНЕ ОНОВЛЕННЯ WINDOWS ЯК НА ANDROID: при виході нової версії додаток автоматично сповіщає користувача, завантажує інсталятор з прогрес-баром прямо всередині вікна та безшовно запускає оновлення.\n' +
-      '• 🔍 ІНТЕЛЕКТУАЛЬНИЙ ПОШУК (КИРИЛИЦЯ ⇄ ЛАТИНИЦЯ): миттєвий пошук українською, російською та англійською мовами, розуміння трансліту, автоматичне виправлення розкладки клавіатури (ЙЦУКЕН ⇄ QWERTY) та глибока інтеграція з Wikidata/Wikipedia/IMDb.\n' +
-      '• 🎨 ЄДИНЕ БРЕНДОВЕ ЛОГО ТА ТЕЛЕМЕТРІЯ ПРИСТРОЇВ: фірмовий щит CinemaVault PRO інтегровано у Windows-інсталятор, ярлики робочого столу, панель завдань та Android.';
+      '• 🚀 ОФІЦІЙНИЙ РЕЛІЗ 3.7.4: ЕКОСИСТЕМА СИНХРОНІЗАЦІЇ В РЕАЛЬНОМУ ЧАСІ, КЛАВІАТУРА ПУЛЬТА ПРОЄКТОРА, UAKINO ТА ПОДІЛИТИСЯ ФІЛЬМОМ (DEEP LINKS):\n' +
+      '• ⌨️ ЕКРАННА КЛАВІАТУРА ДЛЯ ПРОЄКТОРІВ ТА ANDROID TV: автоматичне відкриття пульт-клавіатури при натисканні OK на будь-якому полі введення в меню Синхронізації, живий передперегляд та безшовна D-Pad навігація без залипання курсора.\n' +
+      '• 🇺🇦 ПОВНОЦІННИЙ ПЛЕЄР UAKINO (ASHDI VIP 1080P): гарантований український дубляж одразу після серверів HDRezka з каскадним пошуком через дзеркала UAKino та Kinobox API.\n' +
+      '• ☁️ ЄДИНА ЕКОСИСТЕМА СИНХРОНІЗАЦІЇ ПРИСТРОЇВ (REAL-TIME SSE): миттєва передача поточного фільму, серії, секунди перегляду, паузи/відтворення, обраного та керування списком підключених пристроїв.\n' +
+      '• 🔗 КНОПКА «ПОДІЛИТИСЯ ФІЛЬМОМ» ТА DEEP LINKS: прямі стабільні посилання на будь-який фільм або серіал з автоматичним відкриттям у додатку та інтерактивною маркетинговою сторінкою на Vinegret.Net.';
     let publishedAt = new Date().toISOString().slice(0, 10);
 
     try {

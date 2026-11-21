@@ -134,13 +134,17 @@ button, [role="button"], a, select {
 
 /* High-contrast focus outline for DPAD remote, Mouse Hover & keyboard navigation
    Applies to both :focus and :focus-visible so programmatic focus via Android WebView
-   bridge ALWAYS lights up buttons and cards on Projectors and Smart TVs! */
+   bridge ALWAYS lights up buttons, inputs, textareas and cards on Projectors and Smart TVs! */
 button:focus,
 button:focus-visible,
 [role="button"]:focus,
 [role="button"]:focus-visible,
 [tabindex="0"]:focus,
 [tabindex="0"]:focus-visible,
+input:focus,
+input:focus-visible,
+textarea:focus,
+textarea:focus-visible,
 a:focus,
 a:focus-visible,
 select:focus,

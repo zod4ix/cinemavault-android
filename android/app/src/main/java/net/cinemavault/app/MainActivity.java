@@ -316,6 +316,38 @@ public class MainActivity extends BridgeActivity {
                 }
             }
         });
+
+        handleDeepLinkIntent(getIntent());
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleDeepLinkIntent(intent);
+    }
+
+    private void handleDeepLinkIntent(Intent intent) {
+        if (intent == null) return;
+        Uri data = intent.getData();
+        if (data == null) return;
+        final String urlStr = data.toString();
+        if (urlStr.isEmpty()) return;
+
+        if (this.bridge != null && this.bridge.getWebView() != null) {
+            final WebView webView = this.bridge.getWebView();
+            final String safeUrl = urlStr
+                .replace("\\", "\\\\")
+                .replace("'", "\\'")
+                .replace("\n", "");
+            webView.postDelayed(() -> {
+                webView.evaluateJavascript(
+                    "window.__cinemaPendingDeepLink='" + safeUrl + "';" +
+                    "if(typeof window.__cinemaHandleDeepLink==='function'){window.__cinemaHandleDeepLink('" + safeUrl + "');}",
+                    null
+                );
+            }, 600);
+        }
     }
 
     /**
@@ -1382,9 +1414,13 @@ public class MainActivity extends BridgeActivity {
             runOnUiThread(() -> {
                 if (bridge == null || bridge.getWebView() == null) return;
                 WebView webView = bridge.getWebView();
+                webView.setFocusable(true);
+                webView.setFocusableInTouchMode(true);
                 webView.requestFocus();
+                webView.requestFocusFromTouch();
                 InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
                 if (imm != null) {
+                    imm.showSoftInput(webView, InputMethodManager.SHOW_IMPLICIT);
                     imm.showSoftInput(webView, InputMethodManager.SHOW_FORCED);
                 }
             });
@@ -1500,7 +1536,7 @@ public class MainActivity extends BridgeActivity {
                 } catch (Exception noBrowserException) {
                     // Projector has no browser installed: fall back to direct in-app APK download!
                     downloadAndInstallApkInternal(
-                        "https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.7.3.apk"
+                        "https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.7.4.apk"
                     );
                 }
             });

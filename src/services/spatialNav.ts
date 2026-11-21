@@ -254,11 +254,12 @@ export function initSpatialNavigation(): () => void {
       }
     }
 
-    // Handle text inputs only when non-empty and caret is inside text bounds
+    // Handle text inputs only when a physical keyboard is editing text, NEVER trap D-Pad Left/Right on TV/Projector remotes!
     if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
       const inp = active as HTMLInputElement | HTMLTextAreaElement;
+      const allowCaretTrap = inp.getAttribute('data-allow-arrow-caret') === 'true';
       const val = inp.value || '';
-      if (!inp.readOnly && val.length > 0) {
+      if (allowCaretTrap && !inp.readOnly && val.length > 0) {
         if (key === 'ArrowLeft' && (inp.selectionStart ?? 0) > 0) {
           return false;
         }
@@ -473,12 +474,17 @@ export function initSpatialNavigation(): () => void {
       (el as HTMLInputElement).readOnly = false;
       el.focus();
       el.click();
+      scrollElementIntoViewSafe(el);
       try {
         if ((window as any).AndroidCinemaBridge && typeof (window as any).AndroidCinemaBridge.showKeyboard === 'function') {
           (window as any).AndroidCinemaBridge.showKeyboard();
         }
       } catch (e) {}
-      window.dispatchEvent(new CustomEvent('cinema-input-focus', { detail: { target: el } }));
+      window.dispatchEvent(
+        new CustomEvent('cinema-input-focus', {
+          detail: { target: el, source: 'dpad-enter' },
+        })
+      );
       return;
     }
 
@@ -525,10 +531,25 @@ export function initSpatialNavigation(): () => void {
     if (e.key === 'Enter') {
       const active = document.activeElement as HTMLElement | null;
       if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
+        window.dispatchEvent(
+          new CustomEvent('cinema-input-focus', {
+            detail: { target: active, source: 'keyboard-enter' },
+          })
+        );
+        try {
+          if ((window as any).AndroidCinemaBridge && typeof (window as any).AndroidCinemaBridge.showKeyboard === 'function') {
+            (window as any).AndroidCinemaBridge.showKeyboard();
+          }
+        } catch {}
         return;
       }
       if (window.__cinemaCustomDpadEnterHandler && window.__cinemaCustomDpadEnterHandler()) {
         e.preventDefault();
+        return;
+      }
+      if (active && active !== document.body && active.tagName !== 'IFRAME') {
+        e.preventDefault();
+        triggerElementAction(active);
         return;
       }
     }

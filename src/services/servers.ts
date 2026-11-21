@@ -193,8 +193,8 @@ export async function resolveUaServer(
           if (!result && srcLower.includes('ashdi')) {
             result = {
               id: 'ua-ashdi',
-              name: '🇺🇦 UA • Ashdi VIP (UAKino Український дубляж)',
-              badge: '🇺🇦 UA VIP',
+              name: '🇺🇦 UAKino • Ashdi VIP (Український дубляж 1080p)',
+              badge: '🇺🇦 UAKino',
               url: rawUrl,
               mode: 'embed',
               langs: ['UA', 'UK'],
@@ -300,8 +300,8 @@ export async function resolveUaServer(
               const embedUrl = m[1] || m[0];
               result = {
                 id: 'ua-ashdi',
-                name: '🇺🇦 UA • Ashdi VIP (UAKino Український дубляж)',
-                badge: '🇺🇦 UA VIP',
+                name: '🇺🇦 UAKino • Ashdi VIP (Український дубляж 1080p)',
+                badge: '🇺🇦 UAKino',
                 url: embedUrl.startsWith('//') ? `https:${embedUrl}` : embedUrl,
                 mode: 'embed',
                 langs: ['UA', 'UK'],
@@ -415,10 +415,29 @@ const PROVIDERS: ProviderDef[] = [
     build: (c) => buildRezkaMirrorUrl('api.delivembd.ws', 'delivembd', c),
   },
 
-  // ──────── 2. UKRAINIAN (🇺🇦 UA) & MULTI-BALANCER AGGREGATOR ────────
+  // ──────── 2. UAKINO (🇺🇦 UKRAINIAN DUBBING • RIGHT AFTER HDREZKA) & MULTI-BALANCER ────────
+  {
+    id: 'ua-ashdi',
+    name: '🇺🇦 UAKino • Український дубляж (Ashdi VIP 1080p)',
+    badge: '🇺🇦 UAKino',
+    langs: ['UA', 'UK', 'MULTI'],
+    build: (c) => {
+      if (!c.imdb && !c.tmdb && !c.title) return null;
+      const q: string[] = ['mirror=uakino'];
+      if (c.imdb) q.push(`imdb=${encodeURIComponent(c.imdb)}`);
+      if (c.tmdb) q.push(`tmdb=${encodeURIComponent(String(c.tmdb))}`);
+      if (c.title) q.push(`title=${encodeURIComponent(c.title)}`);
+      if (c.year) q.push(`year=${encodeURIComponent(String(c.year))}`);
+      if (c.series) {
+        q.push(`season=${c.s}`);
+        q.push(`episode=${c.e}`);
+      }
+      return `/kinobox-player.html?${q.join('&')}`;
+    },
+  },
   {
     id: 'kinobox-multi',
-    name: '🇺🇦 UA / Multi • Універсальний Балансер (HDRezka • Ashdi • VidLink)',
+    name: '🇺🇦 UA / Multi • Універсальний Балансер (HDRezka • UAKino • VidLink)',
     badge: '🇺🇦 7-in-1 UA',
     langs: ['UA', 'UK', 'MULTI', 'EN', 'RU'],
     build: (c) => {
@@ -603,8 +622,8 @@ export function buildServers(
 
   const servers: StreamServer[] = [];
 
-  // 1. Always place primary HDRezka mirrors FIRST (#1 & #2)
-  const rezkaPrimaryIds = ['rezka-embess', 'rezka-namy', 'rezka-kinogram'];
+  // 1. Always place primary HDRezka mirrors FIRST (#1 & #2 & #3 & #4)
+  const rezkaPrimaryIds = ['rezka-embess', 'rezka-namy', 'rezka-kinogram', 'rezka-delivembd'];
   for (const rId of rezkaPrimaryIds) {
     const def = PROVIDERS.find((p) => p.id === rId);
     if (!def) continue;
@@ -621,10 +640,25 @@ export function buildServers(
     }
   }
 
-  // 2. Direct UAKino / Kinobox -> Ashdi VIP Ukrainian Dubbing (right after HDRezka)
+  // 2. UAKino / Ashdi VIP Ukrainian Dubbing (ALWAYS available right after HDRezka!)
   const ua = getCachedUaServer(media, ctx.s);
   if (ua && !servers.some((s) => s.id === ua.id)) {
     servers.push(ua);
+  } else {
+    const uaDef = PROVIDERS.find((p) => p.id === 'ua-ashdi');
+    if (uaDef) {
+      const url = uaDef.build(ctx);
+      if (url && !servers.some((s) => s.id === uaDef.id)) {
+        servers.push({
+          id: uaDef.id,
+          name: uaDef.name,
+          badge: uaDef.badge,
+          url,
+          mode: 'embed',
+          langs: uaDef.langs,
+        });
+      }
+    }
   }
 
   // 2b. Direct live Voidboost / Alloha / Kodik URLs resolved from Kinobox API

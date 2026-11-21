@@ -111,6 +111,9 @@ export interface PlaybackProgress {
   title: string;
   posterPath: string;
   mediaSnapshot?: MediaItem;
+  serverId?: string;
+  isPlaying?: boolean;
+  isCompleted?: boolean;
 }
 
 export interface CatalogFilter {
