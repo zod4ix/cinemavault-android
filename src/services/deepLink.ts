@@ -65,8 +65,18 @@ export async function shareMediaItem(
   media: MediaItem
 ): Promise<'shared' | 'copied' | 'failed'> {
   const shareUrl = buildShareMovieUrl(media);
-  const shareTitle = `${media.title} (${media.year || ''}) — Дивитися у CinemaVault PRO 4K`;
-  const shareText = `🎬 Дивись «${media.title}» (${media.year || ''}) онлайн у 4K HDR та з українським дубляжем у додатку CinemaVault PRO від Vinegret.Net:\n${shareUrl}`;
+  const title = media.title || media.originalTitle || 'Фільм';
+  const yearStr = media.year ? ` (${media.year})` : '';
+  const shareTitle = `${title}${yearStr} — Дивитися у CinemaVault PRO 4K`;
+
+  const shareText = `🎬 Дивись «${title}»${yearStr} онлайн у 4K HDR та з українським дубляжем:
+
+▶️ Відкрити фільм у додатку:
+${shareUrl}
+
+⬇️ Ще немає додатку? Скачати напряму з GitHub:
+📱 Android (.apk): https://github.com/zod4ix/cinemavault-android/releases/download/v3.7.4/CinemaVault-PRO-v3.7.4.apk
+💻 Windows (.exe): https://github.com/zod4ix/cinemavault-android/releases/download/v3.7.4/CinemaVault-PRO-v3.7.4-Windows.exe`;
 
   try {
     if (
@@ -77,7 +87,6 @@ export async function shareMediaItem(
       await navigator.share({
         title: shareTitle,
         text: shareText,
-        url: shareUrl,
       });
       return 'shared';
     }
@@ -89,12 +98,12 @@ export async function shareMediaItem(
   }
 
   try {
-    await navigator.clipboard.writeText(shareUrl);
+    await navigator.clipboard.writeText(shareText);
     return 'copied';
   } catch {
     try {
       const ta = document.createElement('textarea');
-      ta.value = shareUrl;
+      ta.value = shareText;
       ta.style.position = 'fixed';
       ta.style.opacity = '0';
       document.body.appendChild(ta);
