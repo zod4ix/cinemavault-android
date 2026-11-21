@@ -61,15 +61,12 @@ export function buildCustomSchemeUrl(media: MediaItem): string {
   return `cinemavault://open?${params.toString()}`;
 }
 
-export async function shareMediaItem(
-  media: MediaItem
-): Promise<'shared' | 'copied' | 'failed'> {
+export function buildShareFullText(media: MediaItem): string {
   const shareUrl = buildShareMovieUrl(media);
   const title = media.title || media.originalTitle || 'Фільм';
   const yearStr = media.year ? ` (${media.year})` : '';
-  const shareTitle = `${title}${yearStr} — Дивитися у CinemaVault PRO 4K`;
 
-  const shareText = `🎬 Дивись «${title}»${yearStr} онлайн у 4K HDR та з українським дубляжем:
+  return `🎬 Дивись «${title}»${yearStr} онлайн у 4K HDR та з українським дубляжем:
 
 ▶️ Відкрити фільм у додатку:
 ${shareUrl}
@@ -77,6 +74,94 @@ ${shareUrl}
 ⬇️ Ще немає додатку? Скачати напряму з GitHub:
 📱 Android (.apk): https://github.com/zod4ix/cinemavault-android/releases/download/v3.7.4/CinemaVault-PRO-v3.7.4.apk
 💻 Windows (.exe): https://github.com/zod4ix/cinemavault-android/releases/download/v3.7.4/CinemaVault-PRO-v3.7.4-Windows.exe`;
+}
+
+export interface SocialShareLink {
+  id: string;
+  name: string;
+  iconName: string;
+  color: string;
+  bgClass: string;
+  url: string;
+}
+
+export function getSocialShareLinks(media: MediaItem): {
+  shareUrl: string;
+  fullText: string;
+  title: string;
+  links: SocialShareLink[];
+  qrCodeUrl: string;
+} {
+  const shareUrl = buildShareMovieUrl(media);
+  const title = media.title || media.originalTitle || 'Фільм';
+  const yearStr = media.year ? ` (${media.year})` : '';
+  const fullText = buildShareFullText(media);
+  const subject = `🎬 Фільм «${title}»${yearStr} у CinemaVault PRO`;
+  const promoCaption = `🎬 Дивись «${title}»${yearStr} у 4K HDR та з українським дубляжем!`;
+
+  const links: SocialShareLink[] = [
+    {
+      id: 'telegram',
+      name: 'Telegram',
+      iconName: 'telegram',
+      color: '#229ED9',
+      bgClass: 'hover:bg-[#229ED9]/20 hover:border-[#229ED9]/60',
+      url: `https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(promoCaption)}`
+    },
+    {
+      id: 'viber',
+      name: 'Viber',
+      iconName: 'viber',
+      color: '#7360F2',
+      bgClass: 'hover:bg-[#7360F2]/20 hover:border-[#7360F2]/60',
+      url: `viber://forward?text=${encodeURIComponent(fullText)}`
+    },
+    {
+      id: 'whatsapp',
+      name: 'WhatsApp',
+      iconName: 'whatsapp',
+      color: '#25D366',
+      bgClass: 'hover:bg-[#25D366]/20 hover:border-[#25D366]/60',
+      url: `https://api.whatsapp.com/send?text=${encodeURIComponent(fullText)}`
+    },
+    {
+      id: 'email',
+      name: 'Email / Пошта',
+      iconName: 'email',
+      color: '#EA4335',
+      bgClass: 'hover:bg-[#EA4335]/20 hover:border-[#EA4335]/60',
+      url: `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(fullText)}`
+    },
+    {
+      id: 'facebook',
+      name: 'Facebook',
+      iconName: 'facebook',
+      color: '#1877F2',
+      bgClass: 'hover:bg-[#1877F2]/20 hover:border-[#1877F2]/60',
+      url: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`
+    },
+    {
+      id: 'twitter',
+      name: 'X (Twitter)',
+      iconName: 'twitter',
+      color: '#38bdf8',
+      bgClass: 'hover:bg-slate-700/60 hover:border-slate-500',
+      url: `https://twitter.com/intent/tweet?text=${encodeURIComponent(promoCaption)}&url=${encodeURIComponent(shareUrl)}`
+    }
+  ];
+
+  const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(shareUrl)}&bgcolor=090d16&color=ffffff&margin=1`;
+
+  return { shareUrl, fullText, title, links, qrCodeUrl };
+}
+
+export async function shareMediaItem(
+  media: MediaItem
+): Promise<'shared' | 'copied' | 'failed'> {
+  const title = media.title || media.originalTitle || 'Фільм';
+  const yearStr = media.year ? ` (${media.year})` : '';
+  const shareTitle = `${title}${yearStr} — Дивитися у CinemaVault PRO 4K`;
+  const shareText = buildShareFullText(media);
 
   try {
     if (

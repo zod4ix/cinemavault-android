@@ -17,7 +17,8 @@ import { openExternalDownload } from '../services/updater';
 import { RatingFeedback } from './RatingFeedback';
 import { MediaCard } from './MediaCard';
 import { getSimilarMedia, SimilarMediaItem } from '../services/recommendations';
-import { shareMediaItem, buildShareMovieUrl } from '../services/deepLink';
+import { buildShareMovieUrl } from '../services/deepLink';
+import { ShareModal } from './ShareModal';
 
 interface MediaModalProps {
   media: MediaItem | null;
@@ -54,7 +55,7 @@ export const MediaModal: React.FC<MediaModalProps> = ({
   const [torrentFilter, setTorrentFilter] = useState<string>('all');
   const [similarItems, setSimilarItems] = useState<SimilarMediaItem[]>([]);
   const [loadingSimilar, setLoadingSimilar] = useState<boolean>(false);
-  const [shareStatus, setShareStatus] = useState<'idle' | 'shared' | 'copied'>('idle');
+  const [showShareModal, setShowShareModal] = useState<boolean>(false);
   const watchNowBtnRef = useRef<HTMLButtonElement>(null);
   const modalScrollRef = useRef<HTMLDivElement>(null);
   const similarRowRef = useRef<HTMLDivElement>(null);
@@ -194,12 +195,8 @@ export const MediaModal: React.FC<MediaModalProps> = ({
 
   if (!media) return null;
 
-  const handleShareMovie = async () => {
-    const res = await shareMediaItem(media);
-    if (res === 'shared' || res === 'copied') {
-      setShareStatus(res);
-      setTimeout(() => setShareStatus('idle'), 3000);
-    }
+  const handleShareMovie = () => {
+    setShowShareModal(true);
   };
 
   const handleCopyMagnet = (magnet: string, id: string) => {
@@ -356,24 +353,11 @@ export const MediaModal: React.FC<MediaModalProps> = ({
                 type="button"
                 onClick={handleShareMovie}
                 tabIndex={0}
-                className={`px-3.5 py-2.5 rounded-xl border backdrop-blur-md font-bold text-xs flex items-center gap-1.5 transition-all shrink-0 tv-btn-focus focus:outline-none ${
-                  shareStatus !== 'idle'
-                    ? 'bg-emerald-600 text-white border-emerald-400 shadow-lg shadow-emerald-600/30'
-                    : 'bg-black/60 hover:bg-blue-600 text-slate-200 hover:text-white border-white/20 hover:border-blue-400'
-                }`}
-                title={`Поділитися прямим посиланням на фільм (${buildShareMovieUrl(media)})`}
+                className="px-3.5 py-2.5 rounded-xl border backdrop-blur-md font-bold text-xs flex items-center gap-1.5 transition-all shrink-0 tv-btn-focus focus:outline-none bg-black/60 hover:bg-blue-600 text-slate-200 hover:text-white border-white/20 hover:border-blue-400"
+                title={`Поділитися фільмом (${buildShareMovieUrl(media)})`}
               >
-                {shareStatus !== 'idle' ? (
-                  <>
-                    <Check className="w-4 h-4 text-white shrink-0" />
-                    <span>Посилання скопійовано!</span>
-                  </>
-                ) : (
-                  <>
-                    <Share2 className="w-4 h-4 shrink-0" />
-                    <span>Поділитися</span>
-                  </>
-                )}
+                <Share2 className="w-4 h-4 shrink-0 text-blue-400" />
+                <span>Поділитися</span>
               </button>
 
               <RatingFeedback media={media} size="md" />
@@ -962,6 +946,14 @@ export const MediaModal: React.FC<MediaModalProps> = ({
           )}
         </div>
       </div>
+
+      {showShareModal && (
+        <ShareModal
+          media={media}
+          isOpen={showShareModal}
+          onClose={() => setShowShareModal(false)}
+        />
+      )}
     </div>
   );
 };

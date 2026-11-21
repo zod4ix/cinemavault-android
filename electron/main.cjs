@@ -859,7 +859,13 @@ function setupIpcHandlers() {
   });
 
   ipcMain.on('cinema-open-external', (_event, url) => {
-    if (typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://'))) {
+    if (
+      typeof url === 'string' &&
+      (url.startsWith('http://') ||
+        url.startsWith('https://') ||
+        url.startsWith('mailto:') ||
+        url.startsWith('viber:'))
+    ) {
       shell.openExternal(url).catch(() => {});
     }
   });
