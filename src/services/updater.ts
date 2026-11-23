@@ -1,6 +1,6 @@
 import { httpGetJson } from './tmdb';
 
-export const APP_VERSION = '3.7.4';
+export const APP_VERSION = '3.7.5';
 export const GITHUB_REPO = 'zod4ix/cinemavault-android';
 export const DEFAULT_APK_URL = `https://github.com/${GITHUB_REPO}/raw/main/CinemaVault-PRO-v${APP_VERSION}.apk`;
 export const DEFAULT_WIN_URL = `https://github.com/${GITHUB_REPO}/releases/download/v${APP_VERSION}/CinemaVault-PRO-v${APP_VERSION}-Windows.exe`;
@@ -136,11 +136,11 @@ export const updaterService = {
     let macDownloadUrl = DEFAULT_MAC_URL;
     let releasePageUrl = GITHUB_RELEASE_PAGE;
     let releaseNotes =
-      '• 🚀 ОФІЦІЙНИЙ РЕЛІЗ 3.7.4: ЕКОСИСТЕМА СИНХРОНІЗАЦІЇ В РЕАЛЬНОМУ ЧАСІ, КЛАВІАТУРА ПУЛЬТА ПРОЄКТОРА, UAKINO ТА ПОДІЛИТИСЯ ФІЛЬМОМ (DEEP LINKS):\n' +
-      '• ⌨️ ЕКРАННА КЛАВІАТУРА ДЛЯ ПРОЄКТОРІВ ТА ANDROID TV: автоматичне відкриття пульт-клавіатури при натисканні OK на будь-якому полі введення в меню Синхронізації, живий передперегляд та безшовна D-Pad навігація без залипання курсора.\n' +
-      '• 🇺🇦 ПОВНОЦІННИЙ ПЛЕЄР UAKINO (ASHDI VIP 1080P): гарантований український дубляж одразу після серверів HDRezka з каскадним пошуком через дзеркала UAKino та Kinobox API.\n' +
-      '• ☁️ ЄДИНА ЕКОСИСТЕМА СИНХРОНІЗАЦІЇ ПРИСТРОЇВ (REAL-TIME SSE): миттєва передача поточного фільму, серії, секунди перегляду, паузи/відтворення, обраного та керування списком підключених пристроїв.\n' +
-      '• 🔗 КНОПКА «ПОДІЛИТИСЯ ФІЛЬМОМ» ТА DEEP LINKS: прямі стабільні посилання на будь-який фільм або серіал з автоматичним відкриттям у додатку та інтерактивною маркетинговою сторінкою на Vinegret.Net.';
+      '• 🚀 ОФІЦІЙНИЙ РЕЛІЗ 3.7.5: БЕЗШОВНИЙ DEEP LINKING, НАДСИЛАННЯ ФІЛЬМІВ ДРУГУ В ДОДАТКУ ЗА ID, ВИПРАВЛЕННЯ ВВЕДЕННЯ ПОШТИ НА ПРОЄКТОРАХ ТА МАКСИМАЛЬНА БЕЗПЕКА WINDOWS & ANDROID:\n' +
+      '• 🔗 РОЗУМНЕ ПОДІЛИТИСЯ ТА ПРЯМЕ НАДСИЛАННЯ ДРУГУ ЗА ID: нове вікно «Надіслати другу в CinemaVault» за персональним ID з миттєвою доставкою контенту на екран друга, швидкі коди фільмів та оновлена інтеграція Viber, Telegram і WhatsApp.\n' +
+      '• ⌨️ ВИПРАВЛЕНО ВВЕДЕННЯ EMAIL ТА ФОКУС НА ПРОЄКТОРАХ: усунено конфлікт фокусування WebView, через який курсор злітав з поля поштової адреси; автоматичне безшовне відкриття екранної пульт-клавіатури для ТВ та проєкторів.\n' +
+      '• 💻 БЕЗПЕКА WINDOWS ТА ЗАХИСТ ВІД SMARTSCREEN: повні метадані PE-видавця Vinegret.Net, безпечна пісочниця Electron, обробка схеми cinemavault:// без шелл-ін\'єкцій та захист користувача від сторонніх редиректів.\n' +
+      '• 📱 ANDROID 16 & SMART TV READY: стабільна робота на всіх типах пультів (D-Pad, Air Mouse, проєкторний режим курсора), апаратне прискорення 60 FPS та відсутність реклами.';
     let publishedAt = new Date().toISOString().slice(0, 10);
 
     try {

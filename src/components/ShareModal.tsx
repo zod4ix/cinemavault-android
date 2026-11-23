@@ -9,11 +9,19 @@ import {
   ExternalLink, 
   Sparkles,
   Mail,
-  Film
+  Film,
+  Send,
+  KeyRound,
+  CheckCircle2,
+  AlertCircle,
+  Radio,
+  Tv,
+  Laptop
 } from 'lucide-react';
 import { MediaItem } from '../types/movie';
-import { getSocialShareLinks } from '../services/deepLink';
+import { getSocialShareLinks, SocialShareLink } from '../services/deepLink';
 import { openExternalDownload } from '../services/updater';
+import { authSyncService, ConnectedDevice } from '../services/authSync';
 
 interface ShareModalProps {
   media: MediaItem;
@@ -22,11 +30,18 @@ interface ShareModalProps {
 }
 
 export const ShareModal: React.FC<ShareModalProps> = ({ media, isOpen, onClose }) => {
-  const [copiedType, setCopiedType] = useState<'none' | 'link' | 'all'>('none');
+  const [copiedType, setCopiedType] = useState<'none' | 'link' | 'all' | 'code' | 'myId'>('none');
   const [showQr, setShowQr] = useState<boolean>(false);
+  const [friendIdInput, setFriendIdInput] = useState<string>('');
+  const [isSendingFriend, setIsSendingFriend] = useState<boolean>(false);
+  const [friendSendSuccess, setFriendSendSuccess] = useState<string | null>(null);
+  const [friendSendError, setFriendSendError] = useState<string | null>(null);
+
+  const [connectedDevices, setConnectedDevices] = useState<ConnectedDevice[]>([]);
   const firstBtnRef = useRef<HTMLButtonElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
 
+  const myFriendId = authSyncService.getPersonalFriendId();
   const canNativeShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
   const shareData = getSocialShareLinks(media);
 
@@ -34,8 +49,13 @@ export const ShareModal: React.FC<ShareModalProps> = ({ media, isOpen, onClose }
     if (!isOpen) {
       setCopiedType('none');
       setShowQr(false);
+      setFriendIdInput('');
+      setFriendSendSuccess(null);
+      setFriendSendError(null);
       return;
     }
+
+    setConnectedDevices(authSyncService.getConnectedDevices());
 
     const t = setTimeout(() => {
       firstBtnRef.current?.focus({ preventScroll: true });
@@ -66,6 +86,26 @@ export const ShareModal: React.FC<ShareModalProps> = ({ media, isOpen, onClose }
     }
   };
 
+  const handleCopyMovieCode = async () => {
+    try {
+      await navigator.clipboard.writeText(shareData.movieCode);
+      setCopiedType('code');
+      setTimeout(() => setCopiedType('none'), 2500);
+    } catch {
+      // fallback
+    }
+  };
+
+  const handleCopyMyId = async () => {
+    try {
+      await navigator.clipboard.writeText(myFriendId);
+      setCopiedType('myId');
+      setTimeout(() => setCopiedType('none'), 2500);
+    } catch {
+      // fallback
+    }
+  };
+
   const handleCopyAll = async () => {
     try {
       await navigator.clipboard.writeText(shareData.fullText);
@@ -89,8 +129,48 @@ export const ShareModal: React.FC<ShareModalProps> = ({ media, isOpen, onClose }
     }
   };
 
-  const handleOpenSocial = (url: string) => {
-    openExternalDownload(url);
+  const handleOpenSocial = (item: SocialShareLink) => {
+    if (item.id === 'viber') {
+      try {
+        openExternalDownload(item.url);
+        // Fallback for browsers / desktops if app scheme is not intercepted
+        setTimeout(() => {
+          if (typeof window !== 'undefined' && item.webFallbackUrl && !document.hidden) {
+            window.open(item.webFallbackUrl, '_blank', 'noopener,noreferrer');
+          }
+        }, 1200);
+      } catch {
+        if (item.webFallbackUrl) openExternalDownload(item.webFallbackUrl);
+      }
+      return;
+    }
+    openExternalDownload(item.url);
+  };
+
+  const handleSendToFriend = async (targetId?: string) => {
+    const rawId = (targetId || friendIdInput).trim().toUpperCase();
+    if (!rawId) {
+      setFriendSendError('Введіть персональний ID друга (наприклад: CV-XXXXXX)');
+      return;
+    }
+    setFriendSendError(null);
+    setFriendSendSuccess(null);
+    setIsSendingFriend(true);
+
+    try {
+      const ok = await authSyncService.sendMovieToFriend(rawId, media);
+      if (ok) {
+        setFriendSendSuccess(`Фільм «${media.title || media.originalTitle}» успішно надіслано на пристрій ${rawId}!`);
+        setFriendIdInput('');
+        setTimeout(() => setFriendSendSuccess(null), 5000);
+      } else {
+        setFriendSendError('Не вдалося доставити контент. Перевірте правильність ID друга.');
+      }
+    } catch {
+      setFriendSendError('Помилка надсилання. Перевірте підключення до Інтернету.');
+    } finally {
+      setIsSendingFriend(false);
+    }
   };
 
   const renderSocialIcon = (iconName: string) => {
@@ -134,7 +214,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({ media, isOpen, onClose }
 
   return (
     <div 
-      className="fixed inset-0 z-[150] flex items-center justify-center p-3 sm:p-5 bg-black/85 backdrop-blur-md animate-fadeIn"
+      className="fixed inset-0 z-[150] flex items-center justify-center p-3 sm:p-5 bg-black/85 backdrop-blur-md animate-fadeIn select-none"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -143,7 +223,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({ media, isOpen, onClose }
         ref={modalRef}
         role="dialog"
         aria-modal="true"
-        className="w-full max-w-xl bg-[#090d16] border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] text-slate-100"
+        className="w-full max-w-xl bg-[#090d16] border border-slate-700/80 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] text-slate-100"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800 bg-[#0d1322]">
@@ -152,11 +232,14 @@ export const ShareModal: React.FC<ShareModalProps> = ({ media, isOpen, onClose }
               <Share2 className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base sm:text-lg font-black text-white flex items-center gap-1.5">
-                Поділитися фільмом
+              <h3 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
+                <span>Поділитися фільмом</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                  REALTIME v3.7.5
+                </span>
               </h3>
               <p className="text-xs text-slate-400">
-                Надішліть друзям або транслюйте на інший пристрій
+                Миттєве авто-відкриття, надсилання другу за ID та соцмережі
               </p>
             </div>
           </div>
@@ -174,15 +257,15 @@ export const ShareModal: React.FC<ShareModalProps> = ({ media, isOpen, onClose }
         {/* Content body */}
         <div className="p-5 overflow-y-auto space-y-5 custom-scrollbar">
           {/* Movie summary banner */}
-          <div className="flex items-center gap-3.5 p-3 rounded-xl bg-slate-900/80 border border-slate-800">
+          <div className="flex items-center gap-3.5 p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800">
             {media.posterPath ? (
               <img 
                 src={media.posterPath} 
                 alt={media.title} 
-                className="w-12 h-16 sm:w-14 sm:h-20 object-cover rounded-lg shadow-md shrink-0 border border-white/10" 
+                className="w-14 h-20 sm:w-16 sm:h-24 object-cover rounded-xl shadow-md shrink-0 border border-white/10" 
               />
             ) : (
-              <div className="w-12 h-16 sm:w-14 sm:h-20 bg-slate-800 rounded-lg flex items-center justify-center shrink-0 border border-white/10 text-slate-500">
+              <div className="w-14 h-20 sm:w-16 sm:h-24 bg-slate-800 rounded-xl flex items-center justify-center shrink-0 border border-white/10 text-slate-500">
                 <Film className="w-6 h-6" />
               </div>
             )}
@@ -201,7 +284,117 @@ export const ShareModal: React.FC<ShareModalProps> = ({ media, isOpen, onClose }
               <p className="text-xs text-slate-400 line-clamp-1 mt-0.5">
                 {media.overview || 'Дивіться онлайн безкоштовно та без реклами у CinemaVault PRO'}
               </p>
+
+              {/* Quick Code Badge */}
+              <div className="mt-2 flex items-center gap-2 flex-wrap">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-black/60 border border-amber-500/40 text-amber-300 font-mono text-xs font-bold">
+                  <KeyRound className="w-3.5 h-3.5" />
+                  <span>Код: {shareData.movieCode}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCopyMovieCode}
+                  tabIndex={0}
+                  className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[11px] font-bold text-slate-200 transition-colors tv-btn-focus focus:outline-none"
+                >
+                  {copiedType === 'code' ? '✓ Код скопійовано' : 'Копіювати код'}
+                </button>
+              </div>
             </div>
+          </div>
+
+          {/* IN-APP REALTIME FRIEND ID SHARE SECTION */}
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-950/40 via-indigo-950/30 to-purple-950/40 border border-indigo-500/30 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-300">
+                  <Radio className="w-4 h-4 animate-pulse" />
+                </div>
+                <div>
+                  <h4 className="text-xs sm:text-sm font-extrabold text-white">
+                    Надіслати другу в додатку (за його ID)
+                  </h4>
+                  <p className="text-[11px] text-slate-400">
+                    Миттєва поява сповіщення на екрані друга (ТБ, ПК, смартфон)
+                  </p>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] text-slate-400 block">Ваш ID:</span>
+                <button
+                  type="button"
+                  onClick={handleCopyMyId}
+                  className="text-xs font-mono font-bold text-amber-300 hover:text-amber-200 underline decoration-dotted"
+                  title="Натисніть для копіювання вашого ID"
+                >
+                  {copiedType === 'myId' ? '✓ Скопійовано!' : myFriendId}
+                </button>
+              </div>
+            </div>
+
+            {friendSendSuccess && (
+              <div className="p-2.5 rounded-xl bg-emerald-950/80 border border-emerald-500/50 text-emerald-200 text-xs font-semibold flex items-center gap-2 animate-fadeIn">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>{friendSendSuccess}</span>
+              </div>
+            )}
+
+            {friendSendError && (
+              <div className="p-2.5 rounded-xl bg-red-950/80 border border-red-500/50 text-red-200 text-xs font-semibold flex items-center gap-2 animate-fadeIn">
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+                <span>{friendSendError}</span>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={friendIdInput}
+                onChange={(e) => setFriendIdInput(e.target.value.toUpperCase())}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSendToFriend();
+                }}
+                placeholder="Введіть ID друга (наприклад: CV-XXXXXX)"
+                className="flex-1 bg-black/60 border border-indigo-500/30 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono placeholder-slate-500 focus:outline-none focus:border-indigo-400"
+              />
+              <button
+                type="button"
+                data-nav-row="friend"
+                tabIndex={0}
+                disabled={isSendingFriend}
+                onClick={() => handleSendToFriend()}
+                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-xs flex items-center gap-1.5 shrink-0 shadow-lg shadow-indigo-600/30 transition-all disabled:opacity-50 tv-btn-focus focus:outline-none"
+              >
+                <Send className={`w-3.5 h-3.5 ${isSendingFriend ? 'animate-spin' : ''}`} />
+                <span>{isSendingFriend ? 'Відправка...' : 'Надіслати'}</span>
+              </button>
+            </div>
+
+            {/* Quick send to my own connected devices */}
+            {connectedDevices.length > 0 && (
+              <div className="pt-1">
+                <span className="text-[10px] text-slate-400 uppercase font-mono mr-1.5">
+                  Мої підключені пристрої:
+                </span>
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {connectedDevices.map((dev) => (
+                    <button
+                      key={dev.deviceId}
+                      type="button"
+                      onClick={() => handleSendToFriend(dev.deviceId)}
+                      className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-[11px] text-slate-300 hover:text-white flex items-center gap-1.5 transition-colors tv-btn-focus focus:outline-none"
+                    >
+                      {dev.deviceType === 'tv' ? (
+                        <Tv className="w-3 h-3 text-amber-400" />
+                      ) : (
+                        <Laptop className="w-3 h-3 text-purple-400" />
+                      )}
+                      <span className="truncate max-w-[130px]">{dev.deviceName}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Social Media Grid */}
@@ -218,7 +411,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({ media, isOpen, onClose }
                   type="button"
                   data-nav-row="social"
                   tabIndex={0}
-                  onClick={() => handleOpenSocial(item.url)}
+                  onClick={() => handleOpenSocial(item)}
                   className={`flex items-center gap-2.5 p-3 rounded-xl bg-slate-900/90 border border-slate-800 text-left transition-all group tv-btn-focus focus:outline-none ${item.bgClass}`}
                 >
                   <div 
@@ -362,7 +555,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({ media, isOpen, onClose }
                 ) : (
                   <>
                     <Copy className="w-4 h-4 text-blue-400" />
-                    <span>Скопіювати все повідомлення (із прямими посиланнями на GitHub)</span>
+                    <span>Скопіювати все повідомлення (із кодом фільму та посиланнями)</span>
                   </>
                 )}
               </button>
@@ -372,7 +565,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({ media, isOpen, onClose }
 
         {/* Footer */}
         <div className="px-5 py-3 border-t border-slate-800/80 bg-[#0d1322] flex items-center justify-between text-[11px] text-slate-400">
-          <span>CinemaVault PRO v3.7.4 • Universal Share</span>
+          <span>CinemaVault PRO v3.7.5 • Universal Realtime Share</span>
           <button
             type="button"
             onClick={onClose}

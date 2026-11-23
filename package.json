@@ -1,14 +1,14 @@
 {
   "name": "cinemavault-app",
   "private": true,
-  "version": "3.7.4",
+  "version": "3.7.5",
   "description": "CinemaVault PRO (Vinegret.Net) — 4K HDR Online Cinema, UAKino & Live Sports",
   "author": {
     "name": "Vinegret.Net (CinemaVault PRO)",
     "url": "https://vinegret.net"
   },
   "homepage": "https://vinegret.net/prostye-poleznye-programmy-dlja-windows/",
-  "releaseNotes": "• 🚀 ОФІЦІЙНИЙ РЕЛІЗ 3.7.4: ЕКОСИСТЕМА СИНХРОНІЗАЦІЇ В РЕАЛЬНОМУ ЧАСІ, КЛАВІАТУРА ПУЛЬТА ПРОЄКТОРА, UAKINO ТА ПОДІЛИТИСЯ ФІЛЬМОМ (DEEP LINKS):\n• ⌨️ ЕКРАННА КЛАВІАТУРА ДЛЯ ПРОЄКТОРІВ ТА ANDROID TV: автоматичне відкриття пульт-клавіатури при натисканні OK на будь-якому полі введення в меню Синхронізації, живий передперегляд та безшовна D-Pad навігація без залипання курсора.\n• 🇺🇦 ПОВНОЦІННИЙ ПЛЕЄР UAKINO (ASHDI VIP 1080P): гарантований український дубляж одразу після серверів HDRezka з каскадним пошуком через дзеркала UAKino та Kinobox API.\n• ☁️ ЄДИНА ЕКОСИСТЕМА СИНХРОНІЗАЦІЇ ПРИСТРОЇВ (REAL-TIME SSE): миттєва передача поточного фільму, серії, секунди перегляду, паузи/відтворення, обраного та керування списком підключених пристроїв (онлайн/офлайн статус, відключення девайсів).\n• 🔗 КНОПКА «ПОДІЛИТИСЯ ФІЛЬМОМ» ТА DEEP LINKS: прямі стабільні посилання на будь-який фільм або серіал з автоматичним відкриттям у додатку (Android App Links / cinemavault://) та інтерактивною маркетинговою сторінкою на Vinegret.Net.\n• 💻 ПРОФЕСІЙНІ ІНСТАЛЯТОРИ WINDOWS ТА MACOS: повні метадані видавця Vinegret.Net, реєстрація протоколу cinemavault://, конфігурація macOS Hardened Runtime та entitlements.",
+  "releaseNotes": "• 🚀 ОФІЦІЙНИЙ РЕЛІЗ 3.7.5: БЕЗШОВНИЙ DEEP LINKING, НАДСИЛАННЯ ФІЛЬМІВ ДРУГУ В ДОДАТКУ ЗА ID, ВИПРАВЛЕННЯ ВВЕДЕННЯ ПОШТИ НА ПРОЄКТОРАХ ТА МАКСИМАЛЬНА БЕЗПЕКА WINDOWS & ANDROID:\n• 🔗 РОЗУМНЕ ПОДІЛИТИСЯ ТА ПРЯМЕ НАДСИЛАННЯ ДРУГУ ЗА ID: нове вікно «Надіслати другу в CinemaVault» за персональним ID з миттєвою доставкою контенту на екран друга, швидкі коди фільмів та оновлена інтеграція Viber, Telegram і WhatsApp.\n• ⌨️ ВИПРАВЛЕНО ВВЕДЕННЯ EMAIL ТА ФОКУС НА ПРОЄКТОРАХ: усунено конфлікт фокусування WebView, через який курсор злітав з поля поштової адреси; автоматичне безшовне відкриття екранної пульт-клавіатури для ТВ та проєкторів.\n• 💻 БЕЗПЕКА WINDOWS ТА ЗАХИСТ ВІД SMARTSCREEN: повні метадані PE-видавця Vinegret.Net, безпечна пісочниця Electron, обробка схеми cinemavault:// без шелл-ін'єкцій та захист користувача від сторонніх редиректів.\n• 📱 ANDROID 16 & SMART TV READY: стабільна робота на всіх типах пультів (D-Pad, Air Mouse, проєкторний режим курсора), апаратне прискорення 60 FPS та відсутність реклами.",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -53,7 +53,13 @@
       ],
       "artifactName": "CinemaVault-PRO-v${version}-Windows.${ext}",
       "icon": "electron/icon.ico",
-      "requestedExecutionLevel": "asInvoker"
+      "requestedExecutionLevel": "asInvoker",
+      "legalTrademarks": "Vinegret.Net / CinemaVault PRO",
+      "signtoolOptions": {
+        "publisherName": [
+          "Vinegret.Net"
+        ]
+      }
     },
     "nsis": {
       "oneClick": false,

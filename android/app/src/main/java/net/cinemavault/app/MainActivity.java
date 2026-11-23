@@ -1414,14 +1414,9 @@ public class MainActivity extends BridgeActivity {
             runOnUiThread(() -> {
                 if (bridge == null || bridge.getWebView() == null) return;
                 WebView webView = bridge.getWebView();
-                webView.setFocusable(true);
-                webView.setFocusableInTouchMode(true);
-                webView.requestFocus();
-                webView.requestFocusFromTouch();
                 InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
                 if (imm != null) {
                     imm.showSoftInput(webView, InputMethodManager.SHOW_IMPLICIT);
-                    imm.showSoftInput(webView, InputMethodManager.SHOW_FORCED);
                 }
             });
         }
@@ -1536,7 +1531,7 @@ public class MainActivity extends BridgeActivity {
                 } catch (Exception noBrowserException) {
                     // Projector has no browser installed: fall back to direct in-app APK download!
                     downloadAndInstallApkInternal(
-                        "https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.7.4.apk"
+                        "https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.7.5.apk"
                     );
                 }
             });

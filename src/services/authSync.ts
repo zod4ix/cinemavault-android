@@ -196,16 +196,16 @@ class AuthSyncService {
           isOnline: true,
         };
         this.registerOrUpdateDevice(this.currentDevice);
+        this.startRealtimeStream();
         if (this.profile) {
-          this.startRealtimeStream();
           this.pullFromCloud().catch(() => {});
         }
       })
       .catch(() => {});
 
     window.addEventListener('online', () => {
+      this.startRealtimeStream();
       if (this.profile) {
-        this.startRealtimeStream();
         if (this.offlineQueuePending) {
           this.offlineQueuePending = false;
           this.pushToCloud().catch(() => {});
@@ -216,10 +216,12 @@ class AuthSyncService {
     });
 
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible' && this.profile) {
+      if (document.visibilityState === 'visible') {
         this.touchCurrentDevice();
         this.startRealtimeStream();
-        this.pullFromCloud().catch(() => {});
+        if (this.profile) {
+          this.pullFromCloud().catch(() => {});
+        }
       }
     });
 
@@ -377,15 +379,80 @@ class AuthSyncService {
     return `CV-${code}`;
   }
 
+  public getPersonalFriendId(): string {
+    if (this.profile?.syncToken) {
+      return this.profile.syncToken;
+    }
+    try {
+      const stored = localStorage.getItem('cinemavault_personal_friend_id');
+      if (stored && stored.startsWith('CV-')) return stored;
+      const newToken = this.generateSyncToken();
+      localStorage.setItem('cinemavault_personal_friend_id', newToken);
+      return newToken;
+    } catch {
+      return 'CV-CINEMA';
+    }
+  }
+
+  public async sendMovieToFriend(targetFriendId: string, media: any): Promise<boolean> {
+    if (!targetFriendId) return false;
+    const cleanId = targetFriendId.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!cleanId) return false;
+
+    const topic = getNtfyTopic(cleanId);
+    const myId = this.getPersonalFriendId();
+    const myName = this.profile?.name || this.currentDevice?.deviceName || 'Ваш друг';
+
+    const payload = {
+      type: 'FRIEND_RECOMMEND',
+      eventId: this.generateEventId(),
+      senderDeviceId: this.getCurrentDeviceId(),
+      senderId: myId,
+      senderName: myName,
+      timestamp: Date.now(),
+      movie: {
+        id: media.id,
+        imdbId: media.imdbId,
+        tmdbId: media.tmdbId,
+        title: media.title || media.originalTitle || 'Фільм',
+        originalTitle: media.originalTitle,
+        posterPath: media.posterPath,
+        backdropPath: media.backdropPath,
+        year: media.year,
+        rating: media.rating,
+        mediaType: media.mediaType || 'movie',
+        overview: media.overview,
+        quality: media.quality || '4K HDR',
+      },
+    };
+
+    try {
+      const res = await fetch(`${NTFY_BASE_URL}/${topic}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain;charset=UTF-8',
+          Title: `🎬 Рекомендація фільму від ${myName}`,
+          Priority: 'high',
+          Tags: 'movie_camera,popcorn',
+        },
+        body: JSON.stringify(payload),
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
   /**
-   * Starts real-time SSE listener on the account's ntfy topic + periodic fallback heartbeat
-   * so all connected devices receive actions & state updates in < 1 second!
+   * Starts real-time SSE listener on the account's / friend ID's ntfy topic + periodic fallback heartbeat
+   * so all connected devices receive actions, friend recommendations & state updates in < 1 second!
    */
   public startRealtimeStream() {
-    if (typeof window === 'undefined' || !this.profile) return;
+    if (typeof window === 'undefined') return;
 
     this.stopRealtimeStream();
-    const topic = getNtfyTopic(this.profile.syncToken);
+    const token = this.profile ? this.profile.syncToken : this.getPersonalFriendId();
+    const topic = getNtfyTopic(token);
 
     try {
       if (typeof EventSource !== 'undefined') {
@@ -410,7 +477,7 @@ class AuthSyncService {
           this.eventSource = null;
           if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
           this.reconnectTimer = setTimeout(() => {
-            if (this.profile && navigator.onLine !== false) {
+            if (navigator.onLine !== false) {
               this.startRealtimeStream();
             }
           }, 8000);
@@ -422,9 +489,11 @@ class AuthSyncService {
 
     // Periodic heartbeat (every 45s) ensures sync resilience even behind strict firewalls
     this.heartbeatInterval = setInterval(() => {
-      if (this.profile && document.visibilityState === 'visible') {
+      if (document.visibilityState === 'visible') {
         this.touchCurrentDevice();
-        this.pullFromCloud().catch(() => {});
+        if (this.profile) {
+          this.pullFromCloud().catch(() => {});
+        }
       }
     }, 45000);
   }
@@ -464,6 +533,20 @@ class AuthSyncService {
       const myDeviceId = this.getCurrentDeviceId();
       if (parsed.senderDeviceId && parsed.senderDeviceId === myDeviceId) {
         return; // Echo protection: ignore our own outbound broadcast
+      }
+
+      if (parsed.type === 'FRIEND_RECOMMEND' && parsed.movie) {
+        window.dispatchEvent(
+          new CustomEvent('cinema-friend-recommendation', {
+            detail: {
+              senderId: parsed.senderId || 'Друг',
+              senderName: parsed.senderName || 'Ваш друг',
+              timestamp: parsed.timestamp || Date.now(),
+              movie: parsed.movie,
+            },
+          })
+        );
+        return;
       }
 
       if (parsed.type === 'PLAYBACK_ACTION' && parsed.session) {
@@ -976,7 +1059,7 @@ class AuthSyncService {
   public exportBackupJson(): string {
     const data = {
       app: 'CinemaVault PRO',
-      version: '3.7.4',
+      version: '3.7.5',
       exportedAt: new Date().toISOString(),
       profile: this.profile,
       favorites: storageService.getFavorites(),

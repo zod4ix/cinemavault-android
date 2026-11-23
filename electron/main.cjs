@@ -884,7 +884,7 @@ function setupIpcHandlers() {
     // On desktop, map .apk download links to the corresponding desktop installer on GitHub Releases
     if (targetUrl.toLowerCase().endsWith('.apk')) {
       const verMatch = targetUrl.match(/v?(\d+\.\d+\.\d+)/i);
-      const ver = verMatch ? verMatch[1] : '3.7.4';
+      const ver = verMatch ? verMatch[1] : '3.7.5';
       if (process.platform === 'darwin') {
         targetUrl = `https://github.com/zod4ix/cinemavault-android/releases/download/v${ver}/CinemaVault-PRO-v${ver}-macOS.dmg`;
       } else {
@@ -1106,7 +1106,7 @@ function getDesktopTelemetryObject() {
       manufacturer: 'Apple',
       model: `${cpuModel} (${ramGb} GB RAM)`,
       arch,
-      appVersion: '3.7.4',
+      appVersion: '3.7.5',
       isFirstInstall,
       installedAt,
     };
@@ -1157,7 +1157,7 @@ function getDesktopTelemetryObject() {
     manufacturer: cpuBrand,
     model: `${cpuModel} (${ramGb} GB RAM)`,
     arch,
-    appVersion: '3.7.4',
+    appVersion: '3.7.5',
     isFirstInstall,
     installedAt,
   };
@@ -1188,7 +1188,7 @@ async function createWindow() {
     minHeight: 600,
     show: !isVerifyMode,
     backgroundColor: '#07090e',
-    title: 'CinemaVault PRO v3.7.4',
+    title: 'CinemaVault PRO v3.7.5',
     icon: path.join(__dirname, winIconFile),
     autoHideMenuBar: true,
     fullscreenable: true,
@@ -1419,7 +1419,7 @@ if (!gotTheLock) {
               headers: {
                 'Content-Type': 'application/json',
                 'Content-Length': Buffer.byteLength(body),
-                'User-Agent': 'CinemaVault-PRO-Desktop/3.7.4',
+                'User-Agent': 'CinemaVault-PRO-Desktop/3.7.5',
               },
               timeout: 7000,
             },

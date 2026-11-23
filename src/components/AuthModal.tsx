@@ -290,6 +290,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   const triggerFieldFocus = (field: 'email' | 'name' | 'pin' | 'token' | 'backup') => {
     setActiveField(field);
+    setShowTvKeyboard(true);
     try {
       if (
         (window as any).AndroidCinemaBridge &&
@@ -617,7 +618,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <h2 className="text-base sm:text-lg font-black text-white flex items-center gap-2">
                 <span>Екосистема & Синхронізація</span>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-500/20 text-blue-300 border border-blue-500/30">
-                  REALTIME v3.7.4
+                  REALTIME v3.7.5
                 </span>
               </h2>
               <p className="text-xs text-slate-400">
@@ -1199,7 +1200,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                           <div className="text-[11px] text-slate-400 flex flex-wrap items-center gap-2 mt-0.5">
                             <span>{dev.deviceType}</span>
                             <span>•</span>
-                            <span>v{dev.appVersion || '3.7.4'}</span>
+                            <span>v{dev.appVersion || '3.7.5'}</span>
                             <span>•</span>
                             <span>Активність: {formatRelativeTime(dev.lastActiveAt)}</span>
                           </div>

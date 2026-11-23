@@ -30,6 +30,7 @@ import {
   ShieldCheck,
   X,
   Play,
+  Radio,
 } from 'lucide-react';
 import { LanguageProvider, useLanguage } from './i18n/LanguageContext';
 import { SplashScreen } from './components/SplashScreen';
@@ -81,6 +82,11 @@ const MainAppContent: React.FC = () => {
   const [isDonateOpen, setIsDonateOpen] = useState<boolean>(false);
   const [isAuthOpen, setIsAuthOpen] = useState<boolean>(false);
   const [isUpdateOpen, setIsUpdateOpen] = useState<boolean>(false);
+  const [friendRecommendation, setFriendRecommendation] = useState<{
+    senderId: string;
+    senderName: string;
+    movie: any;
+  } | null>(null);
 
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [showUpdateBanner, setShowUpdateBanner] = useState<boolean>(false);
@@ -300,6 +306,42 @@ const MainAppContent: React.FC = () => {
     };
   }, [handleIncomingDeepLink]);
 
+  // Real-time friend recommendations listener & Smart clipboard detection
+  useEffect(() => {
+    const handleFriendRec = (e: any) => {
+      if (e.detail?.movie) {
+        setFriendRecommendation(e.detail);
+      }
+    };
+    window.addEventListener('cinema-friend-recommendation', handleFriendRec);
+
+    const checkClipboardForSharedMovie = async () => {
+      try {
+        if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.readText) {
+          const text = await navigator.clipboard.readText();
+          if (text && (text.includes('cv_movie=') || text.includes('cinemavault://open'))) {
+            const lastHandled = sessionStorage.getItem('cv_last_clipboard_deeplink');
+            if (lastHandled !== text) {
+              sessionStorage.setItem('cv_last_clipboard_deeplink', text);
+              handleIncomingDeepLink(text);
+            }
+          }
+        }
+      } catch {
+        // clipboard access denied or not focused
+      }
+    };
+
+    const timer = setTimeout(checkClipboardForSharedMovie, 1200);
+    window.addEventListener('focus', checkClipboardForSharedMovie);
+
+    return () => {
+      window.removeEventListener('cinema-friend-recommendation', handleFriendRec);
+      window.removeEventListener('focus', checkClipboardForSharedMovie);
+      clearTimeout(timer);
+    };
+  }, [handleIncomingDeepLink]);
+
   // Initial background fetch of extra live catalog items (movies, series, anime, classics)
   useEffect(() => {
     let active = true;
@@ -353,6 +395,22 @@ const MainAppContent: React.FC = () => {
     const clean = q.trim();
     if (!clean) return;
     setIsSportsActive(false);
+
+    // Instant Quick Code or Deep Link detection
+    if (
+      clean.startsWith('cinemavault://') ||
+      clean.includes('cv_movie=') ||
+      clean.startsWith('tt') ||
+      clean.startsWith('CV-')
+    ) {
+      const parsed = parseDeepLinkUrl(clean) || { id: clean, imdb: clean.startsWith('tt') ? clean : undefined };
+      const resolved = await resolveDeepLinkMedia(parsed, liveCatalogPool);
+      if (resolved) {
+        setSelectedMedia(resolved);
+        return;
+      }
+    }
+
     const reqId = ++latestSearchReqRef.current;
     setIsSearchingLive(true);
     await searchEverywhere(
@@ -1116,6 +1174,88 @@ const MainAppContent: React.FC = () => {
           });
         }}
       />
+
+      {/* Real-time In-App Friend Recommendation Notification */}
+      {friendRecommendation && (
+        <div className="fixed top-4 right-4 left-4 sm:left-auto sm:w-96 z-[200] p-4 rounded-2xl bg-[#090d16]/95 border-2 border-indigo-500/60 shadow-2xl backdrop-blur-md animate-fadeIn text-white space-y-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-400 shrink-0">
+                <Radio className="w-5 h-5 animate-pulse" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-[11px] font-bold text-indigo-300 block truncate">
+                  {friendRecommendation.senderName} надіслав(-ла) вам фільм:
+                </span>
+                <h4 className="text-xs sm:text-sm font-black text-white line-clamp-1">
+                  {friendRecommendation.movie.title} {friendRecommendation.movie.year ? `(${friendRecommendation.movie.year})` : ''}
+                </h4>
+              </div>
+            </div>
+            <button
+              onClick={() => setFriendRecommendation(null)}
+              className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2 pt-1">
+            <button
+              onClick={async () => {
+                const mov = friendRecommendation.movie;
+                setFriendRecommendation(null);
+                const resolved = await resolveDeepLinkMedia(
+                  {
+                    id: mov.id,
+                    imdb: mov.imdbId,
+                    tmdb: mov.tmdbId,
+                    title: mov.title,
+                    year: mov.year,
+                    poster: mov.posterPath,
+                    rating: mov.rating,
+                    overview: mov.overview,
+                  },
+                  liveCatalogPool
+                );
+                if (resolved) {
+                  setSelectedMedia(resolved);
+                }
+              }}
+              className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-indigo-600/30 tv-btn-focus focus:outline-none"
+            >
+              <Play className="w-3.5 h-3.5 fill-current" />
+              <span>Дивитися зараз</span>
+            </button>
+            <button
+              onClick={async () => {
+                const mov = friendRecommendation.movie;
+                setFriendRecommendation(null);
+                const resolved = await resolveDeepLinkMedia(
+                  {
+                    id: mov.id,
+                    imdb: mov.imdbId,
+                    tmdb: mov.tmdbId,
+                    title: mov.title,
+                    year: mov.year,
+                    poster: mov.posterPath,
+                    rating: mov.rating,
+                    overview: mov.overview,
+                  },
+                  liveCatalogPool
+                );
+                if (resolved) {
+                  handleToggleFavorite(resolved);
+                }
+              }}
+              className="px-3.5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs flex items-center justify-center gap-1 tv-btn-focus focus:outline-none"
+            >
+              <Heart className="w-3.5 h-3.5 text-red-400 fill-current" />
+              <span>В Обране</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* GitHub Auto-Updater & Self-Healing Modal */}
       <UpdateModal

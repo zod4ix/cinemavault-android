@@ -61,19 +61,29 @@ export function buildCustomSchemeUrl(media: MediaItem): string {
   return `cinemavault://open?${params.toString()}`;
 }
 
+export function getMovieQuickCode(media: MediaItem): string {
+  if (media.imdbId && media.imdbId.startsWith('tt')) {
+    return media.imdbId;
+  }
+  return `CV-${String(media.id).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 10).toUpperCase()}`;
+}
+
 export function buildShareFullText(media: MediaItem): string {
   const shareUrl = buildShareMovieUrl(media);
   const title = media.title || media.originalTitle || 'Фільм';
   const yearStr = media.year ? ` (${media.year})` : '';
+  const quickCode = getMovieQuickCode(media);
 
   return `🎬 Дивись «${title}»${yearStr} онлайн у 4K HDR та з українським дубляжем:
 
 ▶️ Відкрити фільм у додатку:
 ${shareUrl}
 
-⬇️ Ще немає додатку? Скачати напряму з GitHub:
-📱 Android (.apk): https://github.com/zod4ix/cinemavault-android/releases/download/v3.7.4/CinemaVault-PRO-v3.7.4.apk
-💻 Windows (.exe): https://github.com/zod4ix/cinemavault-android/releases/download/v3.7.4/CinemaVault-PRO-v3.7.4-Windows.exe`;
+🔑 Швидкий код фільму для пошуку в додатку: ${quickCode}
+
+⬇️ Ще немає додатку? Завантажити в один клік:
+📱 Android (.apk): https://github.com/zod4ix/cinemavault-android/releases/download/v3.7.5/CinemaVault-PRO-v3.7.5.apk
+💻 Windows (.exe): https://github.com/zod4ix/cinemavault-android/releases/download/v3.7.5/CinemaVault-PRO-v3.7.5-Windows.exe`;
 }
 
 export interface SocialShareLink {
@@ -83,12 +93,14 @@ export interface SocialShareLink {
   color: string;
   bgClass: string;
   url: string;
+  webFallbackUrl?: string;
 }
 
 export function getSocialShareLinks(media: MediaItem): {
   shareUrl: string;
   fullText: string;
   title: string;
+  movieCode: string;
   links: SocialShareLink[];
   qrCodeUrl: string;
 } {
@@ -96,8 +108,10 @@ export function getSocialShareLinks(media: MediaItem): {
   const title = media.title || media.originalTitle || 'Фільм';
   const yearStr = media.year ? ` (${media.year})` : '';
   const fullText = buildShareFullText(media);
+  const movieCode = getMovieQuickCode(media);
   const subject = `🎬 Фільм «${title}»${yearStr} у CinemaVault PRO`;
-  const promoCaption = `🎬 Дивись «${title}»${yearStr} у 4K HDR та з українським дубляжем!`;
+  const promoCaption = `🎬 Дивись «${title}»${yearStr} у 4K HDR (код: ${movieCode})`;
+  const viberText = `${promoCaption}\n${shareUrl}`;
 
   const links: SocialShareLink[] = [
     {
@@ -114,7 +128,8 @@ export function getSocialShareLinks(media: MediaItem): {
       iconName: 'viber',
       color: '#7360F2',
       bgClass: 'hover:bg-[#7360F2]/20 hover:border-[#7360F2]/60',
-      url: `viber://forward?text=${encodeURIComponent(fullText)}`
+      url: `viber://forward?text=${encodeURIComponent(viberText)}`,
+      webFallbackUrl: `https://3papi.viber.com/forward?text=${encodeURIComponent(viberText)}`
     },
     {
       id: 'whatsapp',
@@ -122,7 +137,7 @@ export function getSocialShareLinks(media: MediaItem): {
       iconName: 'whatsapp',
       color: '#25D366',
       bgClass: 'hover:bg-[#25D366]/20 hover:border-[#25D366]/60',
-      url: `https://api.whatsapp.com/send?text=${encodeURIComponent(fullText)}`
+      url: `https://api.whatsapp.com/send?text=${encodeURIComponent(viberText)}`
     },
     {
       id: 'email',
@@ -152,7 +167,7 @@ export function getSocialShareLinks(media: MediaItem): {
 
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(shareUrl)}&bgcolor=090d16&color=ffffff&margin=1`;
 
-  return { shareUrl, fullText, title, links, qrCodeUrl };
+  return { shareUrl, fullText, title, movieCode, links, qrCodeUrl };
 }
 
 export async function shareMediaItem(
