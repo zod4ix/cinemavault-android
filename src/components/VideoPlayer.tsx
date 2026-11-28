@@ -43,6 +43,12 @@ import { rememberWorkingServer } from '../services/rezka';
 import { storageService } from '../services/storage';
 import { authSyncService } from '../services/authSync';
 import { torrentService } from '../services/torrent';
+import {
+  extractDirectStreamFromEmbedUrl,
+  getCachedExtractedStream,
+  isRezkaDirectMirrorUrl,
+  ExtractedStreamResult,
+} from '../services/streamExtractor';
 import { useLanguage } from '../i18n/LanguageContext';
 
 declare global {
@@ -51,8 +57,24 @@ declare global {
       setPlayerFullscreen: (fullscreen: boolean) => void;
       simulateScreenTap?: (normX: number, normY: number) => void;
       openExternalUrl?: (url: string) => void;
+      isNativePlayerSupported?: () => boolean;
+      playNativeStream?: (
+        url: string,
+        title: string,
+        subtitle: string,
+        startSeconds: number,
+        referer: string,
+        audioLabelsJson: string,
+        preferredAudioIdx: number,
+        subtitlesJson: string,
+        liveStream: boolean
+      ) => void;
+      stopNativeStream?: () => void;
     };
     __cinemaHandlePlayerBack?: () => boolean;
+    __cinemaOnNativePlayerProgress?: (curSec: number, durSec: number, playing: boolean) => void;
+    __cinemaOnNativePlayerClosed?: (curSec: number, durSec: number, fallbackToWeb: boolean) => void;
+    __cinemaOnNativePlayerError?: (message: string) => void;
     webtor?: any;
   }
 }
@@ -328,6 +350,28 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     return activeServer?.url || '';
   }, [activeServer?.url]);
 
+  const [extractedDirect, setExtractedDirect] = useState<ExtractedStreamResult | null>(() => {
+    const initId = getInitialServerId();
+    const initSrv = availableServers.find((s) => s.id === initId) || availableServers[0];
+    if (initSrv?.mode === 'embed' && isRezkaDirectMirrorUrl(initSrv.url)) {
+      return getCachedExtractedStream(initSrv.url, initialSeason || 1, initialEpisode || 1);
+    }
+    return null;
+  });
+  const [forceWebEmbed, setForceWebEmbed] = useState<boolean>(false);
+  const [isExtractingDirect, setIsExtractingDirect] = useState<boolean>(() => {
+    const initId = getInitialServerId();
+    const initSrv = availableServers.find((s) => s.id === initId) || availableServers[0];
+    return Boolean(
+      initSrv?.mode === 'embed' &&
+        isRezkaDirectMirrorUrl(initSrv.url) &&
+        !getCachedExtractedStream(initSrv.url, initialSeason || 1, initialEpisode || 1)
+    );
+  });
+
+  const isDirectHlsActive = Boolean(extractedDirect && !forceWebEmbed);
+  const isNativeVideoMode = activeServer?.mode === 'native' || isDirectHlsActive;
+
   const nonEmbedQualities = qualities.filter((q) => !q.isEmbed);
   const [customStreamUrl, setCustomStreamUrl] = useState<string>('');
   const [showCustomUrlInput, setShowCustomUrlInput] = useState<boolean>(false);
@@ -539,6 +583,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   useEffect(() => {
     if (!activeServer || activeServer.mode !== 'embed') return;
+    // Skip redundant HTTP probe if direct stream extraction already handles this mirror
+    if (isRezkaDirectMirrorUrl(activeServer.url) && !forceWebEmbed) return;
     const srvId = activeServer.id;
     const srvUrl = activeServer.url;
     let cancelled = false;
@@ -556,7 +602,57 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [activeServer?.id, activeServer?.url, activeServer?.mode]);
+  }, [activeServer?.id, activeServer?.url, activeServer?.mode, forceWebEmbed]);
+
+  // Fast Direct HLS Extractor for HDRezka mirrors: bypasses heavy iframe JS, WebRTC P2P & VAST ads!
+  useEffect(() => {
+    setForceWebEmbed(false);
+    if (!activeServer || activeServer.mode !== 'embed' || !isRezkaDirectMirrorUrl(activeServer.url)) {
+      setExtractedDirect(null);
+      setIsExtractingDirect(false);
+      return;
+    }
+
+    const cached = getCachedExtractedStream(activeServer.url, activeSeason, activeEpisode);
+    if (cached) {
+      setExtractedDirect(cached);
+      setIsExtractingDirect(false);
+      return;
+    }
+
+    let cancelled = false;
+    setExtractedDirect(null);
+    setIsExtractingDirect(true);
+
+    extractDirectStreamFromEmbedUrl(activeServer.url, activeSeason, activeEpisode, 2200)
+      .then((res) => {
+        if (cancelled) return;
+        setExtractedDirect(res);
+        setIsExtractingDirect(false);
+        if (!res && !userExplicitlySelectedServerRef.current) {
+          // If this mirror was blocked/dead, check health and switch if needed
+          probeServer(activeServer.url, 1800).then((h) => {
+            if (!cancelled && h === 'dead') {
+              failedServerIdsRef.current.add(activeServer.id);
+              switchToNextWorkingServerRef.current(
+                '⚡ Дзеркало недоступне — автоперехід на робочий сервер...',
+                false
+              );
+            }
+          });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setExtractedDirect(null);
+          setIsExtractingDirect(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeServer?.id, activeServer?.url, activeServer?.mode, activeSeason, activeEpisode]);
 
   // Watchdog: never leave the loading overlay stuck forever if an embed doesn't fire onLoad/videoState
   useEffect(() => {
@@ -677,29 +773,182 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     showOsd(next ? '🗖 ' + (t('enterFullscreen') || 'Повний екран') : '🗗 ' + (t('exitFullscreen') || 'Звичайний екран'));
   };
 
-  // Initialize native HTML5 / HLS playback when in 'native' server mode
+  // Initialize Hardware ExoPlayer (Android TV/Mobile) OR Fast-Startup HLS.js (<video>) for native & extracted direct streams
   useEffect(() => {
-    if (!activeServer || activeServer.mode !== 'native') return;
-    const video = videoRef.current;
-    const streamToPlay = customStreamUrl.trim() || selectedQuality.url || activeServer.url;
-    if (!video || !streamToPlay) return;
+    if (!isNativeVideoMode || !activeServer) return;
+    const streamToPlay = isDirectHlsActive
+      ? extractedDirect!.hlsUrl
+      : customStreamUrl.trim() || selectedQuality.url || activeServer.url;
+    if (!streamToPlay) return;
 
     const saved = storageService.getProgress(media.id, episodeId);
     const initialTime =
-      saved?.currentTime && saved.currentTime < saved.duration - 15 ? saved.currentTime : 0;
+      saved?.currentTime && saved.duration > 0 && saved.currentTime < saved.duration - 15
+        ? saved.currentTime
+        : 0;
 
+    // 1. Android TV / Mobile: Use Hardware-Accelerated Native Media3 ExoPlayer Overlay (zero WebView compositing!)
+    const canUseNativeOverlay =
+      Boolean(window.AndroidCinemaBridge?.isNativePlayerSupported?.()) &&
+      Boolean(window.AndroidCinemaBridge?.playNativeStream) &&
+      (streamToPlay.includes('.m3u8') || streamToPlay.includes('.mp4'));
+
+    if (canUseNativeOverlay) {
+      setIframeLoading(false);
+      const audioNames = extractedDirect?.audioTracks?.map((a) => a.name) || [];
+      const prefIdx = extractedDirect ? extractedDirect.preferredAudioIndex : -1;
+      const subsJson = JSON.stringify(extractedDirect?.subtitles || []);
+
+      window.__cinemaOnNativePlayerProgress = (curSec, durSec, playing) => {
+        setCurrentTime(curSec);
+        if (durSec > 0) setDuration(durSec);
+        setIsPlaying(playing);
+        if (durSec > 10) {
+          storageService.saveProgress({
+            mediaId: media.id,
+            mediaSnapshot: media,
+            title,
+            posterPath: media.posterPath,
+            currentTime: curSec,
+            duration: durSec,
+            lastUpdated: Date.now(),
+            episodeId,
+            seasonNumber: activeSeason,
+            episodeNumber: activeEpisode,
+            serverId: activeServer.id,
+            isPlaying: playing,
+            isCompleted: durSec > 60 && curSec >= durSec * 0.94,
+          });
+        }
+      };
+
+      window.__cinemaOnNativePlayerClosed = (curSec, durSec, fallbackToWeb) => {
+        if (durSec > 10 && curSec > 2) {
+          storageService.saveProgress({
+            mediaId: media.id,
+            mediaSnapshot: media,
+            title,
+            posterPath: media.posterPath,
+            currentTime: curSec,
+            duration: durSec,
+            lastUpdated: Date.now(),
+            episodeId,
+            seasonNumber: activeSeason,
+            episodeNumber: activeEpisode,
+            serverId: activeServer.id,
+            isPlaying: false,
+            isCompleted: durSec > 60 && curSec >= durSec * 0.94,
+          });
+        }
+        if (fallbackToWeb && activeServer.mode === 'embed') {
+          setForceWebEmbed(true);
+        } else {
+          onClose();
+        }
+      };
+
+      window.__cinemaOnNativePlayerError = () => {
+        if (activeServer.mode === 'embed') {
+          setForceWebEmbed(true);
+          showOsd('⚡ Перехід на веб-плеєр...');
+        }
+      };
+
+      window.AndroidCinemaBridge!.playNativeStream!(
+        streamToPlay,
+        title,
+        subtitle || (isSeries ? `Сезон ${activeSeason} • Серія ${activeEpisode}` : `${media.year || ''}`),
+        initialTime,
+        activeServer.url || '',
+        JSON.stringify(audioNames),
+        prefIdx,
+        subsJson,
+        false
+      );
+
+      return () => {
+        window.__cinemaOnNativePlayerProgress = undefined;
+        window.__cinemaOnNativePlayerClosed = undefined;
+        window.__cinemaOnNativePlayerError = undefined;
+        try {
+          window.AndroidCinemaBridge?.stopNativeStream?.();
+        } catch {
+          // ignore
+        }
+      };
+    }
+
+    // 2. Windows Desktop / Web / Fallback: Direct <video> + Low-Memory Fast-Startup HLS.js
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (isDirectHlsActive && extractedDirect?.audioTracks?.length) {
+      const pref = extractedDirect.preferredAudioIndex;
+      setIframeVoices(
+        extractedDirect.audioTracks.map((a, idx) => ({
+          index: a.index,
+          label: a.name,
+          active: pref >= 0 ? a.index === pref : idx === 0,
+        }))
+      );
+    }
+
+    setIframeLoading(true);
     if (Hls.isSupported() && streamToPlay.includes('.m3u8')) {
       if (hlsRef.current) hlsRef.current.destroy();
-      const hls = new Hls({ enableWorker: true, lowLatencyMode: true });
+      const hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: false,
+        maxBufferLength: 30,
+        maxMaxBufferLength: 60,
+        maxBufferSize: 30 * 1000 * 1000,
+        maxBufferHole: 0.5,
+        backBufferLength: 20,
+        highBufferWatchdogPeriod: 1,
+        nudgeOffset: 0.1,
+        nudgeMaxRetry: 3,
+        manifestLoadingTimeOut: 7000,
+        levelLoadingTimeOut: 7000,
+        fragLoadingTimeOut: 12000,
+      });
       hlsRef.current = hls;
       hls.loadSource(streamToPlay);
       hls.attachMedia(video);
+
+      const applyPrefAudio = () => {
+        if (
+          isDirectHlsActive &&
+          extractedDirect &&
+          extractedDirect.preferredAudioIndex >= 0 &&
+          hls.audioTracks &&
+          extractedDirect.preferredAudioIndex < hls.audioTracks.length
+        ) {
+          hls.audioTrack = extractedDirect.preferredAudioIndex;
+        }
+      };
+
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        setIframeLoading(false);
+        applyPrefAudio();
         if (initialTime > 0) video.currentTime = initialTime;
         video.play().catch(() => setIsPlaying(false));
       });
+      hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => {
+        applyPrefAudio();
+      });
+      hls.on(Hls.Events.ERROR, (_ev, data) => {
+        if (!data.fatal) return;
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+          hls.recoverMediaError();
+        } else if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+          hls.startLoad();
+        } else if (isDirectHlsActive && activeServer.mode === 'embed') {
+          setForceWebEmbed(true);
+        }
+      });
     } else {
       video.src = streamToPlay;
+      setIframeLoading(false);
       if (initialTime > 0) video.currentTime = initialTime;
       video.play().catch(() => setIsPlaying(false));
     }
@@ -710,7 +959,18 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         hlsRef.current = null;
       }
     };
-  }, [activeServer?.id, activeServer?.mode, selectedQuality.url, customStreamUrl]);
+  }, [
+    isNativeVideoMode,
+    isDirectHlsActive,
+    extractedDirect,
+    activeServer?.id,
+    activeServer?.mode,
+    activeServer?.url,
+    selectedQuality.url,
+    customStreamUrl,
+    activeSeason,
+    activeEpisode,
+  ]);
 
   // Broadcast initial open action to connected devices in the ecosystem
   useEffect(() => {
@@ -735,7 +995,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     return authSyncService.subscribeRemoteActions((msg) => {
       if (!msg.session || String(msg.session.mediaId) !== String(media.id)) return;
       if (msg.action === 'pause' && isPlaying) {
-        if (activeServer?.mode === 'native' && videoRef.current) {
+        if (isNativeVideoMode && videoRef.current) {
           videoRef.current.pause();
         } else {
           sendIframeCommand('pause');
@@ -743,7 +1003,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         setIsPlaying(false);
         showOsd(`⏸ Пауза з пристрою «${msg.senderDeviceName}»`);
       } else if (msg.action === 'play' && !isPlaying) {
-        if (activeServer?.mode === 'native' && videoRef.current) {
+        if (isNativeVideoMode && videoRef.current) {
           videoRef.current.play().catch(() => {});
         } else {
           sendIframeCommand('play');
@@ -757,7 +1017,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       ) {
         const targetSec = msg.session.currentTime;
         setCurrentTime(targetSec);
-        if (activeServer?.mode === 'native' && videoRef.current) {
+        if (isNativeVideoMode && videoRef.current) {
           videoRef.current.currentTime = targetSec;
         } else {
           const safeDur = duration > 0 ? duration : 7200;
@@ -827,7 +1087,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   // Universal Play/Pause across BOTH Native AND Embedded (Rezka / Ashdi / Videasy / VidLink) players!
   const togglePlay = useCallback(() => {
     const nextPlaying = !isPlaying;
-    if (activeServer?.mode === 'native' && videoRef.current) {
+    if (isNativeVideoMode && videoRef.current) {
       if (isPlaying) {
         videoRef.current.pause();
         setIsPlaying(false);
@@ -881,7 +1141,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       const nextTime = Math.max(0, Math.min(safeDur, currentTime + seconds));
       setCurrentTime(nextTime);
 
-      if (activeServer?.mode === 'native' && videoRef.current) {
+      if (isNativeVideoMode && videoRef.current) {
         videoRef.current.currentTime = nextTime;
       } else {
         sendIframeCommand('seekBy', { delta: seconds });
@@ -932,7 +1192,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       const targetSec = clamped * safeDur;
       setCurrentTime(targetSec);
 
-      if (activeServer?.mode === 'native' && videoRef.current) {
+      if (isNativeVideoMode && videoRef.current) {
         videoRef.current.currentTime = targetSec;
       } else {
         sendIframeCommand('seekToPercent', { percent: clamped, time: targetSec });
@@ -1983,10 +2243,14 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
                                 active: item.index === v.index && item.label === v.label,
                               }))
                             );
-                            sendIframeCommand('selectInternalVoice', {
-                              index: v.index,
-                              label: v.label,
-                            });
+                            if (hlsRef.current && typeof v.index === 'number' && v.index < (hlsRef.current.audioTracks?.length || 0)) {
+                              hlsRef.current.audioTrack = v.index;
+                            } else {
+                              sendIframeCommand('selectInternalVoice', {
+                                index: v.index,
+                                label: v.label,
+                              });
+                            }
                             showOsd(`🎙️ Озвучка: ${v.label}`);
                             setTimeout(() => setActiveMenu('none'), 160);
                           }}
@@ -2835,7 +3099,14 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               className="w-full h-full flex items-center justify-center"
             />
           </div>
-        ) : activeServer && activeServer.mode !== 'native' ? (
+        ) : isExtractingDirect ? (
+          <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-[#05070c]">
+            <div className="w-11 h-11 rounded-full border-4 border-red-600/30 border-t-red-600 animate-spin" />
+            <p className="text-xs text-slate-300 font-medium">
+              ⚡ Підключення прямого 1080p потоку ({activeServer?.name})...
+            </p>
+          </div>
+        ) : activeServer && !isNativeVideoMode ? (
           /* 2. EMBED / IFRAME STREAMING VIEWPORT (Rezka, Ashdi, Videasy, VidLink, etc.) */
           <>
             {iframeLoading && (
@@ -2920,7 +3191,19 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             }}
             onEnded={() => setIsPlaying(false)}
             playsInline
-          />
+            crossOrigin="anonymous"
+          >
+            {isDirectHlsActive &&
+              extractedDirect?.subtitles?.map((sub, idx) => (
+                <track
+                  key={`${sub.url}-${idx}`}
+                  kind="subtitles"
+                  label={sub.name}
+                  src={sub.url}
+                  default={false}
+                />
+              ))}
+          </video>
         )}
       </div>
 

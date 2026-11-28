@@ -45,17 +45,17 @@ export const FREE_HLS_NODES = {
 // Strict 48-hour retention limit for finished matches
 export const FINISHED_RETENTION_MS = 48 * 3600 * 1000;
 
-// Official YouTube channel uploads playlists (UU + channel ID suffix) for Highlights
+// Official YouTube channel uploads playlists (UU + channel ID suffix) for Highlights (youtube-nocookie avoids WebView embed blocks)
 const OFFICIAL_HIGHLIGHTS_EMBED: Record<SportCategory, string> = {
-  all: 'https://www.youtube.com/embed/videoseries?list=UUWJ2lWNubArHWmf3FIHbfcQ',
-  nba: 'https://www.youtube.com/embed/videoseries?list=UUWJ2lWNubArHWmf3FIHbfcQ',
-  ucl: 'https://www.youtube.com/embed/videoseries?list=UUyGa1YEx9ST66rYrJTGIKOw',
-  football: 'https://www.youtube.com/embed/videoseries?list=UUG5qGWdu8nIRZqJ_GgDwQ-w',
-  nfl: 'https://www.youtube.com/embed/videoseries?list=UUDVYQ4Zhbm3S2dlz7P1GBDg',
-  boxing: 'https://www.youtube.com/embed/videoseries?list=UUvgfXK4nTYKudb0rFR6noLA',
-  f1: 'https://www.youtube.com/embed/videoseries?list=UUB_qr75-ydFVKSF9Dmo6izg',
-  tennis: 'https://www.youtube.com/embed/videoseries?list=UUbcxFkd6B9xUU54InHv4Tig',
-  nhl: 'https://www.youtube.com/embed/videoseries?list=UUqFMzb-4AUf6WAIbl132QKA',
+  all: 'https://www.youtube-nocookie.com/embed/videoseries?list=UUWJ2lWNubArHWmf3FIHbfcQ',
+  nba: 'https://www.youtube-nocookie.com/embed/videoseries?list=UUWJ2lWNubArHWmf3FIHbfcQ',
+  ucl: 'https://www.youtube-nocookie.com/embed/videoseries?list=UUyGa1YEx9ST66rYrJTGIKOw',
+  football: 'https://www.youtube-nocookie.com/embed/videoseries?list=UUG5qGWdu8nIRZqJ_GgDwQ-w',
+  nfl: 'https://www.youtube-nocookie.com/embed/videoseries?list=UUDVYQ4Zhbm3S2dlz7P1GBDg',
+  boxing: 'https://www.youtube-nocookie.com/embed/videoseries?list=UUvgfXK4nTYKudb0rFR6noLA',
+  f1: 'https://www.youtube-nocookie.com/embed/videoseries?list=UUB_qr75-ydFVKSF9Dmo6izg',
+  tennis: 'https://www.youtube-nocookie.com/embed/videoseries?list=UUbcxFkd6B9xUU54InHv4Tig',
+  nhl: 'https://www.youtube-nocookie.com/embed/videoseries?list=UUqFMzb-4AUf6WAIbl132QKA',
 };
 
 // Sport category backgrounds
@@ -1268,63 +1268,75 @@ const ESPN_LEAGUES: Array<{
 ];
 
 function getDirectHlsForSport(sport: SportCategory): Array<{ name: string; url: string }> {
-  switch (sport) {
-    case 'nba':
-      return [
-        { name: 'NBC Sports NOW 1080p (Cloud HLS)', url: FREE_HLS_NODES.nbcSportsNow },
-        { name: 'CBS Sports HQ Live (Cloud HLS)', url: FREE_HLS_NODES.cbsSportsHq },
-        { name: 'Trace Sport Stars HD (Cloud HLS)', url: FREE_HLS_NODES.traceSportStars },
-      ];
-    case 'ucl':
-      return [
-        { name: 'CBS Sports Golazo 1080p (Cloud HLS)', url: FREE_HLS_NODES.cbsGolazo },
-        { name: 'beIN SPORTS XTRA 1080p (Cloud HLS)', url: FREE_HLS_NODES.beinXtra },
-        { name: 'FIFA+ Live (Cloud HLS)', url: FREE_HLS_NODES.fifaPlusUs },
-      ];
-    case 'football':
-      return [
-        { name: 'beIN SPORTS XTRA 1080p (Cloud HLS)', url: FREE_HLS_NODES.beinXtra },
-        { name: 'CBS Sports Golazo 1080p (Cloud HLS)', url: FREE_HLS_NODES.cbsGolazo },
-        { name: 'FIFA+ World Football (Cloud HLS)', url: FREE_HLS_NODES.fifaPlusUs },
-      ];
-    case 'nfl':
-      return [
-        { name: 'NBC Sports NOW 1080p (Cloud HLS)', url: FREE_HLS_NODES.nbcSportsNow },
-        { name: 'CBS Sports HQ (Cloud HLS)', url: FREE_HLS_NODES.cbsSportsHq },
-      ];
-    case 'boxing':
-      return [
-        { name: 'Glory Kickboxing 1080p (Cloud HLS)', url: FREE_HLS_NODES.gloryKickboxing },
-        { name: 'Persiana Fight HD (Cloud HLS)', url: FREE_HLS_NODES.persianaFight },
-        { name: 'DAZN Combat Live (Cloud HLS)', url: FREE_HLS_NODES.daznCombat },
-      ];
-    case 'f1':
-      return [
-        { name: 'ACI Motorsport 1080p (Cloud HLS)', url: FREE_HLS_NODES.aciMotorsport },
-        { name: 'Red Bull Racing TV 1080p (Cloud HLS)', url: FREE_HLS_NODES.redBullMaster },
-        { name: 'Fast&FunBox HD (Cloud HLS)', url: FREE_HLS_NODES.fastFunBox },
-      ];
-    case 'tennis':
-      return [
-        { name: 'Eurosport 1 Court (Cloud HLS)', url: FREE_HLS_NODES.eurosport1 },
-        { name: 'beIN SPORTS XTRA Court (Cloud HLS)', url: FREE_HLS_NODES.beinXtra },
-      ];
-    case 'nhl':
-      return [
-        { name: 'NBC Sports NOW 1080p (Cloud HLS)', url: FREE_HLS_NODES.nbcSportsNow },
-        { name: 'CBS Sports HQ Ice (Cloud HLS)', url: FREE_HLS_NODES.cbsSportsHq },
-      ];
-    default:
-      return [
-        { name: 'NBC Sports NOW 1080p (Cloud HLS)', url: FREE_HLS_NODES.nbcSportsNow },
-        { name: 'beIN SPORTS XTRA 1080p (Cloud HLS)', url: FREE_HLS_NODES.beinXtra },
-      ];
+  const base = (() => {
+    switch (sport) {
+      case 'nba':
+        return [
+          { name: 'NBC Sports NOW 1080p (Cloud HLS)', url: FREE_HLS_NODES.nbcSportsNow },
+          { name: 'Trace Sport Stars HD (Cloud HLS)', url: FREE_HLS_NODES.traceSportStars },
+          { name: 'CBS Sports HQ Live (Cloud HLS)', url: FREE_HLS_NODES.cbsSportsHq },
+        ];
+      case 'ucl':
+        return [
+          { name: 'beIN SPORTS XTRA 1080p (Cloud HLS)', url: FREE_HLS_NODES.beinXtra },
+          { name: 'FIFA+ Live (Cloud HLS)', url: FREE_HLS_NODES.fifaPlusUs },
+          { name: 'CBS Sports Golazo 1080p (Cloud HLS)', url: FREE_HLS_NODES.cbsGolazo },
+        ];
+      case 'football':
+        return [
+          { name: 'beIN SPORTS XTRA 1080p (Cloud HLS)', url: FREE_HLS_NODES.beinXtra },
+          { name: 'FIFA+ World Football (Cloud HLS)', url: FREE_HLS_NODES.fifaPlusUs },
+          { name: 'CBS Sports Golazo 1080p (Cloud HLS)', url: FREE_HLS_NODES.cbsGolazo },
+        ];
+      case 'nfl':
+        return [
+          { name: 'NBC Sports NOW 1080p (Cloud HLS)', url: FREE_HLS_NODES.nbcSportsNow },
+          { name: 'CBS Sports HQ (Cloud HLS)', url: FREE_HLS_NODES.cbsSportsHq },
+        ];
+      case 'boxing':
+        return [
+          { name: 'Glory Kickboxing 1080p (Cloud HLS)', url: FREE_HLS_NODES.gloryKickboxing },
+          { name: 'Persiana Fight HD (Cloud HLS)', url: FREE_HLS_NODES.persianaFight },
+          { name: 'DAZN Combat Live (Cloud HLS)', url: FREE_HLS_NODES.daznCombat },
+        ];
+      case 'f1':
+        return [
+          { name: 'Red Bull Racing TV 1080p (Cloud HLS)', url: FREE_HLS_NODES.redBullMaster },
+          { name: 'ACI Motorsport 1080p (Cloud HLS)', url: FREE_HLS_NODES.aciMotorsport },
+          { name: 'Fast&FunBox HD (Cloud HLS)', url: FREE_HLS_NODES.fastFunBox },
+        ];
+      case 'tennis':
+        return [
+          { name: 'beIN SPORTS XTRA Court (Cloud HLS)', url: FREE_HLS_NODES.beinXtra },
+          { name: 'NBC Sports NOW 1080p (Cloud HLS)', url: FREE_HLS_NODES.nbcSportsNow },
+          { name: 'Eurosport 1 Court (Cloud HLS)', url: FREE_HLS_NODES.eurosport1 },
+        ];
+      case 'nhl':
+        return [
+          { name: 'NBC Sports NOW 1080p (Cloud HLS)', url: FREE_HLS_NODES.nbcSportsNow },
+          { name: 'CBS Sports HQ Ice (Cloud HLS)', url: FREE_HLS_NODES.cbsSportsHq },
+        ];
+      default:
+        return [
+          { name: 'beIN SPORTS XTRA 1080p (Cloud HLS)', url: FREE_HLS_NODES.beinXtra },
+          { name: 'NBC Sports NOW 1080p (Cloud HLS)', url: FREE_HLS_NODES.nbcSportsNow },
+        ];
+    }
+  })();
+
+  if (dynamicHlsExtras.length > 0) {
+    const extra = dynamicHlsExtras.find(
+      (x) => !base.some((b) => b.url === x.url)
+    );
+    if (extra) return [...base, { name: extra.name, url: extra.url }];
   }
+  return base;
 }
 
 interface StreamBuilderOptions {
   id: string;
   sport: SportCategory;
+  status?: 'live' | 'upcoming' | 'finished';
   streamFreeCat?: string;
   streamKey?: string;
   vngStreamA?: string;
@@ -1336,6 +1348,7 @@ interface StreamBuilderOptions {
 
 function buildMultiStreamsForEvent(opts: StreamBuilderOptions): SportStreamNode[] {
   const nodes: SportStreamNode[] = [];
+  const status = opts.status || 'live';
   const sfCat =
     opts.streamFreeCat ||
     (opts.sport === 'nba'
@@ -1352,90 +1365,94 @@ function buildMultiStreamsForEvent(opts: StreamBuilderOptions): SportStreamNode[
                 ? 'tennis'
                 : 'combat');
 
-  // 1. Потік A (Основний Live 1080p FHD)
-  if (opts.vngStreamA) {
-    nodes.push({
-      id: `${opts.id}-vng-a`,
-      slot: 'A',
-      name: 'Потік A • Основний Live FHD (1080p)',
-      badge: 'LIVE • 1080p FHD',
-      quality: '1080p FHD',
-      mode: 'embed',
-      url: opts.vngStreamA,
-      isFreeVerified: true,
-    });
-  } else if (opts.streamKey) {
-    const cleanKey = opts.streamKey.replace(/(1080p2?|720p|540p)$/i, '');
-    nodes.push({
-      id: `${opts.id}-sf-1080`,
-      slot: 'A',
-      name: 'Потік A • Основний Live FHD (1080p)',
-      badge: 'LIVE • 1080p FHD',
-      quality: '1080p FHD',
-      mode: 'embed',
-      url: `https://strmfree.st/embed/${sfCat}/${cleanKey}1080p2`,
-      isFreeVerified: true,
-    });
+  const cleanKey = opts.streamKey ? opts.streamKey.replace(/(1080p\d*|720p|540p)$/i, '') : '';
+  const hasLiveMatchStream = status === 'live' && Boolean(opts.vngStreamA || cleanKey);
+
+  // When the match is currently LIVE and has a match-specific stream, place it first (using working 1080p, NOT 1080p2!)
+  if (hasLiveMatchStream) {
+    if (opts.vngStreamA) {
+      nodes.push({
+        id: `${opts.id}-vng-a`,
+        slot: 'A',
+        name: 'Потік A • Основний Live FHD (1080p)',
+        badge: 'LIVE • 1080p FHD',
+        quality: '1080p FHD',
+        mode: 'embed',
+        url: opts.vngStreamA.replace(/1080p2$/, '1080p'),
+        isFreeVerified: true,
+      });
+    } else if (cleanKey) {
+      nodes.push({
+        id: `${opts.id}-sf-1080`,
+        slot: 'A',
+        name: 'Потік A • Основний Live FHD (1080p)',
+        badge: 'LIVE • 1080p FHD',
+        quality: '1080p FHD',
+        mode: 'embed',
+        url: `https://strmfree.st/embed/${sfCat}/${cleanKey}1080p`,
+        isFreeVerified: true,
+      });
+    }
+
+    if (opts.vngStreamB) {
+      nodes.push({
+        id: `${opts.id}-vng-b`,
+        slot: 'B',
+        name: 'Потік B • Резервний Live (Офіційний HD)',
+        badge: 'LIVE • HD РЕЗЕРВ',
+        quality: '1080p HD',
+        mode: 'embed',
+        url: opts.vngStreamB,
+        isFreeVerified: true,
+      });
+    } else if (opts.extraEmbeds && opts.extraEmbeds.length > 0) {
+      nodes.push({
+        id: `${opts.id}-ext-1`,
+        slot: 'B',
+        name: `Потік B • ${opts.extraEmbeds[0].name}`,
+        badge: 'LIVE • HD',
+        quality: '1080p HD',
+        mode: 'embed',
+        url: opts.extraEmbeds[0].url,
+        isFreeVerified: true,
+      });
+    } else if (cleanKey) {
+      nodes.push({
+        id: `${opts.id}-sf-base`,
+        slot: 'B',
+        name: 'Потік B • Резервний Live (Auto Bitrate)',
+        badge: 'LIVE • AUTO HD',
+        quality: '1080p HD',
+        mode: 'embed',
+        url: `https://strmfree.st/embed/${sfCat}/${cleanKey}`,
+        isFreeVerified: true,
+      });
+    }
+
+    if (cleanKey) {
+      nodes.push({
+        id: `${opts.id}-sf-540`,
+        slot: 'C',
+        name: 'Потік C • Економний 540p (Для слабкого інтернету / SD)',
+        badge: 'LIVE • 540p SD',
+        quality: '540p SD',
+        mode: 'embed',
+        url: `https://strmfree.st/embed/${sfCat}/${cleanKey}540p`,
+        isFreeVerified: true,
+      });
+    }
   }
 
-  // 2. Потік B (Резервний Live / Альтернативний HD)
-  if (opts.vngStreamB) {
-    nodes.push({
-      id: `${opts.id}-vng-b`,
-      slot: 'B',
-      name: 'Потік B • Резервний Live (Офіційний HD)',
-      badge: 'LIVE • HD РЕЗЕРВ',
-      quality: '1080p HD',
-      mode: 'embed',
-      url: opts.vngStreamB,
-      isFreeVerified: true,
-    });
-  } else if (opts.extraEmbeds && opts.extraEmbeds.length > 0) {
-    nodes.push({
-      id: `${opts.id}-ext-1`,
-      slot: 'B',
-      name: `Потік B • ${opts.extraEmbeds[0].name}`,
-      badge: 'LIVE • HD',
-      quality: '1080p HD',
-      mode: 'embed',
-      url: opts.extraEmbeds[0].url,
-      isFreeVerified: true,
-    });
-  } else if (opts.streamKey) {
-    nodes.push({
-      id: `${opts.id}-sf-base`,
-      slot: 'B',
-      name: 'Потік B • Резервний Live (Auto Bitrate)',
-      badge: 'LIVE • AUTO HD',
-      quality: '1080p HD',
-      mode: 'embed',
-      url: `https://strmfree.st/embed/${sfCat}/${opts.streamKey}`,
-      isFreeVerified: true,
-    });
-  }
-
-  // 3. Потік C: Економний потік 540p SD для повільного інтернету
-  if (opts.streamKey) {
-    const cleanKey = opts.streamKey.replace(/(1080p2?|720p|540p)$/i, '');
-    nodes.push({
-      id: `${opts.id}-sf-540`,
-      slot: 'C',
-      name: 'Потік C • Економний 540p (Для слабкого інтернету / SD)',
-      badge: 'LIVE • 540p SD',
-      quality: '540p SD',
-      mode: 'embed',
-      url: `https://strmfree.st/embed/${sfCat}/${cleanKey}540p`,
-      isFreeVerified: true,
-    });
-  }
-
-  // 4. Потік D: Verified Direct Cloud CDN HLS 1080p (миттєве підключення без зависань)
+  // Verified Direct Cloud CDN HLS 1080p (guaranteed fast 200 OK #EXTM3U — Slot A if upcoming/finished/unmatched, Slot D if live match!)
   const hlsList = getDirectHlsForSport(opts.sport);
-  hlsList.slice(0, 2).forEach((hlsNode, idx) => {
+  hlsList.slice(0, 3).forEach((hlsNode, idx) => {
+    const slotLetter = hasLiveMatchStream
+      ? (idx === 0 ? 'D' : 'B')
+      : (idx === 0 ? 'A' : idx === 1 ? 'B' : 'C');
     nodes.push({
       id: `${opts.id}-hls-${idx + 1}`,
-      slot: idx === 0 ? 'D' : 'B',
-      name: `Потік ${idx === 0 ? 'D' : 'B'} • ${hlsNode.name}`,
+      slot: slotLetter,
+      name: `Потік ${slotLetter} • ${hlsNode.name}`,
       badge: 'CLOUD HLS • 1080p',
       quality: '1080p FHD',
       mode: 'hls',
@@ -1444,7 +1461,21 @@ function buildMultiStreamsForEvent(opts: StreamBuilderOptions): SportStreamNode[
     });
   });
 
-  // 5. Потік E: Повні записи матчів & Хайлайти (1080p)
+  // For upcoming matches that already have a StreamFree slot, keep it available as secondary slot (never Slot A before kickoff!)
+  if (status === 'upcoming' && cleanKey) {
+    nodes.push({
+      id: `${opts.id}-sf-upcoming`,
+      slot: 'D',
+      name: 'Потік D • Трансляція матчу (Активується перед стартом)',
+      badge: 'LIVE • 1080p FHD',
+      quality: '1080p FHD',
+      mode: 'embed',
+      url: `https://strmfree.st/embed/${sfCat}/${cleanKey}1080p`,
+      isFreeVerified: true,
+    });
+  }
+
+  // Replays & Highlights (1080p)
   if (opts.replayUrls && opts.replayUrls.length > 0) {
     opts.replayUrls.slice(0, 2).forEach((rep, idx) => {
       nodes.push({
@@ -1464,7 +1495,7 @@ function buildMultiStreamsForEvent(opts: StreamBuilderOptions): SportStreamNode[
   if (opts.highlightIds && opts.highlightIds.length > 0 && opts.sport === 'nba') {
     const firstId = opts.highlightIds[0];
     const restIds = opts.highlightIds.slice(1, 10).join(',');
-    hlUrl = `https://www.youtube.com/embed/${firstId}?rel=0${restIds ? `&playlist=${restIds}` : ''}`;
+    hlUrl = `https://www.youtube-nocookie.com/embed/${firstId}?rel=0${restIds ? `&playlist=${restIds}` : ''}`;
   }
   nodes.push({
     id: `${opts.id}-stream-hl`,
@@ -1744,26 +1775,41 @@ export const sportsService = {
 
     const discoveredEvents: SportEvent[] = [];
 
+    const normTeam = (s: string) =>
+      (s || '')
+        .toLowerCase()
+        .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\bmunchen\b/g, 'munich')
+        .replace(/\bkoln\b/g, 'cologne')
+        .replace(/\bman utd\b/g, 'manchester united')
+        .replace(/\bman city\b/g, 'manchester city')
+        .replace(/\bpsg\b/g, 'paris saint-germain')
+        .replace(/\binter\b/g, 'inter milan')
+        .replace(/\bwolves\b/g, 'wolverhampton')
+        .replace(/\bspurs\b/g, 'tottenham')
+        .replace(/[^a-z0-9\s-]/g, ' ');
+
+    const stopWords = new Set(['fc', 'cf', 'sc', 'ac', 'afc', 'united', 'city', 'club', 'real', 'athletic']);
+
     const findSfMatch = (homeName: string, awayName: string, title: string): StreamFreeEntry | undefined => {
-      const hTokens = homeName
-        .toLowerCase()
-        .split(/\s+/)
-        .filter((w) => w.length > 3);
-      const aTokens = awayName
-        .toLowerCase()
-        .split(/\s+/)
-        .filter((w) => w.length > 3);
-      const fullTitle = title.toLowerCase();
+      const toTokens = (n: string) =>
+        normTeam(n)
+          .split(/\s+/)
+          .filter((w) => w.length >= 3 && !stopWords.has(w));
+      const hTokens = toTokens(homeName);
+      const aTokens = toTokens(awayName);
+      const fullTitle = normTeam(title);
 
       return sfMatches.find((sf) => {
-        const sfName = (sf.name || '').toLowerCase();
-        const t1 = (sf.team1?.name || '').toLowerCase();
-        const t2 = (sf.team2?.name || '').toLowerCase();
+        const sfName = normTeam(sf.name || '');
+        const t1 = normTeam(sf.team1?.name || '');
+        const t2 = normTeam(sf.team2?.name || '');
         const hay = `${sfName} ${t1} ${t2}`;
         const hHit = hTokens.length > 0 && hTokens.some((tk) => hay.includes(tk));
         const aHit = aTokens.length > 0 && aTokens.some((tk) => hay.includes(tk));
         if (hHit && aHit) return true;
-        return Boolean(sfName && fullTitle.includes(sfName));
+        return Boolean(sfName.trim() && fullTitle.includes(sfName.trim()));
       });
     };
 
@@ -1819,6 +1865,7 @@ export const sportsService = {
       const streams = buildMultiStreamsForEvent({
         id: `sf-${sf.stream_key}`,
         sport,
+        status,
         streamFreeCat: sf.category,
         streamKey: sf.stream_key,
         vngStreamA: vngMatch?.streams?.A?.url,
@@ -1997,6 +2044,15 @@ export const sportsService = {
               existing.finishedAt = eventTs + expectedDurMs;
               existing.viewers = 0;
             }
+            existing.streams = buildMultiStreamsForEvent({
+              id: existing.id,
+              sport: cfg.sport,
+              status,
+              streamFreeCat: sfMatch.category,
+              streamKey: sfMatch.stream_key,
+              replayUrls: cfg.sport === 'nba' ? nbaReplaysList : undefined,
+              highlightIds: cfg.sport === 'nba' ? nbaHighlightIds : undefined,
+            });
             if (homeUpper) {
               existing.homeTeam = {
                 name: homeUpper,
@@ -2022,6 +2078,7 @@ export const sportsService = {
         const streams = buildMultiStreamsForEvent({
           id: evId,
           sport: cfg.sport,
+          status,
           streamKey: sfMatch?.stream_key,
           replayUrls: cfg.sport === 'nba' ? nbaReplaysList : undefined,
           highlightIds: cfg.sport === 'nba' ? nbaHighlightIds : undefined,
@@ -2119,6 +2176,16 @@ export const sportsService = {
     cachedEvents = finalEvents;
     lastFetchTs = now;
     setStoredEventsCache(finalEvents);
+
+    // Harvest extra live HTTPS sports HLS channels in background (non-blocking)
+    if (dynamicHlsExtras.length === 0) {
+      this.harvestExtraLiveHlsStreams()
+        .then((list) => {
+          if (list.length > 0) dynamicHlsExtras = list;
+        })
+        .catch(() => {});
+    }
+
     return cachedEvents;
   },
 

@@ -20,18 +20,17 @@ export const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [role="button"]:not([disabled]), [tabindex="0"]:not([disabled]), a[href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled])';
 
 export function isElementVisible(el: HTMLElement): boolean {
-  if (!el || !el.isConnected) return false;
-  const style = window.getComputedStyle(el);
-  if (
-    style.display === 'none' ||
-    style.visibility === 'hidden' ||
-    style.pointerEvents === 'none' ||
-    parseFloat(style.opacity || '1') < 0.05
-  ) {
-    return false;
-  }
+  if (!el || !el.isConnected || el.hidden) return false;
+  // Fast layout check before calling expensive getComputedStyle
   const rect = el.getBoundingClientRect();
-  return rect.width > 4 && rect.height > 4;
+  if (rect.width <= 4 || rect.height <= 4) return false;
+  const style = window.getComputedStyle(el);
+  return (
+    style.display !== 'none' &&
+    style.visibility !== 'hidden' &&
+    style.pointerEvents !== 'none' &&
+    parseFloat(style.opacity || '1') >= 0.05
+  );
 }
 
 let currentHighlightedEl: HTMLElement | null = null;
@@ -50,17 +49,30 @@ export function highlightFocusableElement(el: HTMLElement | null) {
  * Checks if an element inside a horizontal scroll container (.overflow-x-auto)
  * is currently visible within that container's horizontal viewport.
  */
+function hasHorizontalScrollClass(el: HTMLElement): boolean {
+  const cls = el.classList;
+  return cls.contains('overflow-x-auto') || cls.contains('overflow-x-scroll');
+}
+
+function hasVerticalScrollClass(el: HTMLElement): boolean {
+  const cls = el.classList;
+  return cls.contains('overflow-y-auto') || cls.contains('overflow-y-scroll');
+}
+
 function isHorizontallyInContainerView(el: HTMLElement): boolean {
   const elRect = el.getBoundingClientRect();
   let parent = el.parentElement;
   while (parent && parent !== document.body && parent !== document.documentElement) {
-    const style = window.getComputedStyle(parent);
-    if (
-      (style.overflowX === 'auto' || style.overflowX === 'scroll') &&
-      parent.scrollWidth > parent.clientWidth + 8
-    ) {
-      const pRect = parent.getBoundingClientRect();
-      return elRect.right > pRect.left + 6 && elRect.left < pRect.right - 6;
+    if (parent.scrollWidth > parent.clientWidth + 8) {
+      let isHoriz = hasHorizontalScrollClass(parent);
+      if (!isHoriz) {
+        const style = window.getComputedStyle(parent);
+        isHoriz = style.overflowX === 'auto' || style.overflowX === 'scroll';
+      }
+      if (isHoriz) {
+        const pRect = parent.getBoundingClientRect();
+        return elRect.right > pRect.left + 6 && elRect.left < pRect.right - 6;
+      }
     }
     parent = parent.parentElement;
   }
@@ -70,12 +82,12 @@ function isHorizontallyInContainerView(el: HTMLElement): boolean {
 function getHorizontalScrollParent(el: HTMLElement): HTMLElement | null {
   let parent = el.parentElement;
   while (parent && parent !== document.body && parent !== document.documentElement) {
-    const style = window.getComputedStyle(parent);
-    if (
-      (style.overflowX === 'auto' || style.overflowX === 'scroll') &&
-      parent.scrollWidth > parent.clientWidth + 4
-    ) {
-      return parent;
+    if (parent.scrollWidth > parent.clientWidth + 4) {
+      if (hasHorizontalScrollClass(parent)) return parent;
+      const style = window.getComputedStyle(parent);
+      if (style.overflowX === 'auto' || style.overflowX === 'scroll') {
+        return parent;
+      }
     }
     parent = parent.parentElement;
   }
@@ -115,12 +127,12 @@ export function scrollElementIntoViewSafe(el: HTMLElement) {
     vertContainer !== document.body &&
     vertContainer !== document.documentElement
   ) {
-    const style = window.getComputedStyle(vertContainer);
-    if (
-      (style.overflowY === 'auto' || style.overflowY === 'scroll') &&
-      vertContainer.scrollHeight > vertContainer.clientHeight + 4
-    ) {
-      break;
+    if (vertContainer.scrollHeight > vertContainer.clientHeight + 4) {
+      if (hasVerticalScrollClass(vertContainer)) break;
+      const style = window.getComputedStyle(vertContainer);
+      if (style.overflowY === 'auto' || style.overflowY === 'scroll') {
+        break;
+      }
     }
     vertContainer = vertContainer.parentElement;
   }

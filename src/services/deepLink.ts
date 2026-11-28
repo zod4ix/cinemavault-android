@@ -82,8 +82,8 @@ ${shareUrl}
 🔑 Швидкий код фільму для пошуку в додатку: ${quickCode}
 
 ⬇️ Ще немає додатку? Завантажити в один клік:
-📱 Android (.apk): https://github.com/zod4ix/cinemavault-android/releases/download/v3.7.5/CinemaVault-PRO-v3.7.5.apk
-💻 Windows (.exe): https://github.com/zod4ix/cinemavault-android/releases/download/v3.7.5/CinemaVault-PRO-v3.7.5-Windows.exe`;
+📱 Android (.apk): https://github.com/zod4ix/cinemavault-android/releases/download/v3.7.6/CinemaVault-PRO-v3.7.6.apk
+💻 Windows (.exe): https://github.com/zod4ix/cinemavault-android/releases/download/v3.7.6/CinemaVault-PRO-v3.7.6-Windows.exe`;
 }
 
 export interface SocialShareLink {

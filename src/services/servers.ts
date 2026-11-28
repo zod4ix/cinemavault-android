@@ -15,6 +15,7 @@ export interface ResolvedIds {
 }
 
 const idCache = new Map<string, ResolvedIds>();
+const idInflight = new Map<string, Promise<ResolvedIds>>();
 
 const isForeignTmdb = (media: MediaItem) => {
   const id = media.id.toString();
@@ -39,9 +40,12 @@ async function lookupImdbCdn(title: string, year?: number): Promise<string | und
   try {
     const clean = title.trim();
     if (!clean) return undefined;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 2200);
     const res = await fetch(
-      `https://v3.sg.media-imdb.com/suggestion/x/${encodeURIComponent(clean)}.json`
-    );
+      `https://v3.sg.media-imdb.com/suggestion/x/${encodeURIComponent(clean)}.json`,
+      { signal: ctrl.signal }
+    ).finally(() => clearTimeout(timer));
     if (!res.ok) return undefined;
     const data = await res.json();
     const list: any[] = Array.isArray(data?.d) ? data.d : [];
@@ -57,43 +61,63 @@ async function lookupImdbCdn(title: string, year?: number): Promise<string | und
   }
 }
 
-/** Makes sure both IMDb and TMDB ids are known (Cinemeta lookup / IMDb CDN / title search). */
+/** Makes sure both IMDb and TMDB ids are known (deduplicated inflight + parallel lookups). */
 export async function ensureIds(media: MediaItem): Promise<ResolvedIds> {
   const key = media.id.toString();
   const cached = idCache.get(key);
   if (cached?.imdb && cached?.tmdb) return cached;
 
-  let imdb = cached?.imdb || media.imdbId;
-  let tmdb = cached?.tmdb || (!isForeignTmdb(media) ? media.tmdbId : undefined);
+  const inflight = idInflight.get(key);
+  if (inflight) return inflight;
 
+  const task = (async () => {
+    let imdb = cached?.imdb || media.imdbId;
+    let tmdb = cached?.tmdb || (!isForeignTmdb(media) ? media.tmdbId : undefined);
+
+    try {
+      const searchTitle = media.originalTitle || media.title;
+      if (!imdb) {
+        const lookups: Array<Promise<string | undefined>> = [
+          findImdbIdByTitle(searchTitle, media.year, isSeriesLike(media)),
+          lookupImdbCdn(searchTitle, media.year),
+        ];
+        if (media.title && media.title !== searchTitle) {
+          lookups.push(lookupImdbCdn(media.title, media.year));
+        }
+        const results = await Promise.allSettled(lookups);
+        for (const r of results) {
+          if (r.status === 'fulfilled' && r.value) {
+            imdb = r.value;
+            break;
+          }
+        }
+      }
+      if (imdb && !tmdb) {
+        const found = await getCinemetaMetaAny(imdb, isSeriesLike(media));
+        const real = found?.meta?.moviedb_id;
+        if (typeof real === 'number') tmdb = real;
+      }
+    } catch {
+      // keep what we have
+    }
+
+    const out = { imdb, tmdb };
+    idCache.set(key, out);
+    return out;
+  })();
+
+  idInflight.set(key, task);
   try {
-    const searchTitle = media.originalTitle || media.title;
-    if (!imdb) {
-      imdb = await findImdbIdByTitle(searchTitle, media.year, isSeriesLike(media));
-    }
-    if (!imdb) {
-      imdb = await lookupImdbCdn(searchTitle, media.year);
-    }
-    if (!imdb && media.title && media.title !== searchTitle) {
-      imdb = await lookupImdbCdn(media.title, media.year);
-    }
-    if (imdb && !tmdb) {
-      const found = await getCinemetaMetaAny(imdb, isSeriesLike(media));
-      const real = found?.meta?.moviedb_id;
-      if (typeof real === 'number') tmdb = real;
-    }
-  } catch {
-    // keep what we have
+    return await task;
+  } finally {
+    idInflight.delete(key);
   }
-
-  const out = { imdb, tmdb };
-  idCache.set(key, out);
-  return out;
 }
 
 // ───────────────────────────── Ukrainian dubbing (UAKino Mirrors + Kinobox → Ashdi) ─────────────────────────────
 
 const uaCache = new Map<string, StreamServer | null>();
+const uaInflight = new Map<string, Promise<StreamServer | null>>();
 const kinoboxLiveCache = new Map<string, StreamServer[]>();
 
 const UAKINO_MIRRORS = [
@@ -167,117 +191,142 @@ export async function resolveUaServer(
   const cacheKey = `${media.id}-${slug || origSlug}-${media.year}-${season}`;
   if (uaCache.has(cacheKey)) return uaCache.get(cacheKey)!;
 
-  let result: StreamServer | null = null;
-  const extraLiveServers: StreamServer[] = [];
-  const ids = await ensureIds(media);
+  const inflight = uaInflight.get(cacheKey);
+  if (inflight) return inflight;
 
-  // 1. Fast direct lookup via Kinobox Players API for Ashdi + Voidboost + Alloha + Kodik
-  if (ids.imdb || ids.tmdb) {
-    try {
-      const q: string[] = [];
-      if (ids.imdb) q.push(`imdb=${encodeURIComponent(ids.imdb)}`);
-      if (ids.tmdb) q.push(`tmdb=${encodeURIComponent(String(ids.tmdb))}`);
-      const kb = await httpText(`https://api.kinobox.tv/api/players?${q.join('&')}`, 2500);
-      if (kb.status === 200 && kb.text) {
-        const parsed = JSON.parse(kb.text);
-        const list: any[] = Array.isArray(parsed)
-          ? parsed
-          : Array.isArray(parsed?.data)
-          ? parsed.data
-          : [];
-        for (const p of list) {
-          if (!p?.iframeUrl || typeof p.iframeUrl !== 'string') continue;
-          const rawUrl = p.iframeUrl.startsWith('//') ? `https:${p.iframeUrl}` : String(p.iframeUrl);
-          const srcLower = `${String(p.type || p.source || '')} ${rawUrl}`.toLowerCase();
+  const task = (async (): Promise<StreamServer | null> => {
+    let result: StreamServer | null = null;
+    const extraLiveServers: StreamServer[] = [];
+    const ids = await ensureIds(media);
 
-          if (!result && srcLower.includes('ashdi')) {
-            result = {
-              id: 'ua-ashdi',
-              name: '🇺🇦 UAKino • Ashdi VIP (Український дубляж 1080p)',
-              badge: '🇺🇦 UAKino',
-              url: rawUrl,
-              mode: 'embed',
-              langs: ['UA', 'UK'],
-            };
-          } else if (
-            srcLower.includes('voidboost') ||
-            srcLower.includes('rezka')
-          ) {
-            extraLiveServers.push({
-              id: 'rezka-voidboost-live',
-              name: '🎬 HDRezka Direct VIP (Живе дзеркало • Укр та всі студії)',
-              badge: '🇺🇦 HDRezka VIP',
-              url: rawUrl,
-              mode: 'embed',
-              langs: ['UA', 'MULTI', 'EN', 'RU', 'SUB'],
-            });
-          } else if (srcLower.includes('veoveo')) {
-            extraLiveServers.push({
-              id: 'ua-veoveo-live',
-              name: '🇺🇦 UA / Multi • Veoveo Direct HD (Багатозвучка)',
-              badge: 'Veoveo HD',
-              url: rawUrl,
-              mode: 'embed',
-              langs: ['UA', 'MULTI', 'EN', 'RU'],
-            });
-          } else if (srcLower.includes('alloha')) {
-            extraLiveServers.push({
-              id: 'ua-alloha-live',
-              name: '🇺🇦 UA / Multi • Alloha VIP (Дубляж та Студії)',
-              badge: 'Alloha HD',
-              url: rawUrl,
-              mode: 'embed',
-              langs: ['UA', 'MULTI', 'EN', 'RU'],
-            });
-          } else if (srcLower.includes('kodik')) {
-            extraLiveServers.push({
-              id: 'ua-kodik-live',
-              name: '🌐 Kodik Direct HD (Серіали та Аніме)',
-              badge: 'Kodik HD',
-              url: rawUrl,
-              mode: 'embed',
-              langs: ['UA', 'MULTI', 'RU'],
-            });
-          }
-        }
-        if (extraLiveServers.length > 0) {
-          kinoboxLiveCache.set(cacheKey, extraLiveServers);
-        }
-      }
-    } catch {
-      // Fallback to UAKino mirror search below
-    }
-  }
-
-  // 2. Multi-mirror UAKino search (uakino.best, uakino.me, uakino.eu, uakino.club)
-  const searchQueries = Array.from(new Set([primaryTitle, origTitle].filter(Boolean)));
-
-  for (const query of searchQueries) {
-    if (result) break;
-    for (const mirrorBase of UAKINO_MIRRORS) {
-      if (result) break;
+    // 1. Fast non-blocking lookup via Kinobox Players API (short 1.5s timeout so dead domains never stall)
+    const kinoboxPromise = (async () => {
+      if (!ids.imdb && !ids.tmdb) return null;
       try {
-        const search = await httpText(
-          `${mirrorBase}/index.php?do=search&subaction=search&story=${encodeURIComponent(query)}`,
-          2800
-        );
-        if (search.status === 200 && search.text) {
-          const urls = Array.from(
-            new Set(
-              [
-                ...search.text.matchAll(
-                  /https?:\/\/uakino\.[a-z]+\/[a-z0-9-]+\/\d+-([a-z0-9-]+)\.html/gi
-                ),
-              ].map((m) => `${m[0]}|${m[1]}`)
-            )
-          );
+        const q: string[] = [];
+        if (ids.imdb) q.push(`imdb=${encodeURIComponent(ids.imdb)}`);
+        if (ids.tmdb) q.push(`tmdb=${encodeURIComponent(String(ids.tmdb))}`);
+        const kb = await httpText(`https://api.kinobox.tv/api/players?${q.join('&')}`, 1500);
+        if (kb.status === 200 && kb.text) {
+          const parsed = JSON.parse(kb.text);
+          const list: any[] = Array.isArray(parsed)
+            ? parsed
+            : Array.isArray(parsed?.data)
+            ? parsed.data
+            : [];
+          let foundAshdi: StreamServer | null = null;
+          for (const p of list) {
+            if (!p?.iframeUrl || typeof p.iframeUrl !== 'string') continue;
+            const rawUrl = p.iframeUrl.startsWith('//') ? `https:${p.iframeUrl}` : String(p.iframeUrl);
+            const srcLower = `${String(p.type || p.source || '')} ${rawUrl}`.toLowerCase();
 
-          const candidates = urls.map((u) => {
+            if (!foundAshdi && srcLower.includes('ashdi')) {
+              foundAshdi = {
+                id: 'ua-ashdi',
+                name: '🇺🇦 UAKino • Ashdi VIP (Український дубляж 1080p)',
+                badge: '🇺🇦 UAKino',
+                url: rawUrl,
+                mode: 'embed',
+                langs: ['UA', 'UK'],
+              };
+            } else if (srcLower.includes('voidboost') || srcLower.includes('rezka')) {
+              extraLiveServers.push({
+                id: 'rezka-voidboost-live',
+                name: '🎬 HDRezka Direct VIP (Живе дзеркало • Укр та всі студії)',
+                badge: '🇺🇦 HDRezka VIP',
+                url: rawUrl,
+                mode: 'embed',
+                langs: ['UA', 'MULTI', 'EN', 'RU', 'SUB'],
+              });
+            } else if (srcLower.includes('veoveo')) {
+              extraLiveServers.push({
+                id: 'ua-veoveo-live',
+                name: '🇺🇦 UA / Multi • Veoveo Direct HD (Багатозвучка)',
+                badge: 'Veoveo HD',
+                url: rawUrl,
+                mode: 'embed',
+                langs: ['UA', 'MULTI', 'EN', 'RU'],
+              });
+            } else if (srcLower.includes('alloha')) {
+              extraLiveServers.push({
+                id: 'ua-alloha-live',
+                name: '🇺🇦 UA / Multi • Alloha VIP (Дубляж та Студії)',
+                badge: 'Alloha HD',
+                url: rawUrl,
+                mode: 'embed',
+                langs: ['UA', 'MULTI', 'EN', 'RU'],
+              });
+            } else if (srcLower.includes('kodik')) {
+              extraLiveServers.push({
+                id: 'ua-kodik-live',
+                name: '🌐 Kodik Direct HD (Серіали та Аніме)',
+                badge: 'Kodik HD',
+                url: rawUrl,
+                mode: 'embed',
+                langs: ['UA', 'MULTI', 'RU'],
+              });
+            }
+          }
+          if (extraLiveServers.length > 0) {
+            kinoboxLiveCache.set(cacheKey, extraLiveServers);
+          }
+          return foundAshdi;
+        }
+      } catch {
+        // Fallback to UAKino mirror search below
+      }
+      return null;
+    })();
+
+    // 2. Parallel UAKino mirror search (only top query + parallel mirrors instead of slow 8x sequential timeouts)
+    const uakinoPromise = (async (): Promise<StreamServer | null> => {
+      const searchQueries = Array.from(new Set([primaryTitle, origTitle].filter(Boolean)));
+      for (const query of searchQueries) {
+        try {
+          const mirrorPick = await new Promise<{ mirrorBase: string; urls: string[] } | null>(
+            (resolve) => {
+              let settled = false;
+              let remaining = UAKINO_MIRRORS.length;
+              UAKINO_MIRRORS.forEach((mirrorBase) => {
+                httpText(
+                  `${mirrorBase}/index.php?do=search&subaction=search&story=${encodeURIComponent(query)}`,
+                  2000
+                )
+                  .then((search) => {
+                    if (search.status === 200 && search.text) {
+                      const urls = Array.from(
+                        new Set(
+                          [
+                            ...search.text.matchAll(
+                              /https?:\/\/uakino\.[a-z]+\/[a-z0-9-]+\/\d+-([a-z0-9-]+)\.html/gi
+                            ),
+                          ].map((m) => `${m[0]}|${m[1]}`)
+                        )
+                      );
+                      if (!settled && urls.length > 0) {
+                        settled = true;
+                        resolve({ mirrorBase, urls });
+                        return;
+                      }
+                    }
+                    remaining--;
+                    if (!settled && remaining <= 0) resolve(null);
+                  })
+                  .catch(() => {
+                    remaining--;
+                    if (!settled && remaining <= 0) resolve(null);
+                  });
+              });
+            }
+          );
+          if (!mirrorPick) continue;
+
+          const candidates = mirrorPick.urls.map((u: string) => {
             const [url, tail] = u.split('|');
             return { url, tail };
           });
 
-          const scored = candidates.map((c) => {
+          const scored = candidates.map((c: { url: string; tail: string }) => {
             let score = 0;
             if (slug && c.tail.includes(slug)) score += 50;
             if (origSlug && c.tail.includes(origSlug)) score += 40;
@@ -287,18 +336,18 @@ export async function resolveUaServer(
             return { ...c, score };
           });
 
-          scored.sort((a, b) => b.score - a.score);
+          scored.sort((a: { score: number }, b: { score: number }) => b.score - a.score);
           const pick = scored[0];
 
           if (pick && (pick.score > 20 || candidates.length === 1)) {
-            const pageUrl = pick.url.replace(/^https?:\/\/uakino\.[a-z]+/i, mirrorBase);
-            const page = await httpText(pageUrl, 2800);
+            const pageUrl = pick.url.replace(/^https?:\/\/uakino\.[a-z]+/i, mirrorPick.mirrorBase);
+            const page = await httpText(pageUrl, 2000);
             const m =
               page.text.match(/https:\/\/(?:ashdi\.vip|uakino\.[a-z]+)\/(?:vod|serial|embed)?\/\d+/i) ||
               page.text.match(/iframe[^>]+src=["'](https?:\/\/[^"']*(?:ashdi|uakino)[^"']*)["']/i);
             if (m) {
               const embedUrl = m[1] || m[0];
-              result = {
+              return {
                 id: 'ua-ashdi',
                 name: '🇺🇦 UAKino • Ashdi VIP (Український дубляж 1080p)',
                 badge: '🇺🇦 UAKino',
@@ -308,16 +357,25 @@ export async function resolveUaServer(
               };
             }
           }
-          if (urls.length > 0) break;
+        } catch {
+          // Try next query
         }
-      } catch {
-        // Try next UAKino mirror
       }
-    }
-  }
+      return null;
+    })();
 
-  uaCache.set(cacheKey, result);
-  return result;
+    const [kbRes, uaRes] = await Promise.all([kinoboxPromise, uakinoPromise]);
+    result = kbRes || uaRes;
+    uaCache.set(cacheKey, result);
+    return result;
+  })();
+
+  uaInflight.set(cacheKey, task);
+  try {
+    return await task;
+  } finally {
+    uaInflight.delete(cacheKey);
+  }
 }
 
 export function getCachedUaServer(media: MediaItem, season: number = 1): StreamServer | null {

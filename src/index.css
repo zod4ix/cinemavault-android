@@ -151,8 +151,8 @@ select:focus,
 select:focus-visible,
 [data-cinema-focused="true"] {
   outline: none !important;
-  box-shadow: 0 0 0 3px #ef4444, 0 0 22px rgba(239, 68, 68, 0.85) !important;
-  transition: transform 0.14s ease-out, box-shadow 0.14s ease-out !important;
+  box-shadow: 0 0 0 3px #ef4444, 0 0 0 6px rgba(239, 68, 68, 0.25) !important;
+  transition: transform 0.12s ease-out !important;
 }
 
 /* TV Card / Item focus & hover pop */
@@ -188,9 +188,8 @@ select:focus-visible,
 }
 
 /* Low-end GPU & TV Chipset rendering optimization:
-   Skip layout passes for offscreen rows & cards to maintain solid 60 FPS */
+   Skip layout passes for offscreen rows & cards to maintain solid 60 FPS without wasting GPU VRAM */
 [data-nav-row="media-row"] {
   content-visibility: auto;
   contain-intrinsic-size: 260px;
-  will-change: transform;
 }

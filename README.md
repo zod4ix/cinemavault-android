@@ -1,13 +1,31 @@
-# 🎬 CinemaVault PRO v3.7.4 (Real-Time Ecosystem Sync, Projector Remote Keyboard, UAKino & Share Movie Deep Links)
+# 🎬 CinemaVault PRO v3.7.6 (Native Media3 ExoPlayer, Direct 1080p HLS Extraction & Guaranteed Sports Streams)
 
-> **Автономний мультиплатформний онлайн-кінотеатр та спортивний хаб «для своїх»**: оптимізований під **Smart TV (Android TV / Google TV / TV-бокси / проєктори)**, пульти дистанційного керування (2D Spatial D-Pad), **пульти-указки (Air Mouse / гіроскоп)**, планшети, смартфони, комп'ютерні миші та клавіатури. Без реклами, з прямим **P2P-програванням торрентів онлайн (Torrentio + TPB + YTS + EZTV)**, наскрізним керуванням усіма внутрішніми елементами плеєрів (HDRezka #1, UAKino / Ashdi VIP, Videasy, VidLink, HLS), окремим потужним комбайном **🔴 Спорт Live 24/7 (NBA, Футбол, АПЛ, NHL, Формула 1, Бокс/UFC, Теніс)**, **15+ джерелами (HDRezka на чолі списку + UAKino одразу після HDRezka)**, нескінченною бібліотекою контенту (від золотої класики до новинок 2026), самовідновленням (`Self-Healing Engine`), GitHub Auto-Updater та крос-девайс екосистемою синхронізації в реальному часі.
+> **Автономний мультиплатформний онлайн-кінотеатр та спортивний хаб «для своїх»**: оптимізований під **Smart TV (TCL, Android TV / Google TV / TV-бокси / проєктори)**, пульти дистанційного керування (2D Spatial D-Pad), **пульти-указки (Air Mouse / гіроскоп)**, планшети, смартфони, комп'ютерні миші та клавіатури. Без реклами, з апаратним **Native ExoPlayer (Media3)**, прямим витягуванням `master.m3u8` потоків 1080p, окремим потужним комбайном **🔴 Спорт Live 24/7 (NBA, Футбол, АПЛ, NHL, Формула 1, Бокс/UFC, Теніс)**, **15+ джерелами (HDRezka на чолі списку + UAKino одразу після HDRezka)**, P2P-торрентами, самовідновленням (`Self-Healing Engine`), GitHub Auto-Updater та крос-девайс екосистемою синхронізації в реальному часі.
 
-## 📲 Завантажити актуальну версію v3.7.4 (Android, Windows & macOS)
-- **[Завантажити CinemaVault-PRO-v3.7.4-Windows.exe (Windows 10/11 Інсталятор)](https://github.com/zod4ix/cinemavault-android/releases/download/v3.7.4/CinemaVault-PRO-v3.7.4-Windows.exe)** *(Офіційна збірка v3.7.4 для Windows із плавним автооновленням, брендовим логотипом, HDRezka #1, UAKino, Deep Links та апаратним відтворенням 4K/HLS)*
-- **[Завантажити CinemaVault-PRO-v3.7.4.apk (Android / Smart TV / Проєктори)](https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.7.4.apk)** *(Найновіша актуальна версія v3.7.4 для планшетів, смартфонів, Smart TV, проєкторів та TV Box)*
-- **[Завантажити CinemaVault-PRO-v3.7.4-macOS.dmg (Apple macOS)](https://github.com/zod4ix/cinemavault-android/releases/download/v3.7.4/CinemaVault-PRO-v3.7.4-macOS.dmg)** *(Версія для macOS Desktop)*
+## 📲 Завантажити актуальну версію v3.7.6 (Android & Windows)
+- **[Завантажити CinemaVault-PRO-v3.7.6-Windows.exe (Windows 10/11 Інсталятор)](https://github.com/zod4ix/cinemavault-android/releases/download/v3.7.6/CinemaVault-PRO-v3.7.6-Windows.exe)** *(Офіційна збірка v3.7.6 для Windows із плавним автооновленням, брендовим логотипом, прямими HLS потоками та апаратним відтворенням 4K/HLS)*
+- **[Завантажити CinemaVault-PRO-v3.7.6.apk (Android / Smart TV / Проєктори)](https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.7.6.apk)** *(Найновіша актуальна версія v3.7.6 з нативним ExoPlayer Media3 для Smart TV, TCL, проєкторів, планшетів та смартфонів)*
 - **[Офіційний каталог програм Vinegret.net](https://vinegret.net/prostye-poleznye-programmy-dlja-windows/)** *(Корисні програми та утиліти для Windows та Android)*
 - **[Сторінка релізу на GitHub](https://github.com/zod4ix/cinemavault-android/releases/latest)**
+
+---
+
+## 🔥 Що нового у версії v3.7.6 PRO
+
+0. **⚡ Нативний Media3 ExoPlayer з Video Tunneling для Android TV (TCL / Smart TV / Проєктори)**:
+   - **Апаратне відтворення без WebView**: відеопотоки HLS (`.m3u8`) запускаються в нативному `PlayerView` (`SurfaceView` + Hardware Video Tunneling) поверх прихованого WebView, що знімає навантаження з CPU/GPU телевізора і прибирає лаги на 1080p/4K.
+   - **Повне керування з пульта**: миттєва прокрутка `-10с / +10с`, вибір озвучки зі справжніми назвами студій (автоматичний пріоритет української доріжки), субтитри VTT та перемикання формату екрану.
+
+1. **🚀 Прямий екстрактор потоків (`streamExtractor`) без важких iframe та реклами**:
+   - **Миттєвий старт контенту**: додаток витягує прямий `master.m3u8`, список озвучок та субтитри напряму з дзеркал HDRezka (`embess`, `namy`, `kinogram`, `delivembd`) без завантаження стороннього JS-плеєра, WebRTC P2P та VAST-реклами.
+   - **Передзавантаження в картці фільму та усунення дублювання запитів**: поки відкрита картка фільму, потік вже кешується; паралельний пошук дзеркал UAKino без блокування запуску.
+
+2. **🏆 Спорт Live 24/7 — усі події зі стабільним та швидким відео**:
+   - **Прямий HLS-резолвер StreamFree**: виправлено URL (`1080p` замість неактивного `1080p2`), реалізовано пряме витягування `.m3u8` без JWPlayer і popunder-скриптів.
+   - **100% подій з відео**: розумний матчинг команд (нормалізація діакритики та скорочень на кшталт `PSG`, `Man Utd`, `Bayern München`), пріоритезація швидких Cloud CDN HLS-каналів для майбутніх/завершених подій та реальний watchdog-перехід на наступний робочий потік.
+
+3. **🎨 Легкий 60 FPS UI для слабких GPU та чистий реліз (Android & Windows)**:
+   - Оптимізовано `spatialNav.ts` (швидка перевірка класів замість зайвих `getComputedStyle`), прибрано зайві GPU-шари `will-change` і важкі розмиття тіней фокусу, вимкнено `webContentsDebuggingEnabled` у релізі та прискорено `shouldInterceptRequest` у `MainActivity.java`.
 
 ---
 

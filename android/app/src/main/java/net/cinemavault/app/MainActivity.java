@@ -72,6 +72,22 @@ public class MainActivity extends BridgeActivity {
     private static boolean isAdRequest(String urlStr) {
         if (urlStr == null || urlStr.isEmpty()) return false;
         String lower = urlStr.toLowerCase(Locale.US);
+        // Fast-path: bypass ad scan for media segments, playlists, subtitles, and trusted CDNs
+        if (
+            lower.contains("image.tmdb.org") ||
+            lower.contains("a.espncdn.com") ||
+            lower.contains("interkh.com") ||
+            lower.contains("tiktok.com") ||
+            lower.endsWith(".ts") ||
+            lower.endsWith(".m4s") ||
+            lower.endsWith(".m3u8") ||
+            lower.endsWith(".vtt") ||
+            lower.contains(".ts?") ||
+            lower.contains(".m4s?") ||
+            lower.contains(".m3u8?")
+        ) {
+            return false;
+        }
         for (String domain : AD_BLOCK_DOMAINS) {
             if (lower.contains(domain)) return true;
         }
@@ -86,6 +102,7 @@ public class MainActivity extends BridgeActivity {
                lower.contains("adsbygoogle");
     }
 
+    private NativeVideoOverlay nativeVideoOverlay = null;
     private View customFullscreenView = null;
     private BridgeWebChromeClient.CustomViewCallback customViewCallback = null;
     private boolean isPlayerLandscape = false;
@@ -316,6 +333,66 @@ public class MainActivity extends BridgeActivity {
                 }
             }
         });
+
+        // Attach Hardware-Accelerated Native Media3 ExoPlayer Overlay (0% WebView compositing overhead)
+        nativeVideoOverlay = new NativeVideoOverlay(this, new NativeVideoOverlay.Listener() {
+            @Override
+            public void onProgress(double currentSec, double durationSec, boolean isPlaying) {
+                if (bridge == null || bridge.getWebView() == null) return;
+                String js = String.format(
+                    Locale.US,
+                    "if(window.__cinemaOnNativePlayerProgress){window.__cinemaOnNativePlayerProgress(%.2f,%.2f,%s);}",
+                    currentSec,
+                    durationSec,
+                    isPlaying ? "true" : "false"
+                );
+                bridge.getWebView().evaluateJavascript(js, null);
+            }
+
+            @Override
+            public void onClosed(double currentSec, double durationSec, boolean fallbackToWeb) {
+                if (bridge != null && bridge.getWebView() != null) {
+                    WebView wv = bridge.getWebView();
+                    wv.setVisibility(View.VISIBLE);
+                    wv.requestFocus();
+                    String js = String.format(
+                        Locale.US,
+                        "if(window.__cinemaOnNativePlayerClosed){window.__cinemaOnNativePlayerClosed(%.2f,%.2f,%s);}",
+                        currentSec,
+                        durationSec,
+                        fallbackToWeb ? "true" : "false"
+                    );
+                    wv.evaluateJavascript(js, null);
+                }
+                exitImmersiveLandscape();
+            }
+
+            @Override
+            public void onError(String message) {
+                if (bridge != null && bridge.getWebView() != null) {
+                    WebView wv = bridge.getWebView();
+                    wv.setVisibility(View.VISIBLE);
+                    wv.requestFocus();
+                    String safeMsg = (message != null ? message : "Native error")
+                        .replace("\\", "\\\\")
+                        .replace("'", "\\'")
+                        .replace("\n", " ");
+                    wv.evaluateJavascript(
+                        "if(window.__cinemaOnNativePlayerError){window.__cinemaOnNativePlayerError('" + safeMsg + "');}",
+                        null
+                    );
+                }
+                exitImmersiveLandscape();
+            }
+        });
+        FrameLayout decorOverlayRoot = (FrameLayout) getWindow().getDecorView();
+        decorOverlayRoot.addView(
+            nativeVideoOverlay.getRootView(),
+            new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        );
 
         handleDeepLinkIntent(getIntent());
     }
@@ -968,6 +1045,10 @@ public class MainActivity extends BridgeActivity {
         int action = event.getAction();
         long now = SystemClock.uptimeMillis();
 
+        if (nativeVideoOverlay != null && nativeVideoOverlay.isShowing()) {
+            if (nativeVideoOverlay.handleKeyEvent(event)) return true;
+        }
+
         // 1. Handle D-Pad Directional Keys directly via JS bridge so cross-origin iframes
         // in VideoPlayer / SportsHub can NEVER trap or swallow remote control navigation!
         if (
@@ -1168,6 +1249,34 @@ public class MainActivity extends BridgeActivity {
             }
             ViewCompat.requestApplyInsets(getWindow().getDecorView());
         });
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        if (nativeVideoOverlay != null) {
+            nativeVideoOverlay.onPause();
+        }
+    }
+
+    @Override
+    public void onDestroy() {
+        if (nativeVideoOverlay != null) {
+            nativeVideoOverlay.releasePlayerOnly();
+        }
+        super.onDestroy();
+    }
+
+    @Override
+    public void onTrimMemory(int level) {
+        super.onTrimMemory(level);
+        if (level >= TRIM_MEMORY_RUNNING_LOW) {
+            runOnUiThread(() -> {
+                if (bridge != null && bridge.getWebView() != null) {
+                    bridge.getWebView().clearCache(false);
+                }
+            });
+        }
     }
 
     @Override
@@ -1516,6 +1625,56 @@ public class MainActivity extends BridgeActivity {
         }
 
         @JavascriptInterface
+        public boolean isNativePlayerSupported() {
+            return nativeVideoOverlay != null;
+        }
+
+        @JavascriptInterface
+        public void playNativeStream(
+            String url,
+            String title,
+            String subtitle,
+            double startSeconds,
+            String referer,
+            String audioLabelsJson,
+            int preferredAudioIdx,
+            String subtitlesJson,
+            boolean liveStream
+        ) {
+            if (url == null || url.trim().isEmpty() || nativeVideoOverlay == null) return;
+            final String cleanUrl = url.trim();
+            PackageManager pm = getPackageManager();
+            final boolean isTvDevice = pm.hasSystemFeature(PackageManager.FEATURE_LEANBACK) ||
+                (getResources().getConfiguration().uiMode & Configuration.UI_MODE_TYPE_MASK) == Configuration.UI_MODE_TYPE_TELEVISION;
+
+            runOnUiThread(() -> {
+                if (bridge != null && bridge.getWebView() != null) {
+                    bridge.getWebView().setVisibility(View.INVISIBLE);
+                }
+                enterImmersiveLandscape();
+                nativeVideoOverlay.showAndPlay(
+                    cleanUrl,
+                    title,
+                    subtitle,
+                    startSeconds,
+                    referer,
+                    audioLabelsJson,
+                    preferredAudioIdx,
+                    subtitlesJson,
+                    liveStream,
+                    isTvDevice
+                );
+            });
+        }
+
+        @JavascriptInterface
+        public void stopNativeStream() {
+            if (nativeVideoOverlay != null && nativeVideoOverlay.isShowing()) {
+                nativeVideoOverlay.close(false);
+            }
+        }
+
+        @JavascriptInterface
         public void openExternalUrl(String url) {
             if (url == null || url.trim().isEmpty()) return;
             final String cleanUrl = url.trim();
@@ -1531,7 +1690,7 @@ public class MainActivity extends BridgeActivity {
                 } catch (Exception noBrowserException) {
                     // Projector has no browser installed: fall back to direct in-app APK download!
                     downloadAndInstallApkInternal(
-                        "https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.7.5.apk"
+                        "https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v3.7.6.apk"
                     );
                 }
             });

@@ -12,7 +12,8 @@ import { getCinemetaSeasons } from '../services/cinemeta';
 import { torrentService } from '../services/torrent';
 import { useLanguage } from '../i18n/LanguageContext';
 import { useOverview } from '../i18n/useOverview';
-import { ServerHealth } from '../services/servers';
+import { ServerHealth, isSeriesLike } from '../services/servers';
+import { extractDirectStreamByImdb } from '../services/streamExtractor';
 import { openExternalDownload } from '../services/updater';
 import { RatingFeedback } from './RatingFeedback';
 import { MediaCard } from './MediaCard';
@@ -77,12 +78,14 @@ export const MediaModal: React.FC<MediaModalProps> = ({
     setSources(rezkaService.buildSourcesSync(media, 1, 1));
     setServerHealth({});
 
-    // Resolve UA dubbing + server health in background
+    // Pre-warm direct HLS (.m3u8) stream in background so clicking "Watch Now" starts in 0ms!
+    if (media.imdbId) {
+      extractDirectStreamByImdb(media.imdbId, 1, 1, isSeriesLike(media)).catch(() => null);
+    }
+
+    // Resolve IDs & UA dubbing in background without hammering all 15 external embed hosts
     rezkaService.resolveSources(media, 1, 1, {
-      withHealth: true,
-      onHealth: (id, h) => {
-        if (active) setServerHealth((prev) => (prev[id] === h ? prev : { ...prev, [id]: h }));
-      },
+      withHealth: false,
     }).then((resolved) => {
       if (active && resolved.length > 0) setSources(resolved);
     });
@@ -135,11 +138,16 @@ export const MediaModal: React.FC<MediaModalProps> = ({
     if (!media || !selectedEpisode) return;
     let active = true;
     setSources(rezkaService.buildSourcesSync(media, selectedEpisode.seasonNumber, selectedEpisode.episodeNumber));
+    if (media.imdbId) {
+      extractDirectStreamByImdb(
+        media.imdbId,
+        selectedEpisode.seasonNumber,
+        selectedEpisode.episodeNumber,
+        true
+      ).catch(() => null);
+    }
     rezkaService.resolveSources(media, selectedEpisode.seasonNumber, selectedEpisode.episodeNumber, {
-      withHealth: true,
-      onHealth: (id, h) => {
-        if (active) setServerHealth((prev) => (prev[id] === h ? prev : { ...prev, [id]: h }));
-      },
+      withHealth: false,
     }).then((resolved) => {
       if (active && resolved.length > 0) setSources(resolved);
     });

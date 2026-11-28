@@ -69,21 +69,13 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
   const latestVer = updateInfo?.latestVersion || currentVer;
   const hasUpdate = Boolean(updateInfo?.hasUpdate);
   const isDesktop = Boolean((window as any).AndroidCinemaBridge?.isDesktop);
-  const desktopPlatform = (window as any).AndroidCinemaBridge?.platform || 'win32';
   const apkUrl =
     updateInfo?.apkDownloadUrl ||
     `https://github.com/zod4ix/cinemavault-android/raw/main/CinemaVault-PRO-v${latestVer}.apk`;
   const winUrl =
     updateInfo?.winDownloadUrl ||
     `https://github.com/zod4ix/cinemavault-android/releases/download/v${latestVer}/CinemaVault-PRO-v${latestVer}-Windows.exe`;
-  const macUrl =
-    updateInfo?.macDownloadUrl ||
-    `https://github.com/zod4ix/cinemavault-android/releases/download/v${latestVer}/CinemaVault-PRO-v${latestVer}-macOS.dmg`;
-  const primaryUpdateUrl = isDesktop
-    ? desktopPlatform === 'darwin'
-      ? macUrl
-      : winUrl
-    : apkUrl;
+  const primaryUpdateUrl = isDesktop ? winUrl : apkUrl;
   const releaseUrl =
     updateInfo?.releasePageUrl ||
     'https://github.com/zod4ix/cinemavault-android/releases/latest';

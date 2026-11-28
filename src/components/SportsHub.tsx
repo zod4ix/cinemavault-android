@@ -26,6 +26,7 @@ import {
   SportStreamNode,
 } from '../types/sports';
 import { sportsService, resolveTeamLogo } from '../services/sports';
+import { resolveStrmFreeLiveStream } from '../services/streamExtractor';
 
 interface SportsHubProps {
   onBackHome: () => void;
@@ -115,6 +116,7 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
 
   const [streamHuntingMsg, setStreamHuntingMsg] = useState<string | null>(null);
   const [iframeLoading, setIframeLoading] = useState<boolean>(true);
+  const [forceSportsWebHls, setForceSportsWebHls] = useState<boolean>(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
@@ -248,20 +250,122 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
     return () => window.removeEventListener('message', handleMessage);
   }, [activePlayback]);
 
-  // Connection watchdog: if an embed stream hangs on loading for >7.5s, auto-switch to next slot
+  // Connection watchdog: if an embed stream hangs on loading for >7s, auto-switch to next working slot!
   useEffect(() => {
-    if (!activePlayback || !activeNode || !iframeLoading) return;
+    if (!activePlayback || !activeNode || !iframeLoading || activeNode.mode !== 'embed') return;
     const timer = setTimeout(() => {
-      setIframeLoading(false);
-    }, 6500);
+      if (activePlayback.streams.length > 1) {
+        switchToNextStreamNode('Потік не відповідає');
+      } else {
+        setIframeLoading(false);
+      }
+    }, 7000);
     return () => clearTimeout(timer);
-  }, [activePlayback?.id, activeNode?.id, iframeLoading]);
+  }, [activePlayback?.id, activeNode?.id, activeNode?.mode, iframeLoading]);
 
-  // Native HLS (.m3u8) stream lifecycle with high-resilience buffer & self-healing recovery
+  // Smart StreamFree Direct HLS Resolver: extracts direct .m3u8 (zero ads/JWPlayer) or skips unstarted streams!
   useEffect(() => {
-    if (!activeNode || activeNode.mode !== 'hls') return;
+    if (!activePlayback || !activeNode || activeNode.mode !== 'embed') return;
+    if (!activeNode.url.includes('strmfree.st/embed/')) return;
+    const rawKey = activeNode.url.split('/').pop()?.split('?')[0] || '';
+    if (!rawKey) return;
+
+    let cancelled = false;
+    resolveStrmFreeLiveStream(rawKey).then((resolved) => {
+      if (cancelled) return;
+      if (!resolved) {
+        // Stream is not live yet (sources: []): auto-jump to first verified live Cloud HLS slot!
+        setActivePlayback((prev) => {
+          if (!prev) return null;
+          const hlsIdx = prev.streams.findIndex((s) => s.mode === 'hls');
+          if (hlsIdx >= 0 && hlsIdx !== prev.activeIndex) {
+            setStreamHuntingMsg('Матч ще не стартував → Активовано живий Cloud HLS 1080p');
+            setTimeout(() => setStreamHuntingMsg(null), 3200);
+            return { ...prev, activeIndex: hlsIdx };
+          }
+          return prev;
+        });
+        return;
+      }
+
+      if (resolved.hlsUrl) {
+        // Upgrade this StreamFree slot to direct HLS (.m3u8) for instant native/ExoPlayer playback!
+        setActivePlayback((prev) => {
+          if (!prev) return null;
+          const cur = prev.streams[prev.activeIndex];
+          if (!cur || cur.id !== activeNode.id) return prev;
+          const nextStreams = prev.streams.map((s, idx) =>
+            idx === prev.activeIndex
+              ? { ...s, mode: 'hls' as const, url: resolved.hlsUrl!, badge: 'DIRECT HLS • 1080p' }
+              : s
+          );
+          return { ...prev, streams: nextStreams };
+        });
+      } else if (resolved.embedUrl && resolved.embedUrl !== activeNode.url) {
+        setActivePlayback((prev) => {
+          if (!prev) return null;
+          const cur = prev.streams[prev.activeIndex];
+          if (!cur || cur.id !== activeNode.id) return prev;
+          const nextStreams = prev.streams.map((s, idx) =>
+            idx === prev.activeIndex ? { ...s, url: resolved.embedUrl } : s
+          );
+          return { ...prev, streams: nextStreams };
+        });
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activePlayback?.id, activeNode?.id, activeNode?.url, activeNode?.mode]);
+
+  // Native HLS (.m3u8) stream lifecycle: Hardware ExoPlayer on Android TV/Mobile + Fast-Startup HLS.js on Desktop/Web
+  useEffect(() => {
+    if (!activeNode || activeNode.mode !== 'hls' || !activeNode.url) return;
+
+    const canUseNativeOverlay =
+      !forceSportsWebHls &&
+      Boolean(window.AndroidCinemaBridge?.isNativePlayerSupported?.()) &&
+      Boolean(window.AndroidCinemaBridge?.playNativeStream);
+
+    if (canUseNativeOverlay && activePlayback) {
+      setIframeLoading(false);
+      window.__cinemaOnNativePlayerProgress = undefined;
+      window.__cinemaOnNativePlayerClosed = (_c, _d, fallbackToWeb) => {
+        if (fallbackToWeb) {
+          setForceSportsWebHls(true);
+        } else {
+          setActivePlayback(null);
+        }
+      };
+      window.__cinemaOnNativePlayerError = () => {
+        setForceSportsWebHls(true);
+        switchToNextStreamNode('Потік зайнятий');
+      };
+
+      window.AndroidCinemaBridge!.playNativeStream!(
+        activeNode.url,
+        activePlayback.title,
+        `${activePlayback.badge} • ${activeNode.name}`,
+        0,
+        'https://vinegret.net/',
+        '[]',
+        -1,
+        '[]',
+        true
+      );
+
+      return () => {
+        window.__cinemaOnNativePlayerClosed = undefined;
+        window.__cinemaOnNativePlayerError = undefined;
+        try {
+          window.AndroidCinemaBridge?.stopNativeStream?.();
+        } catch {}
+      };
+    }
+
     const video = videoRef.current;
-    if (!video || !activeNode.url) return;
+    if (!video) return;
 
     setIframeLoading(true);
     let hasStartedPlayback = false;
@@ -272,16 +376,22 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
       const hls = new Hls({
         enableWorker: true,
         lowLatencyMode: false,
-        backBufferLength: 60,
-        maxBufferLength: 60,
-        maxMaxBufferLength: 120,
+        backBufferLength: 15,
+        liveBackBufferLength: 15,
+        maxBufferLength: 30,
+        maxMaxBufferLength: 60,
+        maxBufferSize: 30 * 1000 * 1000,
+        maxBufferHole: 0.5,
+        highBufferWatchdogPeriod: 1,
+        nudgeOffset: 0.1,
+        nudgeMaxRetry: 3,
         liveSyncDurationCount: 3,
         liveMaxLatencyDurationCount: 10,
-        manifestLoadingTimeOut: 4500,
+        manifestLoadingTimeOut: 7000,
         manifestLoadingMaxRetry: 2,
-        levelLoadingTimeOut: 5000,
+        levelLoadingTimeOut: 7000,
         levelLoadingMaxRetry: 3,
-        fragLoadingTimeOut: 8000,
+        fragLoadingTimeOut: 12000,
         fragLoadingMaxRetry: 4,
       });
       hlsRef.current = hls;
@@ -340,7 +450,7 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
         hlsRef.current = null;
       }
     };
-  }, [activeNode?.id, activeNode?.url, activeNode?.mode]);
+  }, [activeNode?.id, activeNode?.url, activeNode?.mode, forceSportsWebHls]);
 
   // Escape key closes active sports player first, then returns to Home
   useEffect(() => {
@@ -359,6 +469,7 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
   }, [activePlayback, onBackHome]);
 
   const openEventPlayer = (ev: SportEvent, initialIdx = 0) => {
+    setForceSportsWebHls(false);
     setIframeLoading(true);
     setActivePlayback({
       id: ev.id,
@@ -375,6 +486,7 @@ export const SportsHub: React.FC<SportsHubProps> = ({ onBackHome }) => {
   };
 
   const openChannelPlayer = (ch: SportChannel, initialIdx = 0) => {
+    setForceSportsWebHls(false);
     setIframeLoading(true);
     setActivePlayback({
       id: ch.id,

@@ -1,10 +1,9 @@
 import { httpGetJson } from './tmdb';
 
-export const APP_VERSION = '3.7.5';
+export const APP_VERSION = '3.7.6';
 export const GITHUB_REPO = 'zod4ix/cinemavault-android';
 export const DEFAULT_APK_URL = `https://github.com/${GITHUB_REPO}/raw/main/CinemaVault-PRO-v${APP_VERSION}.apk`;
 export const DEFAULT_WIN_URL = `https://github.com/${GITHUB_REPO}/releases/download/v${APP_VERSION}/CinemaVault-PRO-v${APP_VERSION}-Windows.exe`;
-export const DEFAULT_MAC_URL = `https://github.com/${GITHUB_REPO}/releases/download/v${APP_VERSION}/CinemaVault-PRO-v${APP_VERSION}-macOS.dmg`;
 export const GITHUB_RELEASE_PAGE = `https://github.com/${GITHUB_REPO}/releases/latest`;
 export const VINEGRET_PORTAL_URL = 'https://vinegret.net/prostye-poleznye-programmy-dlja-windows/';
 
@@ -14,7 +13,6 @@ export interface UpdateInfo {
   hasUpdate: boolean;
   apkDownloadUrl: string;
   winDownloadUrl: string;
-  macDownloadUrl: string;
   releasePageUrl: string;
   releaseNotes: string;
   publishedAt: string;
@@ -133,14 +131,13 @@ export const updaterService = {
     let latestVersion = APP_VERSION;
     let apkDownloadUrl = DEFAULT_APK_URL;
     let winDownloadUrl = DEFAULT_WIN_URL;
-    let macDownloadUrl = DEFAULT_MAC_URL;
     let releasePageUrl = GITHUB_RELEASE_PAGE;
     let releaseNotes =
-      '• 🚀 ОФІЦІЙНИЙ РЕЛІЗ 3.7.5: БЕЗШОВНИЙ DEEP LINKING, НАДСИЛАННЯ ФІЛЬМІВ ДРУГУ В ДОДАТКУ ЗА ID, ВИПРАВЛЕННЯ ВВЕДЕННЯ ПОШТИ НА ПРОЄКТОРАХ ТА МАКСИМАЛЬНА БЕЗПЕКА WINDOWS & ANDROID:\n' +
-      '• 🔗 РОЗУМНЕ ПОДІЛИТИСЯ ТА ПРЯМЕ НАДСИЛАННЯ ДРУГУ ЗА ID: нове вікно «Надіслати другу в CinemaVault» за персональним ID з миттєвою доставкою контенту на екран друга, швидкі коди фільмів та оновлена інтеграція Viber, Telegram і WhatsApp.\n' +
-      '• ⌨️ ВИПРАВЛЕНО ВВЕДЕННЯ EMAIL ТА ФОКУС НА ПРОЄКТОРАХ: усунено конфлікт фокусування WebView, через який курсор злітав з поля поштової адреси; автоматичне безшовне відкриття екранної пульт-клавіатури для ТВ та проєкторів.\n' +
-      '• 💻 БЕЗПЕКА WINDOWS ТА ЗАХИСТ ВІД SMARTSCREEN: повні метадані PE-видавця Vinegret.Net, безпечна пісочниця Electron, обробка схеми cinemavault:// без шелл-ін\'єкцій та захист користувача від сторонніх редиректів.\n' +
-      '• 📱 ANDROID 16 & SMART TV READY: стабільна робота на всіх типах пультів (D-Pad, Air Mouse, проєкторний режим курсора), апаратне прискорення 60 FPS та відсутність реклами.';
+      '• 🚀 ОФІЦІЙНИЙ РЕЛІЗ 3.7.6: МАКСИМАЛЬНЕ ПРИСКОРЕННЯ ANDROID TV (НАТИВНИЙ EXOPLAYER MEDIA3 + ПРЯМІ HLS-ПОТОКИ), УСІ СПОРТИВНІ ПОДІЇ ЗІ СТАБІЛЬНИМ ВІДЕО ТА ЛЕГКИЙ 60 FPS ІНТЕРФЕЙС:\n' +
+      '• ⚡ НАТИВНИЙ EXOPLAYER MEDIA3 ДЛЯ ANDROID TV / ПРОЄКТОРІВ: пряме апаратне відтворення HLS-потоків із Video Tunneling (0% навантаження WebView), миттєвим вибором української озвучки та субтитрів без iframe-прослойки.\n' +
+      '• 🚀 ПРЯМИЙ ЕКСТРАКТОР ПОТОКІВ 1080p: автоматичне витягування прямих master.m3u8 потоків, прискорені паралельні дзеркала, усунення дублювання запитів та блокування реклами на рівні мережі.\n' +
+      '• 🏆 СПОРТ LIVE 24/7 — 100% ПОДІЙ З ВІДЕО: виправлено StreamFree 1080p та прямий HLS-резолвер, розумний пошук матчів по командах та миттєве автоперемикання на перевірені Cloud CDN HLS потоки.\n' +
+      '• 🎨 ЛЕГКИЙ 60 FPS UI НА ВСІХ ДЕВАЙСАХ: оптимізовано навігацію пультом (D-Pad), зменшено навантаження на GPU телевізорів (TCL / Smart TV) та оптимізовано пам\'ять.';
     let publishedAt = new Date().toISOString().slice(0, 10);
 
     try {
@@ -156,7 +153,6 @@ export const updaterService = {
           latestVersion = tagVer;
           apkDownloadUrl = `https://github.com/${GITHUB_REPO}/raw/main/CinemaVault-PRO-v${tagVer}.apk`;
           winDownloadUrl = `https://github.com/${GITHUB_REPO}/releases/download/v${tagVer}/CinemaVault-PRO-v${tagVer}-Windows.exe`;
-          macDownloadUrl = `https://github.com/${GITHUB_REPO}/releases/download/v${tagVer}/CinemaVault-PRO-v${tagVer}-macOS.dmg`;
         }
         if (rel.html_url) releasePageUrl = rel.html_url;
         if (rel.body && typeof rel.body === 'string' && rel.body.trim().length > 10) {
@@ -165,7 +161,7 @@ export const updaterService = {
         if (rel.published_at) {
           publishedAt = String(rel.published_at).slice(0, 10);
         }
-        // Check if release has attached .apk / .exe / .dmg assets
+        // Check if release has attached .apk / .exe assets
         if (Array.isArray(rel.assets)) {
           const apkAsset = rel.assets.find(
             (a: any) =>
@@ -183,14 +179,6 @@ export const updaterService = {
           if (winAsset) {
             winDownloadUrl = winAsset.browser_download_url;
           }
-          const macAsset = rel.assets.find(
-            (a: any) =>
-              typeof a?.browser_download_url === 'string' &&
-              a.browser_download_url.toLowerCase().endsWith('.dmg')
-          );
-          if (macAsset) {
-            macDownloadUrl = macAsset.browser_download_url;
-          }
         }
       }
 
@@ -205,7 +193,6 @@ export const updaterService = {
           latestVersion = pkgVer;
           apkDownloadUrl = `https://github.com/${GITHUB_REPO}/raw/main/CinemaVault-PRO-v${pkgVer}.apk`;
           winDownloadUrl = `https://github.com/${GITHUB_REPO}/releases/download/v${pkgVer}/CinemaVault-PRO-v${pkgVer}-Windows.exe`;
-          macDownloadUrl = `https://github.com/${GITHUB_REPO}/releases/download/v${pkgVer}/CinemaVault-PRO-v${pkgVer}-macOS.dmg`;
           if (typeof pkg.releaseNotes === 'string' && pkg.releaseNotes.trim().length > 10) {
             releaseNotes = pkg.releaseNotes.trim();
           }
@@ -220,7 +207,6 @@ export const updaterService = {
       latestVersion = APP_VERSION;
       apkDownloadUrl = DEFAULT_APK_URL;
       winDownloadUrl = DEFAULT_WIN_URL;
-      macDownloadUrl = DEFAULT_MAC_URL;
     }
 
     return {
@@ -229,7 +215,6 @@ export const updaterService = {
       hasUpdate,
       apkDownloadUrl,
       winDownloadUrl,
-      macDownloadUrl,
       releasePageUrl,
       releaseNotes,
       publishedAt,
